@@ -34,34 +34,41 @@ def init_db():
             portrait_path TEXT,
 
             -- Rarity
-            birth_star INTEGER DEFAULT 1,        -- 1-7, from gacha
-            ascension_star INTEGER DEFAULT 0,    -- 0-7, earned
+            birth_star INTEGER DEFAULT 1,
+            ascension_star INTEGER DEFAULT 0,
 
-            -- Base stats (scaled by birth_star + aptitudes)
+            -- Class
+            hero_class TEXT DEFAULT 'Classless',
+            can_pilot INTEGER DEFAULT 0,
+
+            -- Level
+            level INTEGER DEFAULT 1,
+
+            -- Base stats
             hp INTEGER DEFAULT 100,
             max_hp INTEGER DEFAULT 100,
             attack INTEGER DEFAULT 10,
             defense INTEGER DEFAULT 5,
             speed INTEGER DEFAULT 10,
 
-            -- Hidden aptitudes (0-100 each, revealed through play)
+            -- Hidden aptitudes (0-100 each)
             apt_combat INTEGER DEFAULT 50,
             apt_tactical INTEGER DEFAULT 50,
             apt_survival INTEGER DEFAULT 50,
             apt_mental INTEGER DEFAULT 50,
             apt_leadership INTEGER DEFAULT 50,
-            aptitudes_revealed INTEGER DEFAULT 0, -- bitmask
+            aptitudes_revealed INTEGER DEFAULT 0,
 
-            -- Morale / psychology
-            morale INTEGER DEFAULT 100,          -- 0-100
-            stress INTEGER DEFAULT 0,            -- 0-100
-            trauma INTEGER DEFAULT 0,            -- 0-100
-            morale_state TEXT DEFAULT 'steady',  -- steady/shaken/fearful/broken
+            -- Morale
+            morale INTEGER DEFAULT 100,
+            stress INTEGER DEFAULT 0,
+            trauma INTEGER DEFAULT 0,
+            morale_state TEXT DEFAULT 'steady',
 
             -- Status
             is_alive INTEGER DEFAULT 1,
             is_on_team INTEGER DEFAULT 0,
-            floor_joined INTEGER DEFAULT 0,      -- which floor run they joined on
+            floor_joined INTEGER DEFAULT 0,
 
             -- Progression
             kills INTEGER DEFAULT 0,
@@ -73,7 +80,7 @@ def init_db():
 
         CREATE TABLE IF NOT EXISTS runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            status TEXT DEFAULT 'active',        -- active/completed/failed
+            status TEXT DEFAULT 'active',
             current_floor INTEGER DEFAULT 0,
             highest_floor INTEGER DEFAULT 0,
             started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -90,10 +97,10 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id INTEGER REFERENCES runs(id),
             floor_number INTEGER NOT NULL,
-            floor_type TEXT NOT NULL,            -- combat/event/resource/boss/miniboss
-            status TEXT DEFAULT 'pending',       -- pending/completed/failed
-            outcome TEXT,                        -- JSON summary
-            narrative TEXT,                      -- LLM-generated flavor
+            floor_type TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            outcome TEXT,
+            narrative TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -102,8 +109,8 @@ def init_db():
             name TEXT DEFAULT 'The Hollow Spire',
             level INTEGER DEFAULT 1,
             gold INTEGER DEFAULT 10000,
-            materials TEXT DEFAULT '{}',         -- JSON
-            unlocked_features TEXT DEFAULT '[]'  -- JSON list
+            materials TEXT DEFAULT '{}',
+            unlocked_features TEXT DEFAULT '[]'
         );
 
         CREATE TABLE IF NOT EXISTS event_log (
@@ -115,7 +122,27 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Seed base if not exists
+        CREATE TABLE IF NOT EXISTS portrait_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            birth_star INTEGER NOT NULL,
+            path TEXT NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         INSERT OR IGNORE INTO base (id) VALUES (1);
         """)
+
+        # Migrate existing DB — add columns if they don't exist
+        existing = [r[1] for r in conn.execute("PRAGMA table_info(heroes)").fetchall()]
+        migrations = [
+            ("hero_class",  "ALTER TABLE heroes ADD COLUMN hero_class TEXT DEFAULT 'Classless'"),
+            ("can_pilot",   "ALTER TABLE heroes ADD COLUMN can_pilot INTEGER DEFAULT 0"),
+            ("level",       "ALTER TABLE heroes ADD COLUMN level INTEGER DEFAULT 1"),
+        ]
+        for col, sql in migrations:
+            if col not in existing:
+                conn.execute(sql)
+                print(f"[DB] Migrated: added column '{col}'")
+
     print("Database initialized.")

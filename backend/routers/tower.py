@@ -201,9 +201,33 @@ def advance_floor():
             (next_floor, next_floor, run_id)
         )
 
-        # Update hero floors_survived stat
-        for hid in [s["id"] for s in result.get("combat", {}).get("surviving_heroes", [])]:
-            conn.execute("UPDATE heroes SET floors_survived = floors_survived + 1 WHERE id = ?", (hid,))
+        # Update hero stats, kills, floors_survived, and level after combat
+        from services.level_service import recalculate_hero_level, level_up_summary
+        for s in result.get("combat", {}).get("surviving_heroes", []):
+            hid = s["id"]
+            kills_gained = s.get("kills_gained", 0)
+            conn.execute("""
+                UPDATE heroes SET
+                    floors_survived = floors_survived + 1,
+                    kills = kills + ?
+                WHERE id = ?
+            """, (kills_gained, hid))
+
+            # Recalculate level
+            hero_row = conn.execute("SELECT * FROM heroes WHERE id = ?", (hid,)).fetchone()
+            if hero_row:
+                hero_dict = dict(hero_row)
+                old_level = hero_dict.get("level", 1)
+                new_level = recalculate_hero_level(hero_dict)
+                if new_level != old_level:
+                    conn.execute("UPDATE heroes SET level = ? WHERE id = ?", (new_level, hid))
+                    level_msgs = level_up_summary(old_level, new_level, hero_dict["name"])
+                    result.setdefault("level_ups", []).extend(level_msgs)
+                    conn.execute("""
+                        INSERT INTO event_log (run_id, floor_number, event_type, description)
+                        VALUES (?,?,?,?)
+                    """, (run_id, next_floor, "level_up",
+                          f"{hero_dict['name']} reached level {new_level}.")  )
 
         # Auto-return to base every 10 floors
         if next_floor % 10 == 0 and result.get("combat", {}).get("winner") != "enemies":
