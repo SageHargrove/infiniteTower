@@ -6,32 +6,17 @@ A roguelike tower-climbing gacha RPG. You are the manager. Heroes die permanentl
 
 ## Quick Start
 
-### 1. Backend Setup
+# Terminal 1 — ComfyUI
+cd C:\Users\liamh\ComfyUI && venv\Scripts\activate && python main.py
+localhost:8188
 
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# Terminal 2 — Backend
+cd "C:\infinite gacha\tower-gacha\backend" && venv\Scripts\activate && uvicorn main:app --reload
+backend
 
-# Set your OpenAI key
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Run the server
-uvicorn main:app --reload
-# API now at http://localhost:8000
-# Docs at http://localhost:8000/docs
-```
-
-### 2. Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-# UI now at http://localhost:5173
-```
+# Terminal 3 — Frontend
+cd "C:\infinite gacha\tower-gacha\frontend" && npm run dev
+localhost:5173
 
 ---
 
