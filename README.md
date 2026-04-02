@@ -7,15 +7,23 @@ A roguelike tower-climbing gacha RPG. You are the manager. Heroes die permanentl
 ## Quick Start
 
 # Terminal 1 — ComfyUI
-cd C:\Users\liamh\ComfyUI && venv\Scripts\activate && python main.py
+cd C:\Users\liamh\ComfyUI 
+venv\Scripts\activate 
+python main.py
+
 localhost:8188
 
 # Terminal 2 — Backend
-cd "C:\infinite gacha\tower-gacha\backend" && venv\Scripts\activate && uvicorn main:app --reload
+cd "C:\infinite gacha\tower-gacha\backend" 
+venv\Scripts\activate 
+uvicorn main:app --reload
+
 backend
 
 # Terminal 3 — Frontend
-cd "C:\infinite gacha\tower-gacha\frontend" && npm run dev
+cd "C:\infinite gacha\tower-gacha\frontend" 
+npm run dev
+
 localhost:5173
 
 ---
