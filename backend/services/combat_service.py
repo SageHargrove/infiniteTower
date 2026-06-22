@@ -6,7 +6,7 @@ import random
 import json
 from dataclasses import dataclass, field
 from services.class_service import apply_class_combat_modifiers
-from services.level_service import apply_level_to_stats
+from services.level_service import apply_level_to_stats, talent_score, get_hero_star, max_skill_slots
 
 @dataclass
 class CombatUnit:
@@ -36,53 +36,61 @@ class CombatUnit:
     armor_pen: float = 0.0
     skills: list = field(default_factory=list)
     portrait_path: str = ""
+    abilities: list = field(default_factory=list)
+    used_abilities: set = field(default_factory=set)
+    talent: float = 0.5
+    regen_pct: float = 0.0
+    hero_star: int = 1
 
     def __post_init__(self):
         self.log_name = self.name if self.is_hero else f"[{self.name}]"
         if self.has_construct:
             self.construct_active = True
 
-def make_enemies(floor_number: int, count: int = None, team_power: float = 0) -> list[CombatUnit]:
+# name, hp_m, def_m, spd_m, archetype — shared with services/portrait_cache.py
+# so the enemy portrait library is pre-generated for exactly these types.
+ENEMY_TYPES = [
+    ("Corpse Rat", 1.0, 1.0, 1.5, "swarm"),
+    ("Grave Scarab", 1.0, 1.0, 1.6, "swarm"),
+    ("Carrion Bat", 0.9, 0.8, 1.9, "swarm"),
+    ("Plague Crawler", 1.0, 1.0, 1.3, "pack"),
+    ("Abyssal Spider", 1.0, 1.0, 1.4, "pack"),
+    ("Rotting Ghoul", 1.1, 0.9, 1.2, "pack"),
+    ("Hollow Knight", 1.2, 1.1, 0.9, "normal"),
+    ("Bone Warden", 1.0, 1.3, 0.8, "normal"),
+    ("Flame Wraith", 0.9, 0.6, 1.4, "normal"),
+    ("Shriek Shade", 0.7, 0.5, 1.6, "normal"),
+    ("Iron Revenant", 1.3, 1.4, 0.7, "normal"),
+    ("Venom Stalker", 0.9, 0.8, 1.5, "normal"),
+    ("Stone Golem", 1.5, 1.8, 0.5, "elite"),
+    ("Dread Brute", 1.8, 1.2, 0.7, "elite"),
+    ("Abyssal Lurker", 1.3, 0.9, 1.8, "elite"),
+    ("Frost Wight", 1.4, 1.1, 0.9, "elite"),
+    ("Obsidian Behemoth", 2.0, 1.6, 0.4, "elite"),
+]
+
+def make_enemies(floor_number: int, count: int = None, difficulty_mult: float = 1.0) -> list[CombatUnit]:
     """
-    Generate enemies for a floor. Adaptive difficulty:
-    team_power is the average star rank of the team (0 = no scaling).
+    Generate enemies for a floor. Difficulty is purely a function of floor
+    number — not the player's team strength. A 7★ team and a 1★ team face
+    the identical floor 10 enemies.
+
+    difficulty_mult scales the TOTAL threat of the encounter (not just enemy
+    count) — a "weak" target against an elite archetype still comes out
+    weaker even though elites can't drop below a count of 1; the shortfall
+    that rounding count to an integer can't absorb gets folded into a stat
+    correction instead. This is what lets a choice like "fight defensively"
+    mean something consistent regardless of which archetype gets rolled,
+    rather than just meaning "fewer enemies" (5 weak swarmers can be an
+    easier fight than 1 elite — raw count alone doesn't capture that).
     """
     scale = 1 + (floor_number * 0.12)
 
-    # Adaptive scaling — stronger teams face harder enemies
-    if team_power > 3:
-        adaptive_bonus = 1 + ((team_power - 3) * 0.15)  # +15% per star above 3
-        scale *= adaptive_bonus
-
-    # name, hp_m, def_m, spd_m, archetype
-    enemy_types = [
-        ("Corpse Rat", 1.0, 1.0, 1.5, "swarm"),
-        ("Grave Scarab", 1.0, 1.0, 1.6, "swarm"),
-        ("Plague Crawler", 1.0, 1.0, 1.3, "pack"),
-        ("Abyssal Spider", 1.0, 1.0, 1.4, "pack"),
-        ("Hollow Knight", 1.2, 1.1, 0.9, "normal"),
-        ("Bone Warden", 1.0, 1.3, 0.8, "normal"),
-        ("Flame Wraith", 0.9, 0.6, 1.4, "normal"),
-        ("Shriek Shade", 0.7, 0.5, 1.6, "normal"),
-        ("Stone Golem", 1.5, 1.8, 0.5, "elite"),
-        ("Dread Brute", 1.8, 1.2, 0.7, "elite"),
-        ("Abyssal Lurker", 1.3, 0.9, 1.8, "elite"),
-    ]
-
-    etype = random.choice(enemy_types)
+    etype = random.choice(ENEMY_TYPES)
     name, hp_m, def_m, spd_m, archetype = etype
 
-    if count is None:
-        if archetype == "swarm":
-            count = random.randint(4, 5)
-        elif archetype == "pack":
-            count = random.randint(3, 4)
-        elif archetype == "elite":
-            count = 1
-        else: # normal
-            count = random.randint(1, min(3, 1 + floor_number // 10))
-
-    # Apply archetype modifiers
+    # Apply archetype modifiers first — count/difficulty math below needs
+    # the post-archetype numbers, not the raw per-monster base stats.
     atk_m = 1.0
     if archetype == "swarm":
         atk_m = 0.5
@@ -97,27 +105,78 @@ def make_enemies(floor_number: int, count: int = None, team_power: float = 0) ->
         hp_m *= 1.5
         def_m *= 1.5
 
+    if count is None:
+        # Reference count for this archetype at "normal" (1.0) difficulty —
+        # the midpoint of what the old fixed ranges used to roll.
+        if archetype == "swarm":
+            base_count = 4.5
+        elif archetype == "pack":
+            base_count = 3.5
+        elif archetype == "elite":
+            base_count = 1.0
+        else:  # normal
+            base_count = (1 + min(3, 1 + floor_number // 10)) / 2
+
+        if difficulty_mult == 1.0:
+            count = max(1, round(random.uniform(base_count - 0.5, base_count + 0.5)))
+        else:
+            unit_power = hp_m * (atk_m + def_m)
+            target_total_power = base_count * unit_power * difficulty_mult
+            count = max(1, min(8, round(target_total_power / unit_power))) if unit_power > 0 else max(1, round(base_count))
+            actual_total = count * unit_power
+            # Rounding count to an integer (especially count=1 for elites)
+            # leaves a gap between actual and target total power — close it
+            # with a stat correction so the encounter's real difficulty.
+            # Power is HP * (ATK+DEF) — a product of two corrected terms —
+            # so the correction must be split via sqrt across them, or it
+            # would double-count and land at correction^2 instead.
+            stat_correction = (target_total_power / actual_total) if actual_total > 0 else 1.0
+            half_correction = stat_correction ** 0.5
+            hp_m *= half_correction
+            atk_m *= half_correction
+            def_m *= half_correction
+
+    import os
+    enemy_portrait_path = f"static/portraits/enemies/{name.lower().replace(' ', '_')}.png"
+    if not os.path.exists(enemy_portrait_path):
+        enemy_portrait_path = ""
+
+    abilities = ["cleave"] if archetype == "elite" else []
+
     enemies = []
     for i in range(count):
         enemies.append(CombatUnit(
-            id=-(i+1), 
+            id=-(i+1),
             name=f"{name} {i+1}" if count > 1 else name,
             hp=max(1, int(80 * scale * hp_m)), max_hp=max(1, int(80 * scale * hp_m)),
             attack=max(1, int(8 * scale * atk_m)), defense=int(5 * scale * def_m),
             speed=int(10 * scale * spd_m),
             morale=100, stress=0, is_hero=False,
-            portrait_path=f"static/enemies/{name.lower().replace(' ', '_')}.png"
+            portrait_path=enemy_portrait_path,
+            abilities=list(abilities),
         ))
     return enemies
 
 
-def make_boss(floor_number: int, zone_theme: str = "", is_miniboss: bool = False) -> list[CombatUnit]:
+_UNSET = object()
+
+def make_boss(floor_number: int, zone_theme: str = "", is_miniboss: bool = False, boss_data_override=_UNSET) -> list[CombatUnit]:
     """Create a boss or miniboss enemy."""
     scale = 1 + (floor_number * 0.12)
-    
-    if zone_theme:
-        from services.llm_service import generate_boss_enemy
-        boss_data = generate_boss_enemy(zone_theme, floor_number, is_miniboss)
+
+    # Boss naming is pure flavor — never let it block combat resolution.
+    # boss_data_override lets the caller pre-fetch this concurrently with the
+    # zone theme call instead of sequentially after it (see tower.py) — if the
+    # caller already tried and got nothing (timeout), trust that and use the
+    # local fallback pool below instead of attempting a second, redundant
+    # sequential LLM call here. Only attempt our own call if the caller never
+    # tried pre-fetching at all (boss_data_override wasn't passed).
+    boss_data = None if boss_data_override is _UNSET else boss_data_override
+    if boss_data_override is _UNSET and zone_theme:
+        from services.llm_service import generate_boss_enemy, call_with_timeout
+        boss_data = call_with_timeout(generate_boss_enemy, zone_theme, floor_number, is_miniboss, timeout=1.5)
+
+    if boss_data:
         name = boss_data.get("name", "Unknown Boss")
         mod = {
             "name": boss_data.get("modifier", "Enraged"),
@@ -143,23 +202,34 @@ def make_boss(floor_number: int, zone_theme: str = "", is_miniboss: bool = False
         ]
         mod = random.choice(boss_modifiers)
 
-    if is_miniboss and not zone_theme:
+    if is_miniboss and not boss_data:
         name = f"Lieutenant of {name}"
     
+    # Power curves were originally tuned far too aggressively (a floor-10
+    # boss hit for ~106 base attack — a near-instant kill against an early
+    # team's 80-170 HP heroes). Scaled down so a boss is a meaningfully
+    # tougher single-target fight, not a one/two-shot machine.
     if is_miniboss:
-        power = 2.5 + (floor_number / 40)
+        power = 1.5 + (floor_number / 40)
     else:
-        power = 4.5 + (floor_number / 30)
+        power = 2.5 + (floor_number / 30)
 
     boss_title = f"{mod['name']} {name}"
 
+    # Signature abilities by tier — minibosses get a recurring party-wide
+    # threat (cleave) plus a one-time enrage; full bosses get two big
+    # one-time swings instead (an early crushing blow, a late-game heal).
+    abilities = ["cleave", "enrage"] if is_miniboss else ["crushing_blow", "last_stand"]
+
+    from services.portrait_cache import get_random_boss_portrait
     boss = CombatUnit(
         id=-99, name=boss_title,
-        hp=int(300 * scale * power * mod['hp']), max_hp=int(300 * scale * power * mod['hp']),
-        attack=int(20 * scale * (power * 0.5) * mod['atk']), defense=int(15 * scale * (power * 0.4) * mod['def']),
+        hp=int(220 * scale * power * mod['hp']), max_hp=int(220 * scale * power * mod['hp']),
+        attack=int(16 * scale * (power * 0.28) * mod['atk']), defense=int(12 * scale * (power * 0.35) * mod['def']),
         speed=int(8 * scale * mod['spd']),
         morale=100, stress=0, is_hero=False,
-        portrait_path=f"static/enemies/{name.lower().replace(' ', '_')}.png"
+        portrait_path=get_random_boss_portrait(is_miniboss=is_miniboss),
+        abilities=abilities,
     )
     return [boss]
 
@@ -217,7 +287,61 @@ def calc_damage(attacker: CombatUnit, defender: CombatUnit) -> tuple[int, bool]:
 
     return damage, is_crit
 
-def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "") -> dict:
+
+# Enemy signature abilities — elite/miniboss/boss tiers get 1-2 of these
+# instead of just a plain basic attack every turn. "cleave" can recur each
+# turn (chance-gated); the rest are one-time triggers gated on the
+# attacker's own HP, tracked via used_abilities so they only fire once.
+def _try_use_ability(attacker: CombatUnit, alive_heroes: list, log: list, morale_changes: dict, stress_changes: dict) -> bool:
+    """Returns True if an ability fired this turn (attacker's normal attack
+    is skipped), False to fall through to a normal attack."""
+    hp_pct = attacker.hp / attacker.max_hp if attacker.max_hp else 0
+
+    if "cleave" in attacker.abilities and random.random() < 0.20:
+        log.append(f"  ⚔ {attacker.log_name} cleaves at the whole party!")
+        for target in alive_heroes:
+            damage, is_crit = calc_damage(attacker, target)
+            damage = int(damage * 0.5)
+            target.hp -= damage
+            crit_text = " CRIT!" if is_crit else ""
+            log.append(f"    → {target.log_name} takes {damage}{crit_text} [{max(0,target.hp)}/{target.max_hp}]")
+            if target.hp <= 0:
+                target.alive = False
+                log.append(f"    ✦ {target.log_name} has fallen.")
+                for h in alive_heroes:
+                    if h.alive and h is not target:
+                        morale_changes[h.id] = morale_changes.get(h.id, 0) - random.randint(8, 18)
+                        stress_changes[h.id] = stress_changes.get(h.id, 0) + random.randint(5, 12)
+        return True
+
+    if "enrage" in attacker.abilities and "enrage" not in attacker.used_abilities and hp_pct < 0.5:
+        attacker.used_abilities.add("enrage")
+        attacker.attack = int(attacker.attack * 1.4)
+        log.append(f"  ⚡ {attacker.log_name} flies into a rage! Attack sharply rises!")
+        return False  # still takes a normal attack this turn, just buffed first
+
+    if "crushing_blow" in attacker.abilities and "crushing_blow" not in attacker.used_abilities and hp_pct < 0.7 and alive_heroes:
+        attacker.used_abilities.add("crushing_blow")
+        target = max(alive_heroes, key=lambda h: h.hp)
+        damage, is_crit = calc_damage(attacker, target)
+        damage = int(damage * 2.2)
+        target.hp -= damage
+        log.append(f"  ☠ {attacker.log_name} unleashes a CRUSHING BLOW on {target.log_name} for {damage} damage! [{max(0,target.hp)}/{target.max_hp}]")
+        if target.hp <= 0:
+            target.alive = False
+            log.append(f"    ✦ {target.log_name} has fallen.")
+        return True
+
+    if "last_stand" in attacker.abilities and "last_stand" not in attacker.used_abilities and hp_pct < 0.2:
+        attacker.used_abilities.add("last_stand")
+        heal = int(attacker.max_hp * 0.25)
+        attacker.hp = min(attacker.max_hp, attacker.hp + heal)
+        log.append(f"  ✚ {attacker.log_name} makes a last stand, recovering {heal} HP! [{attacker.hp}/{attacker.max_hp}]")
+        return True
+
+    return False
+
+def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0) -> dict:
     log = []
     turns = []
     morale_changes = {h["id"]: 0 for h in heroes}
@@ -332,6 +456,14 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             # Traits use the exact same effect dict structure as passive skills!
             modified = apply_passive_skills(modified, hero_traits)
 
+        # Apply equipped relics (Seals/Runes) — same passive effect shape as skills
+        from services.relics_service import get_hero_relics
+        from services.skills_service import apply_passive_skills
+        hero_relics = get_hero_relics(h["id"])
+        if hero_relics:
+            modified = apply_passive_skills(modified, hero_relics)
+        modified["regen_pct"] = modified.get("regen_pct", 0.0)
+
         # Remove raw string payload to avoid confusion later, but keep as python list for UI/Combat logic if needed
         if "skills" in modified:
             modified["_skills"] = hero_skills if 'hero_skills' in locals() else []
@@ -360,7 +492,10 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             death_save=h.get("death_save", 0),
             armor_pen=h.get("armor_pen", 0.0),
             skills=h.get("_skills", []),
-            portrait_path=h.get("portrait_path", "")
+            portrait_path=h.get("portrait_path", ""),
+            talent=talent_score(h),
+            regen_pct=h.get("regen_pct", 0.0),
+            hero_star=get_hero_star(h),
         )
         combatants_heroes.append(hero_unit)
         
@@ -379,16 +514,17 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             construct_id -= 1
             log.append(f"  {hero_unit.name} deploys a massive Construct to the frontline!")
 
-    # Generate enemies (adaptive difficulty)
-    avg_star = sum(h.get("birth_star", 1) for h in heroes) / max(1, len(heroes))
+    # Generate enemies — difficulty is purely floor-based, not adaptive to team strength.
     if is_boss or is_miniboss:
-        enemies = make_boss(floor_number, zone_theme, is_miniboss)
+        enemies = make_boss(floor_number, zone_theme, is_miniboss, boss_data_override=boss_data_override)
         log.append(f"🔥💀🔥 {'MINIBOSS' if is_miniboss else 'BOSS'} FLOOR {floor_number} 🔥💀🔥")
         log.append(f"  {enemies[0].name} emerges from the darkness.")
     else:
-        enemies = make_enemies(floor_number, team_power=avg_star)
+        enemies = make_enemies(floor_number, count=enemy_count_override, difficulty_mult=difficulty_mult)
 
     initial_state = {
+        "is_boss": is_boss,
+        "is_miniboss": is_miniboss,
         "heroes": [
             {"id": h.id, "name": h.name, "hero_class": h.hero_class, "max_hp": h.max_hp, "hp": h.hp, "portrait_path": h.portrait_path}
             for h in combatants_heroes
@@ -426,6 +562,13 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
         for hero in alive_heroes:
             hero.fear_stunned = False  # Reset from last round
             _fear_check(hero, log)
+
+        # ─── Relic/skill regen ticks ───
+        for unit in alive_heroes + alive_enemies:
+            if unit.regen_pct > 0 and unit.hp < unit.max_hp:
+                heal = int(unit.max_hp * unit.regen_pct)
+                unit.hp = min(unit.max_hp, unit.hp + heal)
+                log.append(f"  ✚ {unit.log_name} regenerates {heal} HP [{unit.hp}/{unit.max_hp}]")
 
         alive_frontline = [h for h in frontline if h.alive]
 
@@ -507,9 +650,14 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
                         morale_changes[attacker.id] = morale_changes.get(attacker.id, 0) + random.randint(2, 5)
 
             else:
+                if attacker.abilities:
+                    alive_heroes_now = [h for h in combatants_heroes if h.alive]
+                    if alive_heroes_now and _try_use_ability(attacker, alive_heroes_now, log, morale_changes, stress_changes):
+                        continue  # ability replaced the normal attack this turn
+
                 alive_frontline = [h for h in frontline if h.alive]
                 alive_backline = [h for h in backline if h.alive]
-                
+
                 if alive_frontline:
                     idx = enemies.index(attacker) % len(alive_frontline)
                     target = alive_frontline[idx]
@@ -572,12 +720,14 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
         log.append(f"✗ Defeat. All heroes fell on floor {floor_number}.")
 
     skill_upgrades = {}
+    skills_learned = {}
     if heroes_won:
         for h in alive_heroes:
-            for s in getattr(h, '_skills', []):
+            for s in h.skills:
                 if s.get("level", 1) >= 10:
-                    # Chance to upgrade
-                    chance = 0.20 if is_boss else 0.05
+                    # Chance to upgrade — talented heroes learn faster
+                    base_chance = 0.20 if is_boss else 0.05
+                    chance = base_chance * (0.6 + h.talent * 0.8)
                     if random.random() < chance:
                         tiers = ["Beginner", "Intermediate", "Advanced", "Legendary"]
                         current_tier = s.get("tier", "Beginner")
@@ -591,6 +741,26 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
                                     "new_tier": new_tier
                                 })
                                 log.append(f"  ✦ {h.name}'s {s['name']} ascended to {new_tier} tier!")
+
+            # Chance to learn an entirely new skill — capacity grows with
+            # star rank, but talent grows it further on top, so a highly
+            # talented hero can out-learn a less-talented hero of the same
+            # rarity over a long career.
+            cap = max_skill_slots(h.hero_star, h.talent)
+            if len(h.skills) < cap:
+                base_chance = 0.10 if is_boss else 0.02
+                chance = base_chance * (0.5 + h.talent * 1.5)
+                if random.random() < chance:
+                    from services.skills_service import get_skill_for_class
+                    known_ids = {s["id"] for s in h.skills}
+                    new_skill = get_skill_for_class(h.hero_class)
+                    if new_skill and new_skill["id"] not in known_ids:
+                        new_skill["tier"] = "Beginner"
+                        new_skill["level"] = 1
+                        new_skill["xp"] = 0
+                        new_skill["max_xp"] = 100
+                        skills_learned.setdefault(h.id, []).append(new_skill)
+                        log.append(f"  ✦ {h.name} has learned a new skill: {new_skill['name']}!")
 
     result = {
         "winner": "heroes" if heroes_won else "enemies",
@@ -608,6 +778,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
         ],
         "dead_heroes": [h.id for h in dead_heroes],
         "skill_upgrades": skill_upgrades,
+        "skills_learned": skills_learned,
         "log": log,
         "turns": turns,
         "rounds": round_num,
@@ -625,14 +796,19 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             equip = generate_equipment_drop(floor_number, is_boss, drop_bonus)
             if equip:
                 result["equipment_drop"] = equip
-            
+
+            from services.relics_service import roll_relic_drop
+            relic = roll_relic_drop(is_boss, is_miniboss, floor_number)
+            if relic:
+                result["relic_drop"] = relic
+
             # Guaranteed Drops
             result["gold_gained"] = int(300 * (1 + (floor_number/10)))
             result["supplies_gained"] = random.randint(2, 5)
             
             mats = ["Slime Core", "Iron Ore", "Goblin Ear", "Monster Bone", "Mystic Dust"]
             drops = {}
-            for _ in range(random.randint(1, 3)):
+            for _ in range(random.randint(2, 4)):
                 mat = random.choice(mats)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops

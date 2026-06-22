@@ -58,12 +58,39 @@ def calculate_level(floors_survived: int, kills: int, hero_star: int, ascension_
     cap = level_cap(hero_star, ascension_star)
     return min(raw, cap)
 
-def stat_multiplier(level: int) -> float:
-    """Overall stat multiplier for a given level."""
-    return 1.0 + (level - 1) * 0.02
+APTITUDE_KEYS = ["apt_combat", "apt_tactical", "apt_survival", "apt_mental", "apt_leadership"]
 
-def hp_multiplier(level: int) -> float:
-    return 1.0 + (level - 1) * 0.03
+def talent_score(hero: dict) -> float:
+    """
+    Average of the 5 hidden aptitudes, normalized to 0.0-1.0. This drives
+    growth RATE per level, not base stats — birth_star still sets a hero's
+    starting floor (see generate_base_stats), talent decides how steep
+    their climb is from there. A high-aptitude 1-star promoted all the way
+    to 7-star ends up growing at roughly the same rate a natural 7-star
+    does; a low-aptitude 1-star never catches up even fully promoted.
+    """
+    apts = [hero.get(k, 50) for k in APTITUDE_KEYS]
+    return sum(apts) / len(apts) / 100.0
+
+def growth_multiplier(hero: dict) -> float:
+    """0.7x (untalented) to 1.3x (max talent) — applied to per-level stat gain."""
+    return 0.7 + talent_score(hero) * 0.6
+
+# Base skill capacity mirrors the old birth-time skill counts (1/4★+ gets a
+# 2nd, 6★+ gets a 3rd) — talent adds up to 3 more slots on top, so a highly
+# talented hero can out-learn a less-talented hero of the same rarity.
+MAX_SKILLS_BASE = {1: 1, 2: 1, 3: 1, 4: 2, 5: 2, 6: 3, 7: 3}
+
+def max_skill_slots(hero_star: int, talent: float) -> int:
+    base = MAX_SKILLS_BASE.get(hero_star, 1)
+    return base + int(talent * 3)
+
+def stat_multiplier(level: int, growth_mult: float = 1.0) -> float:
+    """Overall stat multiplier for a given level."""
+    return 1.0 + (level - 1) * 0.02 * growth_mult
+
+def hp_multiplier(level: int, growth_mult: float = 1.0) -> float:
+    return 1.0 + (level - 1) * 0.03 * growth_mult
 
 def apply_level_to_stats(hero: dict) -> dict:
     """
@@ -75,8 +102,9 @@ def apply_level_to_stats(hero: dict) -> dict:
     if level <= 1:
         return h
 
-    sm = stat_multiplier(level)
-    hm = hp_multiplier(level)
+    gm = growth_multiplier(h)
+    sm = stat_multiplier(level, gm)
+    hm = hp_multiplier(level, gm)
 
     h["attack"]  = int(h["attack"]  * sm)
     h["defense"] = int(h["defense"] * sm)

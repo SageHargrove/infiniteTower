@@ -212,8 +212,8 @@ CLASS_CATEGORY_RATES = {
     3: (55, 20, 25),
     4: (65, 28,  7),
     5: (72, 28,  0),
-    6: (74, 26,  0),
-    7: (76, 24,  0),
+    6: (96,  4,  0),
+    7: (100, 0,  0),
 }
 
 # Recursively get all classes in tree
@@ -256,10 +256,15 @@ def assign_class(birth_star: int) -> tuple[str, str]:
     if category == "classless":
         actual_class = "Classless"
     elif category == "base":
-        actual_class = random.choice(SUPPORT_BASE_CLASSES)
+        if birth_star == 6:
+            # 6-star base classes are exclusively Blacksmith due to combat scaling
+            actual_class = "Blacksmith"
+        else:
+            actual_class = random.choice(SUPPORT_BASE_CLASSES)
     else:
-        weights = COMBAT_WEIGHTS_BY_STAR.get(birth_star, {})
-        weights = {k: v for k, v in weights.items() if v > 0}
+        # Weighted roll for combat classes
+        pool = COMBAT_WEIGHTS_BY_STAR.get(birth_star, {})
+        weights = {k: v for k, v in pool.items() if v > 0}
         if not weights:
             actual_class = "Classless"
         else:

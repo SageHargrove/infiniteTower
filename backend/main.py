@@ -8,7 +8,7 @@ env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
 
 from database import init_db, db
-from routers import heroes, gacha, tower, base, runs, equipment, profiles, chat
+from routers import heroes, gacha, tower, base, runs, equipment, profiles, chat, relics
 
 init_db()
 
@@ -27,9 +27,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.on_event("startup")
 async def startup():
     init_db()
-    from services.portrait_cache import cleanup_portraits, start_cache_worker
+    from services.portrait_cache import cleanup_portraits, start_cache_worker, reconcile_pending_portraits, queue_missing_enemy_portraits, queue_missing_boss_portraits
     cleanup_portraits()
     start_cache_worker()
+    reconcile_pending_portraits()
+    queue_missing_enemy_portraits()
+    queue_missing_boss_portraits()
     from services.chat_service import start_chat_worker
     start_chat_worker()
     print("Portrait and Chat workers started.")
@@ -40,6 +43,7 @@ app.include_router(tower.router, prefix="/tower", tags=["Tower"])
 app.include_router(base.router, prefix="/base", tags=["Base"])
 app.include_router(runs.router, prefix="/runs", tags=["Runs"])
 app.include_router(equipment.router, prefix="/equipment", tags=["Equipment"])
+app.include_router(relics.router, prefix="/relics", tags=["Relics"])
 app.include_router(profiles.router, prefix="/profiles", tags=["Profiles"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 

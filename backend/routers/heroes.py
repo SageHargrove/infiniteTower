@@ -5,11 +5,15 @@ from services.level_service import get_revealed_aptitudes, recalculate_hero_leve
 
 router = APIRouter()
 
-def row_to_hero(row, equipment_rows=[]) -> dict:
+def row_to_hero(row, equipment_rows=[], is_ego_satisfied=None) -> dict:
     from services.class_service import get_class_evolution_options
+    from services.equipment_service import apply_equipment_stats
     h = dict(row)
     h["equipment"] = [dict(e) for e in equipment_rows if e["is_equipped_to"] == h["id"]]
     h["evolution_options"] = get_class_evolution_options(h["hero_class"], h.get("level", 1))
+    h = apply_equipment_stats(h, h["equipment"])
+    if is_ego_satisfied is not None:
+        h["is_ego_satisfied"] = is_ego_satisfied
     return h
 
 @router.get("/")
@@ -29,7 +33,21 @@ def list_heroes(alive_only: bool = False):
         else:
             equipment_rows = []
             
-    return [row_to_hero(r, equipment_rows) for r in rows]
+        # Calculate ego satisfaction for heroes on teams
+        from services.ego_service import check_ego_satisfaction
+        teams = {}
+        alive_rows = [dict(r) for r in rows if r["is_alive"]]
+        for r in alive_rows:
+            if r["is_on_team"]:
+                teams.setdefault(r["is_on_team"], []).append(r)
+        
+        satisfaction_map = {}
+        for r in alive_rows:
+            if r["ego_type"] and r["is_on_team"]:
+                team_members = teams[r["is_on_team"]]
+                satisfaction_map[r["id"]] = check_ego_satisfaction(r, team_members, alive_rows)
+            
+    return [row_to_hero(r, equipment_rows, satisfaction_map.get(r["id"])) for r in rows]
 
 @router.get("/{hero_id}")
 def get_hero(hero_id: int):
@@ -311,22 +329,42 @@ def synthesize_hero(data: SynthesizeRequest):
         ).fetchall()
         for hero in living_heroes:
             h = dict(hero)
-            new_trauma = min(100, h["trauma"] + trauma_gain)
-            new_stress = min(100, h["stress"] + stress_gain)
+            
+            # Observer confidence factor: if they are stronger than the sacrifice, they feel safer.
+            # If they are weaker, they realize nobody is safe and take more damage.
+            star_diff = h["birth_star"] - sacrifice_dict["birth_star"]
+            level_diff = h.get("level", 1) - sacrifice_dict.get("level", 1)
+            observer_mult = 1.0 - (star_diff * 0.15) - (level_diff * 0.01)
+            observer_mult = max(0.2, min(2.0, observer_mult))
+            
+            actual_trauma = int(trauma_gain * observer_mult)
+            actual_stress = int(stress_gain * observer_mult)
+            actual_morale = int(morale_loss * observer_mult)
+
+            new_trauma = min(100, h["trauma"] + actual_trauma)
+            new_stress = min(100, h["stress"] + actual_stress)
             trauma_ceiling = 100 - int(new_trauma * 0.4)
-            new_morale = max(0, min(trauma_ceiling, h["morale"] + morale_loss))
+            new_morale = max(0, min(trauma_ceiling, h["morale"] + actual_morale))
             new_state = get_morale_state(new_morale)
             conn.execute("""
                 UPDATE heroes SET trauma = ?, stress = ?, morale = ?, morale_state = ?
                 WHERE id = ?
             """, (new_trauma, new_stress, new_morale, new_state, hero["id"]))
 
-        # Target also gets some guilt
+        # Target also gets some guilt, scaling similarly
         t = target_dict
-        t_trauma = min(100, t["trauma"] + max(2, trauma_gain // 2))
-        t_stress = min(100, t["stress"] + max(3, stress_gain // 2))
+        t_star_diff = t["birth_star"] - sacrifice_dict["birth_star"]
+        t_level_diff = t.get("level", 1) - sacrifice_dict.get("level", 1)
+        t_mult = max(0.2, min(2.0, 1.0 - (t_star_diff * 0.15) - (t_level_diff * 0.01)))
+
+        t_trauma_gain = int(max(2, trauma_gain // 2) * t_mult)
+        t_stress_gain = int(max(3, stress_gain // 2) * t_mult)
+        t_morale_loss = int((morale_loss // 2) * t_mult)
+
+        t_trauma = min(100, t["trauma"] + t_trauma_gain)
+        t_stress = min(100, t["stress"] + t_stress_gain)
         t_ceiling = 100 - int(t_trauma * 0.4)
-        t_morale = max(0, min(t_ceiling, t["morale"] + morale_loss // 2))
+        t_morale = max(0, min(t_ceiling, t["morale"] + t_morale_loss))
         conn.execute("""
             UPDATE heroes SET trauma = ?, stress = ?, morale = ?, morale_state = ?
             WHERE id = ?

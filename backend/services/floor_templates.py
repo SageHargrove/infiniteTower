@@ -5,14 +5,14 @@ Defines mechanical templates for all floor types beyond standard combat.
 All outcomes are deterministic — the backend decides everything, LLM only narrates.
 
 Floor types:
-  combat   — Standard fight (existing, handled by combat_service)
-  event    — Choice encounter (existing, handled by event_service)
-  survival — Endure X rounds of waves. Stress/HP drain per round.
-  defend   — Protect a point. Enemies try to breach.
-  explore  — Risk/reward discovery. Find loot, traps, or materials.
-  escort   — Protect an NPC to safety.
-  boss     — Every 10th floor. Powerful single enemy.
-  rest     — Every floor after boss. Free healing, no combat.
+  combat    — Standard fight (existing, handled by combat_service)
+  event     — Choice encounter (existing, handled by event_service)
+  survival  — A real fight against a larger wave of enemies (handled by tower.py via combat_service)
+  defend    — A real fight framed as holding a chokepoint (handled by tower.py via combat_service)
+  explore   — Risk/reward discovery. Find loot, traps, or materials.
+  escort    — A real fight framed as protecting an NPC (handled by tower.py via combat_service)
+  boss      — Every 10th floor. Powerful single enemy.
+  rest      — Every floor after boss. Free healing, no combat.
 """
 
 import random
@@ -29,152 +29,56 @@ def get_floor_type(floor_number: int) -> str:
     if floor_number % 10 == 1 and floor_number > 1:
         return "rest"
 
-    # Weighted random for other floors
+    # Weighted random for other floors — survival/defend/escort are all real
+    # fights under a different frame, so combat still dominates the mix.
     weights = {
-        "combat": 100,
+        "combat": 50,
+        "event": 10,
+        "explore": 15,
+        "survival": 10,
+        "defend": 10,
+        "escort": 5,
     }
-
-    # Higher floors = more dangerous floor types
-    if floor_number > 50:
-        weights["combat"] = 100
 
     types = list(weights.keys())
     wts = list(weights.values())
     return random.choices(types, weights=wts, k=1)[0]
 
 
-# ─── Survival Floor ────────────────────────────────────────────────
-
-def generate_survival_floor(floor_number: int) -> dict:
-    """Generate a survival floor challenge."""
-    rounds = min(8, 3 + floor_number // 15)
-    enemy_power = 1 + (floor_number * 0.06)
-
-    return {
-        "floor_type": "survival",
-        "theme": "Waves of enemies pour from every corridor. There is no retreat — only endurance.",
-        "rounds": rounds,
-        "enemy_power_scale": enemy_power,
-        "stress_per_round": random.randint(3, 8),
-        "hp_drain_per_round_pct": round(random.uniform(0.02, 0.06), 3),
-        "reward": {
-            "gold": (random.randint(40, 80) + floor_number * 5) * 3,
-            "materials": random.randint(1, 3),
-        },
-    }
+def get_cached_floor_type(conn, floor_number: int) -> str:
+    """Floor type is rolled once per floor number and cached — re-entering
+    (rerun) or merely previewing a floor must always show the same type."""
+    row = conn.execute("SELECT floor_type FROM floor_cache WHERE floor_number = ?", (floor_number,)).fetchone()
+    if row:
+        return row["floor_type"]
+    floor_type = get_floor_type(floor_number)
+    conn.execute("INSERT INTO floor_cache (floor_number, floor_type) VALUES (?, ?)", (floor_number, floor_type))
+    return floor_type
 
 
-def resolve_survival_floor(template: dict, heroes: list[dict]) -> dict:
-    """Resolve a survival floor deterministically."""
-    rounds = template["rounds"]
-    stress_per = template["stress_per_round"]
-    hp_drain = template["hp_drain_per_round_pct"]
-    log = []
-    hero_results = []
-
-    for hero in heroes:
-        h = hero.copy()
-        for r in range(rounds):
-            hp_loss = int(h["max_hp"] * hp_drain)
-            h["hp"] = max(1, h["hp"] - hp_loss)
-            h["stress"] = min(100, h.get("stress", 0) + stress_per)
-
-            if h["hp"] <= 1:
-                log.append(f"  {h['name']} barely holds on, gasping...")
-                break
-
-        hero_results.append({
-            "id": h["id"],
-            "hp": h["hp"],
-            "stress_gained": stress_per * rounds,
-            "survived": h["hp"] > 0,
-        })
-        log.append(f"  {h['name']} endured {rounds} waves. HP: {h['hp']}/{h['max_hp']}")
-
-    all_survived = all(r["survived"] for r in hero_results)
-
-    return {
-        "success": all_survived,
-        "hero_results": hero_results,
-        "reward": template["reward"] if all_survived else {"gold": template["reward"]["gold"] // 2},
-        "log": [f"Survival — {rounds} waves of relentless assault."] + log,
-        "summary": f"{'All heroes endured.' if all_survived else 'The team was overwhelmed.'}",
-    }
-
-
-# ─── Defend Floor ──────────────────────────────────────────────────
-
-def generate_defend_floor(floor_number: int) -> dict:
-    """Generate a defend floor challenge."""
-    waves = min(5, 2 + floor_number // 20)
-    enemy_power = 1 + (floor_number * 0.07)
-
-    return {
-        "floor_type": "defend",
-        "theme": "A narrow passage. Behind you, something worth protecting. They're coming.",
-        "waves": waves,
-        "enemy_power_scale": enemy_power,
-        "breach_penalty": {
-            "hp_pct": -0.20,
-            "morale": -15,
-        },
-        "reward": {
-            "gold": (random.randint(50, 100) + floor_number * 4) * 3,
-            "materials": random.randint(1, 2),
-        },
-    }
-
-
-def resolve_defend_floor(template: dict, heroes: list[dict]) -> dict:
-    """Resolve a defend floor. Team DEF determines breach chance."""
-    waves = template["waves"]
-    log = []
-    breaches = 0
-
-    total_def = sum(h.get("defense", 5) for h in heroes)
-    avg_def = total_def / max(1, len(heroes))
-
-    for wave in range(waves):
-        # Breach chance decreases with higher team DEF
-        breach_threshold = max(0.05, 0.40 - (avg_def * 0.01))
-        breached = random.random() < breach_threshold
-
-        if breached:
-            breaches += 1
-            log.append(f"  Wave {wave+1}: BREACH! Enemies broke through the line!")
-        else:
-            log.append(f"  Wave {wave+1}: Held the line. The barrier stands.")
-
-    hero_results = []
-    for hero in heroes:
-        hp_loss = int(hero["max_hp"] * abs(template["breach_penalty"]["hp_pct"]) * breaches)
-        morale_loss = template["breach_penalty"]["morale"] * breaches
-        hero_results.append({
-            "id": hero["id"],
-            "hp": max(1, hero["hp"] - hp_loss),
-            "morale_delta": morale_loss,
-        })
-
-    success = breaches == 0
-    partial = breaches < waves
-
-    return {
-        "success": success,
-        "partial": partial,
-        "breaches": breaches,
-        "hero_results": hero_results,
-        "reward": template["reward"] if success else {
-            "gold": template["reward"]["gold"] // (1 + breaches),
-        },
-        "log": [f"Defend — {waves} waves incoming."] + log,
-        "summary": f"{'Perfect defense!' if success else f'{breaches} breach(es). The line wavered.'}",
-    }
+# One-line flavor/intro text per floor type, shared by the pre-floor preview
+# card (shown only for floors not yet visited) and the actual combat log
+# framing — keeps what the player previews consistent with what they get.
+FLOOR_FLAVOR_INTRO = {
+    "combat": "The corridor stretches ahead. Something waits in the dark.",
+    "miniboss": "A presence looms ahead, stronger than the rest.",
+    "boss": "The floor's guardian awaits. There is no other way through.",
+    "event": "Something unusual catches your attention.",
+    "survival": "Waves of enemies pour from every corridor. There is no retreat — only endurance.",
+    "defend": "A narrow passage. Behind you, something worth protecting. They're coming.",
+    "explore": "The corridor opens into an unexplored chamber. Dust and silence.",
+    "escort": "Someone nearby needs safe passage. Enemies aren't far.",
+    "rest": "A safe chamber. Water flows from cracks in the stone.",
+}
 
 
 # ─── Explore Floor ─────────────────────────────────────────────────
 
 def generate_explore_floor(floor_number: int) -> dict:
-    """Generate an explore floor with risk/reward choices."""
+    """Generate an explore floor with risk/reward choices. Every choice still
+    leads to a real fight (combat is mandatory on every floor type) — the
+    choice decides how big/hard that fight is, and the loot odds that follow
+    a win."""
     return {
         "floor_type": "explore",
         "theme": "The corridor opens into an unexplored chamber. Dust and silence.",
@@ -183,24 +87,27 @@ def generate_explore_floor(floor_number: int) -> dict:
         "choices": [
             {
                 "id": "thorough",
-                "label": "Search thoroughly",
-                "hint": "Better loot, higher risk",
+                "label": "Search Thoroughly",
+                "hint": "A genuinely harder fight, better loot odds",
+                "difficulty_mult": 1.8,
                 "discovery_bonus": 0.20,
                 "trap_bonus": 0.15,
                 "time_cost": 2,
             },
             {
                 "id": "quick",
-                "label": "Quick sweep",
-                "hint": "Safe but less reward",
+                "label": "Quick Sweep",
+                "hint": "A normal fight, standard loot odds",
+                "difficulty_mult": 1.0,
                 "discovery_bonus": -0.10,
                 "trap_bonus": -0.10,
                 "time_cost": 1,
             },
             {
                 "id": "leave",
-                "label": "Leave immediately",
-                "hint": "Nothing ventured",
+                "label": "Fight Defensively",
+                "hint": "The weakest fight possible — safest, worst loot odds",
+                "difficulty_mult": 0.4,
                 "discovery_bonus": -1.0,
                 "trap_bonus": -1.0,
                 "time_cost": 0,
@@ -210,61 +117,44 @@ def generate_explore_floor(floor_number: int) -> dict:
     }
 
 
-def resolve_explore_floor(template: dict, choice_id: str, heroes: list[dict]) -> dict:
-    """Resolve an explore floor based on the player's choice."""
-    choice = next((c for c in template["choices"] if c["id"] == choice_id), template["choices"][1])
+def get_explore_choice(template: dict, choice_id: str) -> dict:
+    """Look up a choice by id, defaulting to Quick Sweep if unrecognized."""
+    return next((c for c in template["choices"] if c["id"] == choice_id), template["choices"][1])
+
+
+def resolve_explore_loot(template: dict, choice: dict) -> dict:
+    """Roll for bonus loot after a real fight has already been won — the
+    fight itself (sized by enemy_count_mod) carries the actual danger now;
+    this just decides what extra the choice's thoroughness turned up."""
     log = []
-
     discovery = template["discovery_chance"] + choice["discovery_bonus"]
-    trap = template["trap_chance"] + choice["trap_bonus"]
-
     found_something = random.random() < discovery
-    hit_trap = random.random() < trap
 
     loot = {}
-    hero_results = []
-
     if found_something:
         loot = random.choice(template["loot_table"])
         log.append(f"  Discovery! Found: {loot.get('desc', 'something useful')}")
     else:
-        log.append("  The chamber held nothing of value.")
-
-    if hit_trap:
-        trap_damage_pct = random.uniform(0.05, 0.15)
-        log.append("  A trap springs! The team takes damage.")
-        for hero in heroes:
-            dmg = int(hero["max_hp"] * trap_damage_pct)
-            hero_results.append({
-                "id": hero["id"],
-                "hp": max(1, hero["hp"] - dmg),
-                "stress_gained": random.randint(5, 12),
-            })
-    else:
-        for hero in heroes:
-            hero_results.append({
-                "id": hero["id"],
-                "hp": hero["hp"],
-                "stress_gained": choice["time_cost"],
-            })
+        log.append("  Nothing more of value here.")
 
     return {
         "success": found_something,
-        "trapped": hit_trap,
         "loot": loot,
-        "hero_results": hero_results,
-        "log": ["Explore — searching the unknown."] + log,
-        "summary": f"{'Found treasure!' if found_something else 'Nothing found.'}{' Trap sprung!' if hit_trap else ''}",
+        "log": log,
+        "summary": "Found treasure!" if found_something else "Nothing else of note.",
     }
 
+
+CRAFTING_MATERIALS = ["Slime Core", "Iron Ore", "Goblin Ear", "Monster Bone", "Mystic Dust"]
 
 def _exploration_loot_table(floor_number: int) -> list[dict]:
     """Generate possible loot for this floor level."""
     base_gold = (30 + floor_number * 3) * 3
+    mat_name = random.choice(CRAFTING_MATERIALS)
     return [
         {"type": "gold", "amount": random.randint(base_gold, base_gold * 2), "desc": f"{base_gold}-{base_gold*2} gold"},
-        {"type": "elemental_stone", "amount": 1, "desc": "Elemental Stone ×1"},
-        {"type": "materials", "amount": random.randint(2, 5), "desc": "Tower materials"},
+        {"type": "materials", "name": mat_name, "amount": random.randint(2, 4), "desc": f"{mat_name} ×{random.randint(2, 4)}"},
+        {"type": "materials", "name": mat_name, "amount": random.randint(3, 5), "desc": f"{mat_name} ×{random.randint(3, 5)}"},
         {"type": "gold", "amount": random.randint(base_gold * 2, base_gold * 3), "desc": f"Large gold cache"},
     ]
     # Higher floors add rarer loot

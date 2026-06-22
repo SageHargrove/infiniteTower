@@ -176,7 +176,7 @@ def _upload_image(file_path: str) -> str | None:
         return None
 
 
-def generate_portrait_comfy(prompt: str, save_path: str, init_image_path: str = None, denoise: float = 0.45) -> bool:
+def generate_portrait_comfy(prompt: str, save_path: str, init_image_path: str = None, denoise: float = 0.45, negative: str = "") -> bool:
     if not is_comfy_running():
         print("[ComfyUI] Server not running — skipping.")
         return False
@@ -185,7 +185,7 @@ def generate_portrait_comfy(prompt: str, save_path: str, init_image_path: str = 
     if init_image_path and os.path.exists(init_image_path):
         init_image_name = _upload_image(init_image_path)
 
-    workflow = _build_workflow(prompt, init_image_name=init_image_name, denoise=denoise)
+    workflow = _build_workflow(prompt, negative=negative, init_image_name=init_image_name, denoise=denoise)
     prompt_id = _queue_prompt(workflow)
     if not prompt_id:
         return False

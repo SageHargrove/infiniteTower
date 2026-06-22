@@ -46,29 +46,31 @@ def generate_base_stats(birth_star: int) -> dict:
     stats["max_hp"] = stats["hp"]
     return stats
 
+APTITUDE_RANGES = {
+    1: (10, 55), 2: (15, 60), 3: (25, 65), 4: (35, 70),
+    5: (55, 80), 6: (70, 90), 7: (85, 100),
+}
+
+# A 1-5★ pull has a tiny, genuinely rare chance to be a hidden prodigy —
+# talent on par with a natural 7★, just born into a lower rarity. This
+# drives growth potential (see level_service.talent_score), NOT current
+# stats — you have to find it, then choose to invest in raising them.
+# 6-7★ are already near the talent ceiling, so there's no jackpot to roll
+# into; pulling a 7★ means you can assume top-tier talent already.
+APTITUDE_JACKPOT_CHANCE = {1: 0.005, 2: 0.005, 3: 0.01, 4: 0.015, 5: 0.03}
+
 def generate_aptitudes(birth_star: int) -> dict:
     """
-    Hidden aptitudes. Low rarity can roll prodigies.
-    High rarity tends toward average-high with less variance.
+    Hidden aptitudes drive how steeply a hero's stats grow per level —
+    not their current power. Higher birth_star reliably rolls high
+    aptitude; lower birth_star usually rolls modest aptitude, with a rare
+    jackpot chance at true prodigy-tier talent.
     """
-    if birth_star <= 2:
-        # Wild variance — rags-to-riches potential
-        lo, hi = 10, 100
-    elif birth_star <= 4:
-        lo, hi = 30, 90
-    else:
-        # High rarity: safer floor but less ceiling surprise
-        lo, hi = 50, 85
+    if random.random() < APTITUDE_JACKPOT_CHANCE.get(birth_star, 0):
+        return {f"apt_{apt}": random.randint(90, 100) for apt in ["combat", "tactical", "survival", "mental", "leadership"]}
 
-    aptitudes = {}
-    for apt in ["combat", "tactical", "survival", "mental", "leadership"]:
-        # Chance of a prodigy spike on any single aptitude
-        if random.random() < 0.08:  # 8% chance per stat
-            aptitudes[f"apt_{apt}"] = random.randint(90, 100)
-        else:
-            aptitudes[f"apt_{apt}"] = random.randint(lo, hi)
-
-    return aptitudes
+    lo, hi = APTITUDE_RANGES.get(birth_star, (10, 55))
+    return {f"apt_{apt}": random.randint(lo, hi) for apt in ["combat", "tactical", "survival", "mental", "leadership"]}
 
 def get_pull_cost() -> int:
     return 100  # gold per pull, can expand to pity system later

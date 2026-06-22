@@ -58,13 +58,15 @@ def process_training_xp(conn):
             
         assignments = conn.execute("SELECT * FROM facility_assignments WHERE facility_id = ?", (tg["id"],)).fetchall()
         
+        from services.level_service import talent_score
         # Load heroes and skills
         heroes = {}
-        hero_rows = conn.execute("SELECT id, skills, traits FROM heroes").fetchall()
+        hero_rows = conn.execute("SELECT * FROM heroes").fetchall()
         for r in hero_rows:
+            rd = dict(r)
             heroes[r["id"]] = {
-                "skills": json.loads(r["skills"] or "[]"),
-                "traits": json.loads(r["traits"] or "[]")
+                "skills": json.loads(rd.get("skills") or "[]"),
+                "talent": talent_score(rd),
             }
             
         for a in assignments:
@@ -100,12 +102,9 @@ def process_training_xp(conn):
             except:
                 pass
             
-            # Trait multipliers
-            traits = [t["id"] for t in hero["traits"]]
-            if "talent_prodigy" in traits:
-                xp_gain *= 2.0
-            if "talent_genius" in traits:
-                xp_gain *= 1.5
+            # Talent (aptitude growth rate) scales how fast training sticks,
+            # same multiplier shape as combat skill-tier ascension.
+            xp_gain *= (0.7 + hero["talent"] * 0.8)
                 
             if role == "spar":
                 # Check if target is also sparring with us

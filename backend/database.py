@@ -6,7 +6,22 @@ from contextlib import contextmanager
 SAVES_DIR = "saves"
 os.makedirs(SAVES_DIR, exist_ok=True)
 
-ACTIVE_PROFILE = "main"
+_ACTIVE_PROFILE_FILE = os.path.join(SAVES_DIR, ".active_profile")
+
+def _load_active_profile():
+    if os.path.exists(_ACTIVE_PROFILE_FILE):
+        try:
+            name = open(_ACTIVE_PROFILE_FILE, "r", encoding="utf-8").read().strip()
+            if name:
+                return name
+        except Exception:
+            pass
+    return "main"
+
+# Persisted to disk so a backend restart/reload (e.g. during dev) doesn't
+# silently snap back to "main" while the frontend still thinks another
+# profile is active.
+ACTIVE_PROFILE = _load_active_profile()
 
 if os.path.exists("game.db") and not os.path.exists(os.path.join(SAVES_DIR, "main.db")):
     os.rename("game.db", os.path.join(SAVES_DIR, "main.db"))
@@ -17,7 +32,21 @@ def get_db_path():
 def set_profile(profile_name):
     global ACTIVE_PROFILE
     ACTIVE_PROFILE = profile_name
+    try:
+        with open(_ACTIVE_PROFILE_FILE, "w", encoding="utf-8") as f:
+            f.write(profile_name)
+    except Exception:
+        pass
     init_db()
+
+def clear_active_profile():
+    global ACTIVE_PROFILE
+    ACTIVE_PROFILE = None
+    try:
+        if os.path.exists(_ACTIVE_PROFILE_FILE):
+            os.remove(_ACTIVE_PROFILE_FILE)
+    except Exception:
+        pass
 
 def get_profiles():
     if not os.path.exists(SAVES_DIR):
@@ -98,6 +127,7 @@ CREATE TABLE IF NOT EXISTS heroes (
             floor_joined INTEGER DEFAULT 0,
             team_position INTEGER DEFAULT 0,
             ego_type TEXT,
+            ego_patience INTEGER DEFAULT 100,
 
             -- Progression
             kills INTEGER DEFAULT 0,
@@ -113,7 +143,9 @@ CREATE TABLE IF NOT EXISTS heroes (
             fatigue INTEGER DEFAULT 0,
             base_floor INTEGER DEFAULT 0,
             traits TEXT DEFAULT '[]',
-            xp INTEGER DEFAULT 0
+            xp INTEGER DEFAULT 0,
+            runes TEXT DEFAULT '[]',
+            seals TEXT DEFAULT '[]'
         );
 
 CREATE TABLE IF NOT EXISTS runs (
@@ -159,7 +191,7 @@ CREATE TABLE IF NOT EXISTS base (
             spark_points INTEGER DEFAULT 0,
             last_training_tick TIMESTAMP,
             last_fatigue_tick TIMESTAMP
-        , last_research_tick TIMESTAMP);
+        , last_research_tick TIMESTAMP, last_mage_tick TIMESTAMP, last_alchemist_tick TIMESTAMP, last_restaurant_tick TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS event_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -213,9 +245,25 @@ CREATE TABLE IF NOT EXISTS equipment (
             base_def INTEGER DEFAULT 0,
             base_hp INTEGER DEFAULT 0,
             base_spd INTEGER DEFAULT 0,
+            atk_pct REAL DEFAULT 0.0,
+            def_pct REAL DEFAULT 0.0,
+            hp_pct REAL DEFAULT 0.0,
+            spd_pct REAL DEFAULT 0.0,
             crit_chance REAL DEFAULT 0.0,
             dodge_chance REAL DEFAULT 0.0,
             armor_pen REAL DEFAULT 0.0,
+            is_equipped_to INTEGER REFERENCES heroes(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+CREATE TABLE IF NOT EXISTS hero_relics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            relic_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            rarity TEXT NOT NULL,
+            desc TEXT,
+            effect TEXT NOT NULL,
+            min_star INTEGER DEFAULT 1,
             is_equipped_to INTEGER REFERENCES heroes(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -300,10 +348,46 @@ INSERT OR IGNORE INTO base (id) VALUES (1);
             pass
 
         try:
+            conn.execute("ALTER TABLE base ADD COLUMN last_rest_time REAL DEFAULT 0")
+            print("[DB] Migrated: added column 'last_rest_time' to base")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE legacies ADD COLUMN is_sacrifice INTEGER DEFAULT 0")
+            print("[DB] Migrated: added column 'is_sacrifice' to legacies")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE legacies ADD COLUMN portrait_path TEXT")
+            print("[DB] Migrated: added column 'portrait_path' to legacies")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE equipment ADD COLUMN atk_pct REAL DEFAULT 0.0")
+            conn.execute("ALTER TABLE equipment ADD COLUMN def_pct REAL DEFAULT 0.0")
+            conn.execute("ALTER TABLE equipment ADD COLUMN hp_pct REAL DEFAULT 0.0")
+            conn.execute("ALTER TABLE equipment ADD COLUMN spd_pct REAL DEFAULT 0.0")
+            print("[DB] Migrated: added pct columns to equipment")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
             conn.execute("UPDATE facilities SET type = 'The Lobby' WHERE type = 'The Square'")
             conn.commit()
         except Exception as e:
             print(f"[DB] Migration error for The Lobby: {e}")
+
+        # Floor type is rolled once per floor number and cached here so
+        # re-entering the same floor (rerun) always gives the same floor type.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS floor_cache (
+                floor_number INTEGER PRIMARY KEY,
+                floor_type TEXT NOT NULL
+            )
+        """)
 
         # Migrate existing DB — add columns if they don't exist
         existing = [r[1] for r in conn.execute("PRAGMA table_info(heroes)").fetchall()]
@@ -311,6 +395,7 @@ INSERT OR IGNORE INTO base (id) VALUES (1);
             ("hero_class",  "ALTER TABLE heroes ADD COLUMN hero_class TEXT DEFAULT 'Classless'"),
             ("can_pilot",   "ALTER TABLE heroes ADD COLUMN can_pilot INTEGER DEFAULT 0"),
             ("level",       "ALTER TABLE heroes ADD COLUMN level INTEGER DEFAULT 1"),
+            ("ego_patience", "ALTER TABLE heroes ADD COLUMN ego_patience INTEGER DEFAULT 100"),
         ]
         for col, sql in migrations:
             if col not in existing:

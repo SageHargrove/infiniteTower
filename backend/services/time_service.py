@@ -82,28 +82,35 @@ def process_passive_generation(conn):
     if ticks <= 0:
         return
         
-    facilities = conn.execute("""
-        SELECT f.type, f.level, COUNT(fa.hero_id) as assigned
-        FROM facilities f
-        LEFT JOIN facility_assignments fa ON f.id = fa.facility_id
-        WHERE f.type IN ('The Market', 'The Farm', 'The Vault')
-        GROUP BY f.id
-    """).fetchall()
-    
+    facilities = conn.execute("SELECT id, type, level FROM facilities WHERE type IN ('The Market', 'The Farm', 'The Vault')").fetchall()
+
+    PREFERRED_CLASSES = {
+        'The Market': ('Merchant', 'Quartermaster'),
+        'The Farm': ('Merchant', 'Druid'),
+    }
+
     gold_gen = 0
     supplies_gen = 0
-    
+
     for f in facilities:
-        # Assigned heroes increase rate by 10% each
-        multiplier = 1.0 + (f["assigned"] * 0.10)
-        
+        assigned = conn.execute("""
+            SELECT h.hero_class FROM facility_assignments fa
+            JOIN heroes h ON fa.hero_id = h.id
+            WHERE fa.facility_id = ? AND h.is_alive = 1
+        """, (f["id"],)).fetchall()
+
+        preferred = PREFERRED_CLASSES.get(f["type"], ())
+        multiplier = 1.0
+        for a in assigned:
+            multiplier += 0.20 if a["hero_class"] in preferred else 0.10
+
         if f["type"] == 'The Market':
             base_amt = 100 * f["level"]
             gold_gen += int(base_amt * multiplier) * ticks
         elif f["type"] == 'The Farm':
             base_amt = 5 * f["level"]
             supplies_gen += int(base_amt * multiplier) * ticks
-            
+
     if gold_gen > 0 or supplies_gen > 0:
         conn.execute("UPDATE base SET gold = gold + ?, supplies = supplies + ? WHERE id = 1", (gold_gen, supplies_gen))
         

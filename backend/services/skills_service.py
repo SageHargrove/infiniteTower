@@ -238,31 +238,12 @@ GENERIC_SKILLS = {
     ],
 }
 
-# Talents and Seals (Assigned based on rarity and chance)
-TALENT_SKILLS = {
-    "genius": [
-        {"id": "talent_genius", "name": "Genius Talent", "rarity": "rare", "type": "passive",
-         "desc": "+10% all stats, +5% speed", "effect": {"all_pct": 0.10, "spd_pct": 0.05}},
-        {"id": "talent_prodigy", "name": "Prodigy", "rarity": "epic", "type": "passive",
-         "desc": "+15% all stats, +10% speed", "effect": {"all_pct": 0.15, "spd_pct": 0.10}},
-    ],
-    "seals": [
-        {"id": "seal_strength", "name": "Seal of Strength", "rarity": "epic", "type": "passive",
-         "desc": "+25% ATK, -5% SPD", "effect": {"atk_pct": 0.25, "spd_pct": -0.05}},
-        {"id": "seal_protection", "name": "Seal of Protection", "rarity": "epic", "type": "passive",
-         "desc": "+25% DEF, +10% max HP", "effect": {"def_pct": 0.25, "hp_pct": 0.10}},
-        {"id": "seal_agility", "name": "Seal of Agility", "rarity": "epic", "type": "passive",
-         "desc": "+15% SPD, +15% dodge chance", "effect": {"spd_pct": 0.15, "dodge_pct": 0.15}},
-    ],
-    "runes": [
-        {"id": "rune_destruction", "name": "Ancient Rune of Destruction", "rarity": "legendary", "type": "passive",
-         "desc": "+40% ATK, attacks ignore 20% DEF", "effect": {"atk_pct": 0.40, "armor_pen": 0.20}},
-        {"id": "rune_eternity", "name": "Ancient Rune of Eternity", "rarity": "legendary", "type": "passive",
-         "desc": "+50% max HP, regenerate 5% HP per round", "effect": {"hp_pct": 0.50, "regen_pct": 0.05}},
-        {"id": "rune_void", "name": "Ancient Rune of the Void", "rarity": "legendary", "type": "passive",
-         "desc": "+30% all stats, immune to fear", "effect": {"all_pct": 0.30, "fear_immune": True}},
-    ]
-}
+# Seals and Runes used to be rolled here at birth — they're now Relics
+# (services/relics_service.py): loot dropped from bosses/events, then
+# equipped onto any hero whose CURRENT star meets the relic's min_star.
+# Genius/Prodigy talent is retired entirely — the aptitude/talent growth
+# system (level_service.talent_score) now covers that "secretly OP low
+# rarity" narrative beat more thoroughly.
 
 # Boss-drop exclusive skills — never rolled naturally
 BOSS_DROP_SKILLS = [
@@ -350,26 +331,6 @@ def assign_initial_skills(hero_class: str, birth_star: int) -> list[dict]:
         if skill3 and skill3["id"] not in [s["id"] for s in skills]:
             skills.append(skill3)
 
-    # Apply Talents/Seals/Runes
-    if birth_star <= 4:
-        # 1-4★ heroes have a small chance to be a Genius/Prodigy
-        if random.random() < 0.05:  # 5% chance
-            talent = random.choice(TALENT_SKILLS["genius"]).copy()
-            skills.append(talent)
-    
-    if birth_star == 4:
-        # 4★ heroes can get a Seal
-        if random.random() < 0.20:  # 20% chance
-            seal = random.choice(TALENT_SKILLS["seals"]).copy()
-            skills.append(seal)
-            
-    if birth_star >= 5:
-        # 5-7★ heroes get Ancient Runes
-        if random.random() < 0.30 + (birth_star - 5) * 0.20:  # 30% for 5★, 50% for 6★, 70% for 7★
-            rune = random.choice(TALENT_SKILLS["runes"]).copy()
-            if rune["id"] not in [s["id"] for s in skills]:
-                skills.append(rune)
-
     for s in skills:
         if "tier" not in s:
             s["tier"] = "Beginner"
@@ -422,5 +383,7 @@ def apply_passive_skills(hero: dict, skills: list[dict]) -> dict:
             h["fear_immune"] = True
         if "death_save" in eff:
             h["death_save"] = eff["death_save"]
+        if "regen_pct" in eff:
+            h["regen_pct"] = h.get("regen_pct", 0.0) + eff["regen_pct"]
 
     return h

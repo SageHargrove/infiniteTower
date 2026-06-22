@@ -1,7 +1,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-def generate_placeholder(class_name, output_dir="static/portraits"):
+def generate_placeholder(class_name, output_dir="static/portraits/defaults"):
     os.makedirs(output_dir, exist_ok=True)
     
     # Create a simple dark gray image
@@ -29,9 +29,10 @@ def generate_placeholder(class_name, output_dir="static/portraits"):
     img.save(path)
     print(f"Generated {path}")
 
-# Load all classes to generate placeholders
-from services.class_service import ALL_CLASSES
+# Only base/starting classes need placeholders — evolutions are reached via
+# leveling, by which point the hero already has a real generated portrait.
+from services.class_service import COMBAT_BASE_CLASSES, SUPPORT_BASE_CLASSES
 
 if __name__ == "__main__":
-    for cls in set(ALL_CLASSES + ["Classless"]):
+    for cls in set(COMBAT_BASE_CLASSES + SUPPORT_BASE_CLASSES + ["Classless"]):
         generate_placeholder(cls)

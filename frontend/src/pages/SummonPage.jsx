@@ -127,7 +127,7 @@ export default function SummonPage({ onGoldChange }) {
                   const isRainbow = numStar === 7;
                   return (
                     <div key={star} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', padding: '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)', borderRadius: 4 }}>
-                      <span className={isRainbow ? 'cyan-text' : `birth-star-${star}`} style={{ color: isRainbow ? undefined : `var(--star${star})`, textShadow: numStar >= 5 ? '0 0 5px currentColor' : 'none' }}>
+                      <span className={isRainbow ? 'rainbow-text' : `birth-star-${star}`} style={{ color: isRainbow ? undefined : `var(--star${star})`, textShadow: numStar >= 5 ? '0 0 5px currentColor' : 'none' }}>
                         {'★'.repeat(numStar)}
                       </span>
                       <span className="text-dim" style={{ fontFamily: 'monospace', fontSize: '1.1rem' }}>

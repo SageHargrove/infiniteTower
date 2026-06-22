@@ -1,4 +1,38 @@
+import { emitToast } from '../toastBus'
+
 const BASE = '/api'
+
+// Every reward-granting endpoint in this codebase uses a slightly different
+// response shape (flat gold_gained/gems_gained on tower floors, {type,
+// reward} on daily dungeons, {effects:{...}} on event/explore resolution,
+// {equipment:{...}} on forge crafting). Rather than wire a toast call into
+// every individual call site (and inevitably miss one — see the gems display
+// bug), every response funnels through here once, so nothing can silently
+// fail to surface again.
+function extractRewards(data) {
+  if (!data || typeof data !== 'object') return null
+  const gold = (data.gold_gained || 0) + (data.effects?.gold || 0) + (data.type === 'gold' ? (data.reward || 0) : 0)
+  const gems = (data.gems_gained || 0) + (data.effects?.gems || 0)
+  const supplies = (data.supplies_gained || 0) + (data.type === 'supplies' ? (data.reward || 0) : 0)
+  const materials = { ...(data.materials_gained || {}) }
+  if (data.type === 'materials' && data.reward && typeof data.reward === 'object') {
+    for (const [k, v] of Object.entries(data.reward)) materials[k] = (materials[k] || 0) + v
+  }
+  const equipment = data.equipment_drop || data.equipment || null
+  const relic = data.relic_drop || null
+
+  const lines = []
+  if (gold > 0) lines.push({ label: 'Gold', value: `+${gold.toLocaleString()}`, color: 'var(--gold)' })
+  if (gems > 0) lines.push({ label: 'Gems', value: `+${gems.toLocaleString()}`, color: '#00ffff' })
+  if (supplies > 0) lines.push({ label: 'Supplies', value: `+${supplies.toLocaleString()}`, color: 'var(--text-hi)' })
+  for (const [name, qty] of Object.entries(materials)) {
+    if (qty > 0) lines.push({ label: name, value: `+${qty}`, color: 'var(--text-hi)' })
+  }
+  if (equipment?.name) lines.push({ label: 'Equipment', value: equipment.name, color: 'var(--green)' })
+  if (relic?.name) lines.push({ label: relic.relic_type === 'rune' ? 'Rune' : 'Seal', value: relic.name, color: '#c060ff' })
+
+  return lines.length ? lines : null
+}
 
 async function request(path, options = {}) {
   const isGet = !options.method || options.method === 'GET'
@@ -14,11 +48,24 @@ async function request(path, options = {}) {
     if (typeof msg === 'object') msg = JSON.stringify(msg)
     throw new Error(msg)
   }
-  return res.json()
+  const data = await res.json()
+  const lines = extractRewards(data)
+  if (lines) emitToast({ title: 'Rewards', lines, borderColor: 'var(--gold)' })
+  if (Array.isArray(data?.ego_rebellions) && data.ego_rebellions.length) {
+    for (const reb of data.ego_rebellions) {
+      emitToast({
+        title: '⚡ Ego Rebellion',
+        lines: [{ label: reb.hero_name, value: reb.message, color: '#ff8888' }],
+        borderColor: '#ff4444',
+      })
+    }
+  }
+  return data
 }
 
 export const getChatLogs = (limit = 10) => request(`/chat/?limit=${limit}`)
 export const egoAutoTeam = (teamId, egoHeroId) => request('/heroes/team/ego_auto', { method: 'POST', body: JSON.stringify({ team_id: teamId, ego_hero_id: egoHeroId }) })
+export const getEgoRecommendation = (heroId) => request(`/heroes/${heroId}/ego_recommendation`)
 
 // Base
 export const getBase = () => request('/base/')
@@ -36,9 +83,15 @@ export const configTraining = (facilityId, heroId, role, targetSkillId, targetHe
 export const getMageTowerUpgrades = () => request('/base/facilities/mage-tower/upgrades')
 export const buyResearchUpgrade = (upgradeId) => request('/base/facilities/mage-tower/buy', { method: 'POST', body: JSON.stringify({ upgrade_id: upgradeId }) })
 
+export const grantResources = (gold = 0, gems = 0, supplies = 0) => request('/base/dev/grant', { method: 'POST', body: JSON.stringify({ gold, gems, supplies }) })
+export const clearDevInventory = () => request('/base/dev/clear-inventory', { method: 'POST' })
+export const setDevLevel = (heroId, level) => request('/base/dev/set-level', { method: 'POST', body: JSON.stringify({ hero_id: heroId, level }) })
+export const grantInventoryItem = (itemName, itemType, quantity = 1) => request(`/base/inventory/add?item_name=${encodeURIComponent(itemName)}&item_type=${encodeURIComponent(itemType)}&quantity=${quantity}`, { method: 'POST' })
+
 export const listUpgrades = () => request('/base/upgrades')
 export const purchaseUpgrade = (facilityId) => request('/base/upgrades/purchase', { method: 'POST', body: JSON.stringify({ upgrade_id: facilityId }) })
 export const getInventory = () => request('/base/inventory')
+export const useItem = (itemName, heroId, targetSkillId = null) => request('/base/inventory/use', { method: 'POST', body: JSON.stringify({ item_name: itemName, hero_id: heroId, target_skill_id: targetSkillId }) })
 
 // Heroes
 export const listHeroes = (aliveOnly = false) => request(`/heroes/?alive_only=${aliveOnly}`)
@@ -63,6 +116,7 @@ export const listEquipment = () => request('/equipment/')
 export const craftEquipment = (crafterId) => request('/equipment/craft', { method: 'POST', body: JSON.stringify({ crafter_id: crafterId }) })
 export const equipItem = (equipmentId, heroId) => request('/equipment/equip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId, hero_id: heroId }) })
 export const unequipItem = (equipmentId) => request('/equipment/unequip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
+export const scrapEquipment = (equipmentId) => request('/equipment/scrap', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
 
 // Gacha
 export const pullHeroes = (count = 1, usePortrait = false) => request('/gacha/pull', { method: 'POST', body: JSON.stringify({ count, use_portrait: usePortrait }) })
@@ -72,7 +126,9 @@ export const redeemSpark = () => request('/gacha/spark-redeem', { method: 'POST'
 
 // Tower / Runs
 export const enterFloor = (floorNumber, teamId) => request('/tower/floor/enter', { method: 'POST', body: JSON.stringify({ floor_number: floorNumber, team_id: teamId }) })
+export const previewFloor = (floorNumber) => request(`/tower/floor/preview/${floorNumber}`)
 export const resolveEvent = (floorNumber, teamId, templateId, choiceId, theme) => request('/tower/floor/event/resolve', { method: 'POST', body: JSON.stringify({ floor_number: floorNumber, team_id: teamId, template_id: templateId, choice_id: choiceId, theme: theme }) })
+export const resolveExplore = (floorNumber, teamId, choiceId) => request('/tower/floor/explore/resolve', { method: 'POST', body: JSON.stringify({ floor_number: floorNumber, team_id: teamId, choice_id: choiceId }) })
 export const listRuns = () => request('/runs/')
 export const getEventLog = (runId = null, limit = 50) => request(`/runs/log?${runId ? `run_id=${runId}&` : ''}limit=${limit}`)
 

@@ -7,7 +7,8 @@ import LogPage from './pages/LogPage'
 import InventoryPage from './pages/InventoryPage'
 import ProfileSelect from './components/ProfileSelect'
 import HeroChat from './components/HeroChat'
-import { getBase, listProfiles } from './api/client'
+import ToastContainer from './components/ToastContainer'
+import { getBase, listProfiles, grantResources, clearDevInventory, setDevLevel, grantInventoryItem, listHeroes } from './api/client'
 import { initAudio, setSoundEnabled, isSoundEnabled, playClick, setBgmVolume, setSfxVolume } from './audio'
 
 const TABS = [
@@ -28,6 +29,13 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true)
   const [bgmVol, setBgmVol] = useState(50)
   const [sfxVol, setSfxVol] = useState(50)
+  const [devHeroes, setDevHeroes] = useState([])
+  const [devHeroId, setDevHeroId] = useState('')
+  const [devLevel, setDevLevel_] = useState(10)
+  const [devItemName, setDevItemName] = useState('')
+  const [devItemType, setDevItemType] = useState('material')
+  const [devItemQty, setDevItemQty] = useState(5)
+  const [devBusy, setDevBusy] = useState(false)
 
   useEffect(() => { 
     checkProfile()
@@ -60,7 +68,46 @@ export default function App() {
 
   useEffect(() => {
     if (activeProfile) refreshResources()
+    if (activeProfile && activeProfile.toLowerCase().startsWith('test')) {
+      listHeroes(true).then(setDevHeroes).catch(() => {})
+    }
   }, [activeProfile])
+
+  async function handleDevClearInventory() {
+    if (!confirm('Wipe all equipment, materials, potions, and scrolls on this profile?')) return
+    setDevBusy(true)
+    try {
+      await clearDevInventory()
+      alert('Inventory cleared.')
+    } catch (e) { alert(e.message) } finally { setDevBusy(false) }
+  }
+
+  async function handleDevSetLevel() {
+    if (!devHeroId) return
+    setDevBusy(true)
+    try {
+      const res = await setDevLevel(Number(devHeroId), Number(devLevel))
+      alert(`Set to level ${res.level}${res.capped ? ' (capped by star)' : ''}.`)
+    } catch (e) { alert(e.message) } finally { setDevBusy(false) }
+  }
+
+  async function handleDevGrantItem() {
+    if (!devItemName.trim()) return
+    setDevBusy(true)
+    try {
+      await grantInventoryItem(devItemName.trim(), devItemType, Number(devItemQty))
+      alert(`Granted ${devItemQty}x ${devItemName}.`)
+    } catch (e) { alert(e.message) } finally { setDevBusy(false) }
+  }
+
+  async function handleGrantResources(gold, gems, supplies) {
+    try {
+      await grantResources(gold, gems, supplies)
+      refreshResources()
+    } catch (e) {
+      alert(e.message)
+    }
+  }
 
   function toggleSound() {
     initAudio()
@@ -80,7 +127,7 @@ export default function App() {
     summon: <SummonPage onGoldChange={refreshResources} />,
     heroes: <HeroesPage />,
     inventory: <InventoryPage />,
-    tower:  <TowerPage />,
+    tower:  <TowerPage onGoldChange={refreshResources} />,
     base:   <BasePage onGoldChange={refreshResources} />,
     log:    <LogPage />,
   }
@@ -113,7 +160,7 @@ export default function App() {
           <button
             key={t.id}
             className={`tab-btn ${tab === t.id ? 'active' : ''}`}
-            onClick={() => { setTab(t.id); if (t.id === 'base' || t.id === 'summon') refreshResources() }}
+            onClick={() => { setTab(t.id); if (t.id === 'base' || t.id === 'summon' || t.id === 'tower') refreshResources() }}
           >
             {t.label}
           </button>
@@ -123,8 +170,59 @@ export default function App() {
       <main className="main-content">
         {pages[tab]}
       </main>
-      
-      
+
+      {activeProfile && activeProfile.toLowerCase().startsWith('test') && (
+        <div style={{
+          position: 'fixed', top: '50%', right: 0, transform: 'translateY(-50%)',
+          zIndex: 500, background: 'rgba(20,10,10,0.92)', border: '1px solid rgba(255,100,100,0.4)',
+          borderRight: 'none', borderRadius: '8px 0 0 8px', padding: '1rem',
+          display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '230px',
+          maxHeight: '90vh', overflowY: 'auto',
+          boxShadow: '-4px 0 12px rgba(0,0,0,0.4)'
+        }}>
+          <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1rem', color: '#ff8080' }}>🛠 Dev Tools</div>
+          <div className="text-dim" style={{ fontSize: '0.7rem', marginBottom: '0.3rem' }}>
+            Profile "{activeProfile}" only
+          </div>
+          <button className="btn" style={{ fontSize: '0.85rem' }} onClick={() => handleGrantResources(10000, 0, 0)}>+10,000 Gold</button>
+          <button className="btn" style={{ fontSize: '0.85rem' }} onClick={() => handleGrantResources(0, 500, 0)}>+500 Gems</button>
+          <button className="btn" style={{ fontSize: '0.85rem' }} onClick={() => handleGrantResources(0, 0, 500)}>+500 Supplies</button>
+
+          <div style={{ borderTop: '1px solid rgba(255,100,100,0.25)', marginTop: '0.4rem', paddingTop: '0.5rem' }}>
+            <button className="btn" style={{ fontSize: '0.8rem', width: '100%', color: '#ff8080' }} disabled={devBusy} onClick={handleDevClearInventory}>
+              ⚠ Clear Inventory
+            </button>
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(255,100,100,0.25)', marginTop: '0.4rem', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <div className="text-dim" style={{ fontSize: '0.7rem' }}>Set Hero Level</div>
+            <select className="input" style={{ fontSize: '0.75rem', padding: '0.3rem' }} value={devHeroId} onChange={e => setDevHeroId(e.target.value)}>
+              <option value="">Select hero...</option>
+              {devHeroes.map(h => <option key={h.id} value={h.id}>{h.name} (Lv.{h.level})</option>)}
+            </select>
+            <div style={{ display: 'flex', gap: '0.3rem' }}>
+              <input type="number" className="input" style={{ fontSize: '0.75rem', padding: '0.3rem', flex: 1 }} value={devLevel} onChange={e => setDevLevel_(e.target.value)} />
+              <button className="btn" style={{ fontSize: '0.75rem' }} disabled={devBusy || !devHeroId} onClick={handleDevSetLevel}>Set</button>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(255,100,100,0.25)', marginTop: '0.4rem', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <div className="text-dim" style={{ fontSize: '0.7rem' }}>Grant Item</div>
+            <input type="text" className="input" placeholder="Item name" style={{ fontSize: '0.75rem', padding: '0.3rem' }} value={devItemName} onChange={e => setDevItemName(e.target.value)} />
+            <div style={{ display: 'flex', gap: '0.3rem' }}>
+              <select className="input" style={{ fontSize: '0.75rem', padding: '0.3rem', flex: 1 }} value={devItemType} onChange={e => setDevItemType(e.target.value)}>
+                <option value="material">Material</option>
+                <option value="potion">Potion</option>
+                <option value="scroll">Scroll</option>
+              </select>
+              <input type="number" className="input" style={{ fontSize: '0.75rem', padding: '0.3rem', width: '50px' }} value={devItemQty} onChange={e => setDevItemQty(e.target.value)} />
+            </div>
+            <button className="btn" style={{ fontSize: '0.75rem' }} disabled={devBusy || !devItemName.trim()} onClick={handleDevGrantItem}>Grant</button>
+          </div>
+        </div>
+      )}
+
+
 
       {showSettings && (
         <div style={{
@@ -177,6 +275,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   )
 }

@@ -1,1 +1,0 @@
-def get(): from m1 import VAL; return VAL

@@ -1,7 +1,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-os.makedirs("static/portraits", exist_ok=True)
+os.makedirs("static/portraits/defaults", exist_ok=True)
 
 COLORS = {
     1: "#888888",
@@ -34,5 +34,5 @@ for star, color in COLORS.items():
         # Draw a small circle as a star for simplicity
         draw.ellipse([x-10, center_y-10, x+10, center_y+10], fill=color)
         
-    img.save(f"static/portraits/default_{star}star.png")
+    img.save(f"static/portraits/defaults/default_{star}star.png")
     print(f"Created default_{star}star.png")

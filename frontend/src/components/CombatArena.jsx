@@ -2,19 +2,30 @@ import React, { useState, useEffect } from 'react'
 
 const TEAM_POSITIONS = {
   hero: [
-    { x: '35%', y: '40%' }, // Front Top
-    { x: '35%', y: '60%' }, // Front Bottom
-    { x: '20%', y: '30%' }, // Back Top
-    { x: '20%', y: '50%' }, // Back Mid
-    { x: '20%', y: '70%' }, // Back Bottom
+    { x: '34%', y: '30%' }, // Front Top
+    { x: '34%', y: '70%' }, // Front Bottom
+    { x: '14%', y: '15%' }, // Back Top
+    { x: '14%', y: '50%' }, // Back Mid
+    { x: '14%', y: '85%' }, // Back Bottom
   ],
   enemy: [
-    { x: '65%', y: '40%' }, // Front Top
-    { x: '65%', y: '60%' }, // Front Bottom
-    { x: '80%', y: '30%' }, // Back Top
-    { x: '80%', y: '50%' }, // Back Mid
-    { x: '80%', y: '70%' }, // Back Bottom
+    { x: '66%', y: '30%' }, // Front Top
+    { x: '66%', y: '70%' }, // Front Bottom
+    { x: '86%', y: '15%' }, // Back Top
+    { x: '86%', y: '50%' }, // Back Mid
+    { x: '86%', y: '85%' }, // Back Bottom
   ]
+}
+
+// Solo enemies (elite mobs, minibosses, bosses) read as more threatening when
+// rendered bigger than a regular swarm/pack unit — scaled by tier, not just
+// "is there one enemy on screen" so a true boss still reads as the biggest
+// thing in the room.
+const ENEMY_SIZE_TIERS = {
+  normal:   { circle: 150, container: 170, icon: '2.8rem', name: '1rem',   pos: null },
+  elite:    { circle: 220, container: 240, icon: '3.6rem', name: '1.15rem', pos: { x: '70%', y: '50%' } },
+  miniboss: { circle: 320, container: 340, icon: '4.4rem', name: '1.3rem', pos: { x: '73%', y: '50%' } },
+  boss:     { circle: 460, container: 480, icon: '5.5rem', name: '1.5rem', pos: { x: '77%', y: '50%' } },
 }
 
 function FloatingDamage({ number, isCrit, onComplete }) {
@@ -50,13 +61,15 @@ function FloatingDamage({ number, isCrit, onComplete }) {
   )
 }
 
-function CombatUnitSprite({ unit, team, position, isActive, isHit, hp, maxHp, damageInfo }) {
+function CombatUnitSprite({ unit, team, position, pos: posOverride, isActive, isHit, hp, maxHp, damageInfo, tier = 'normal' }) {
+  const [imgError, setImgError] = useState(false)
   if (!unit) return null
-  
+
   const isDead = hp <= 0
   const hpPercent = Math.max(0, (hp / maxHp) * 100)
-  
-  const pos = TEAM_POSITIONS[team][position] || TEAM_POSITIONS[team][0]
+
+  const pos = posOverride || TEAM_POSITIONS[team][position] || TEAM_POSITIONS[team][0]
+  const size = ENEMY_SIZE_TIERS[tier] || ENEMY_SIZE_TIERS.normal
 
   return (
     <div style={{
@@ -70,30 +83,36 @@ function CombatUnitSprite({ unit, team, position, isActive, isHit, hp, maxHp, da
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      gap: '0.5rem',
-      width: '100px'
+      gap: '0.7rem',
+      width: `${size.container}px`,
+      zIndex: tier === 'boss' ? 5 : tier === 'miniboss' ? 4 : tier === 'elite' ? 3 : 1
     }}>
-      <div style={{ 
-        width: '60px', 
-        height: '60px', 
+      <div style={{
+        width: `${size.circle}px`,
+        height: `${size.circle}px`,
         borderRadius: '50%',
-        border: `3px solid ${team === 'hero' ? 'var(--gold)' : '#a44'}`,
+        border: `${tier === 'normal' ? 4 : 5}px solid ${team === 'hero' ? 'var(--gold)' : '#a44'}`,
         overflow: 'hidden',
         position: 'relative',
-        boxShadow: isActive ? `0 0 15px ${team === 'hero' ? 'var(--gold)' : '#a44'}` : '0 4px 8px rgba(0,0,0,0.5)'
+        boxShadow: isActive
+          ? `0 0 20px ${team === 'hero' ? 'var(--gold)' : '#a44'}`
+          : tier !== 'normal' ? `0 0 14px ${team === 'hero' ? 'rgba(201,168,76,0.4)' : 'rgba(170,68,68,0.5)'}, 0 4px 10px rgba(0,0,0,0.5)`
+          : '0 4px 10px rgba(0,0,0,0.5)'
       }}>
-        {unit.portrait_path ? (
-          <img src={`http://localhost:8000/${unit.portrait_path}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={unit.name} />
+        {unit.portrait_path && !imgError ? (
+          <img src={`http://localhost:8000/${unit.portrait_path}`} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%' }} alt={unit.name} onError={() => setImgError(true)} />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: '#333' }} />
+          <div style={{ width: '100%', height: '100%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size.icon }}>
+            {team === 'hero' ? '⚔' : '💀'}
+          </div>
         )}
       </div>
 
       <div style={{
         width: '100%',
         background: '#111',
-        height: '6px',
-        borderRadius: '3px',
+        height: '10px',
+        borderRadius: '5px',
         overflow: 'hidden'
       }}>
         <div style={{
@@ -104,10 +123,10 @@ function CombatUnitSprite({ unit, team, position, isActive, isHit, hp, maxHp, da
         }} />
       </div>
 
-      <div style={{ 
-        fontSize: '0.7rem', 
-        background: 'rgba(0,0,0,0.6)', 
-        padding: '0.1rem 0.4rem', 
+      <div style={{
+        fontSize: size.name,
+        background: 'rgba(0,0,0,0.6)',
+        padding: '0.15rem 0.6rem',
         borderRadius: '4px',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
@@ -134,6 +153,14 @@ export default function CombatArena({ combatData, onComplete }) {
   const heroes = combatData?.initial_state?.heroes || []
   const enemies = combatData?.initial_state?.enemies || []
   const turns = combatData?.turns || []
+  const isBoss = combatData?.initial_state?.is_boss || false
+  const isMiniboss = combatData?.initial_state?.is_miniboss || false
+
+  // Solo enemies (elite mobs, minibosses, bosses) read as more threatening
+  // rendered bigger than a regular swarm/pack unit. A true boss is sized to
+  // dominate its entire side of the field.
+  const enemyTier = isBoss ? 'boss' : isMiniboss ? 'miniboss' : enemies.length === 1 ? 'elite' : 'normal'
+  const soloEnemyPos = enemies.length === 1 ? ENEMY_SIZE_TIERS[enemyTier].pos : null
 
   useEffect(() => {
     if (combatData) {
@@ -175,7 +202,7 @@ export default function CombatArena({ combatData, onComplete }) {
     return () => clearTimeout(timer)
   }, [currentTurnIndex, playing, turns, onComplete])
 
-  if (!combatData) return null
+  if (!combatData || combatData.awaiting_choice) return null
 
   const currentTurn = currentTurnIndex >= 0 && currentTurnIndex < turns.length ? turns[currentTurnIndex] : null
 
@@ -183,7 +210,7 @@ export default function CombatArena({ combatData, onComplete }) {
     <div style={{
       position: 'relative',
       width: '100%',
-      height: '400px',
+      height: '880px',
       background: 'linear-gradient(to bottom, #1a1a24, #0a0a10)',
       border: '1px solid #333',
       borderRadius: '8px',
@@ -223,11 +250,13 @@ export default function CombatArena({ combatData, onComplete }) {
         const isTarget = currentTurn?.target_id === enemy.id
         const dmgInfo = isTarget ? { amount: currentTurn.damage, crit: currentTurn.is_crit } : null
         return (
-          <CombatUnitSprite 
-            key={enemy.id} 
-            unit={enemy} 
-            team="enemy" 
-            position={idx} 
+          <CombatUnitSprite
+            key={enemy.id}
+            unit={enemy}
+            team="enemy"
+            position={idx}
+            pos={soloEnemyPos}
+            tier={enemyTier}
             isActive={isAttacker}
             isHit={isTarget}
             hp={unitHPs[enemy.id] ?? enemy.hp}

@@ -86,5 +86,5 @@ def delete_profile(req: ProfileDeleteReq):
         shutil.rmtree(portraits_dir)
         
     if database.ACTIVE_PROFILE == name:
-        database.ACTIVE_PROFILE = None
+        database.clear_active_profile()
     return {"ok": True}

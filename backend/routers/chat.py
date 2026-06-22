@@ -7,10 +7,10 @@ import json
 router = APIRouter()
 
 class ChatGenerateRequest(BaseModel):
-    location: str = "The Square"
+    location: str = "The Lobby"
 
 @router.get("/")
-def get_chat_logs(limit: int = 10):
+def get_chat_logs(limit: int = 5):
     with db() as conn:
         rows = conn.execute(
             "SELECT id, location, message, participants, created_at FROM hero_chat_logs ORDER BY created_at DESC LIMIT ?", 

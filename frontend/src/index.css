@@ -120,6 +120,10 @@ h1, h2, h3, .title-font {
   cursor: pointer;
   transition: border-color 0.2s, transform 0.1s;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  box-sizing: border-box;
 }
 
 .hero-card:hover { border-color: var(--border-hi); transform: translateY(-1px); }
@@ -156,13 +160,36 @@ h1, h2, h3, .title-font {
   text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
 }
 
-.birth-star-7 .star { 
-  color: var(--star7);
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes star-rainbow {
+  0% { color: #ff0000; text-shadow: 0 0 10px #ff0000; filter: hue-rotate(0deg); }
+  50% { color: #ff0000; text-shadow: 0 0 10px #ff0000; filter: hue-rotate(180deg); }
+  100% { color: #ff0000; text-shadow: 0 0 10px #ff0000; filter: hue-rotate(360deg); }
+}
+
+.birth-star-7 .star {
+  animation: star-rainbow 2s linear infinite;
+}
+
+.rainbow-text {
+  animation: star-rainbow 2s linear infinite;
+}
+
+/* Vault Selection Ring */
+.vault-item-selected {
+  outline: 2px solid cyan;
+  box-shadow: 0 0 12px 2px cyan, inset 0 0 8px cyan !important;
+  transform: scale(1.05);
+  z-index: 10;
 }
 
 /* Morale bar */
 .morale-bar-wrap { margin-top: 0.5rem; }
-.morale-label { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 2px; display: flex; justify-content: space-between; }
+.morale-label { font-size: 0.72em; color: var(--text-dim); margin-bottom: 2px; display: flex; justify-content: space-between; }
 .morale-bar-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .morale-bar-fill {
   height: 100%;
@@ -183,12 +210,25 @@ h1, h2, h3, .title-font {
 .stats-row {
   display: flex;
   gap: 0.8rem;
-  font-size: 0.78rem;
+  font-size: 0.78em;
   color: var(--text-dim);
   margin-top: 0.5rem;
   flex-wrap: wrap;
 }
 .stat span { color: var(--text); font-weight: 600; }
+
+/* Expanded hero detail view — name/title/HP/level are what the user is
+   scanning for first, so they get bumped up relative to the rest; the
+   backstory is real but not immediately actionable, so it's de-emphasized
+   and relocated to the bottom of the panel (see HeroCard.jsx showFull). */
+.hero-card.full .hero-name { font-size: 1.7em; margin-bottom: 0.15em; }
+.hero-card.full .hero-title { font-size: 1.25em; margin-bottom: 0.6em; }
+.hero-card.full .hp-bar-wrap .morale-label,
+.hero-card.full .morale-bar-wrap .morale-label { font-size: 1.05em; }
+.hero-card.full .hp-bar-bg,
+.hero-card.full .morale-bar-bg { height: 7px; }
+.hero-card.full .stats-row { font-size: 1em; }
+.hero-card.full .story-block { font-size: 0.62em; }
 
 /* Grid layouts */
 .hero-grid {
@@ -398,4 +438,38 @@ h1, h2, h3, .title-font {
   margin-bottom: 0.4rem;
   line-height: 1.4;
   font-size: 0.9rem;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(20px); }
+}
+
+.toast-item {
+  animation: toast-in 0.2s ease-out;
+}
+
+.toast-item.toast-leaving {
+  animation: toast-out 0.2s ease-in forwards;
+}
+
+/* select.input has no rule of its own, so its dropdown list falls back to
+   browser/OS default colors (light bg, faint text) regardless of the
+   inline dark-theme style on the closed box — style the popup list too. */
+select.input,
+.input[type="select"] {
+  background: var(--bg-panel);
+  color: var(--text-hi);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+select.input option {
+  background: var(--bg-panel);
+  color: var(--text-hi);
 }

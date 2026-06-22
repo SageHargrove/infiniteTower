@@ -8,6 +8,16 @@ backend/static/portraits/
 # Python
 __pycache__/
 *.pyc
+# Environment
+backend/.env
+backend/game.db
+
+# Portraits (large files, regenerated locally)
+backend/static/portraits/
+
+# Python
+__pycache__/
+*.pyc
 venv/
 backend/venv/
 
@@ -16,3 +26,4 @@ frontend/node_modules/
 
 # ComfyUI
 ComfyUI/
+*.mp3

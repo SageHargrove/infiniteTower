@@ -5,22 +5,43 @@ const MORALE_STATE_LABEL = {
   steady: 'Steady', shaken: 'Shaken', fearful: 'Fearful', broken: 'Broken',
 }
 
-const CLASS_COLORS = {
-  'Warrior': '#c87830',
-  'Spearman': '#c8a030',
-  'Thief': '#7030c8',
-  'Archer': '#30a030',
-  'Mage': '#4060c8',
-  'Magic Engineer': '#30b8c8',
-  'Chef': '#c85030',
-  'Medic': '#30c870',
-  'Scout': '#a8c830',
-  'Blacksmith': '#888',
-  'Quartermaster': '#c8c030',
-  'Tactician': '#8030c8',
-  'Priest': '#c0c0e0',
-  'Alchemist': '#30c8a0',
-  'Classless': '#555',
+// Every base class evolves into a whole tree of named tiers (Warrior →
+// Knight/Berserker/Paladin → Aegis/Templar/Bloodrager/... etc — see
+// backend services/class_service.py). Hand-mapping ~90 individual evolution
+// names to icons/colors is unmaintainable and silently breaks (showing '?')
+// every time a new evolution tier gets added. Instead, every evolution name
+// is grouped under its base-class family here, and the whole family shares
+// one icon + color — new evolutions just need a one-line addition to a list,
+// not a whole new icon/color decision.
+const CLASS_FAMILIES = {
+  'Warrior': { icon: '⚔', color: '#c87830', members: ['Warrior', 'Knight', 'Berserker', 'Paladin', 'Aegis', 'Templar', 'Bloodrager', 'Juggernaut', 'Crusader', 'Divine Sentinel'] },
+  'Spearman': { icon: '🔱', color: '#c8a030', members: ['Spearman', 'Lancer', 'Halberdier', 'Dragoon', 'Pikemaster', 'Vanguard', 'Glaive Lord', 'Warlord', 'Wyvern Rider', 'Dragon Knight'] },
+  'Thief': { icon: '🗡', color: '#7030c8', members: ['Thief', 'Assassin', 'Rogue', 'Ninja', 'Shadowblade', 'Nightstalker', 'Trickster', 'Shinobi', 'Shadowmaster', 'Infiltrator'] },
+  'Archer': { icon: '🏹', color: '#30a030', members: ['Archer', 'Sniper', 'Ranger', 'Crossbowman', 'Marksman', 'Deadeye', 'Beastmaster', 'Warden', 'Arbalist', 'Siege Master'] },
+  'Mage': { icon: '🔮', color: '#4060c8', members: ['Mage', 'Sorcerer', 'Warlock', 'Necromancer', 'Summoner', 'Archmage', 'Elementalist', 'Demonologist', 'Voidwalker', 'Lich', 'Deathcaller', 'Grand Summoner', 'Conjurer'] },
+  'Spellsword': { icon: '🗲', color: '#5040d0', members: ['Spellsword', 'Eldritch Knight', 'Rune Blade', 'Arcane Lord', 'Mystic Vanguard', 'Rune Master', 'Spellweaver'] },
+  'Acolyte': { icon: '☀', color: '#c0c0e0', members: ['Acolyte', 'Cleric', 'Bard', 'Druid', 'Monk', 'High Priest', 'Bishop', 'Maestro', 'Troubadour', 'Archdruid', 'Hierophant', 'Grandmaster', 'Zenith'] },
+  'Priest': { icon: '✝', color: '#d8d8f0', members: ['Priest', 'Chaplain', 'Confessor', 'High Confessor', 'Oracle', 'Prophet', 'Saint'] },
+  'Tactician': { icon: '♔', color: '#8030c8', members: ['Tactician', 'Strategist', 'Grand Strategist', 'War Master'] },
+  'Scout': { icon: '🦅', color: '#a8c830', members: ['Scout', 'Pathfinder', 'Trailblazer', 'Void Walker'] },
+  'Blacksmith': { icon: '⚒', color: '#888888', members: ['Blacksmith', 'Master Smith', 'Runesmith', 'Weaponsmith', 'Armorer', 'Artificer', 'Forge Lord'] },
+  'Chef': { icon: '🍳', color: '#c85030', members: ['Chef', 'Head Chef', 'Culinary Master', 'Brewmaster', 'Iron Chef', 'Sous Chef', 'Gourmet', 'Master Chef', 'Butcher'] },
+  'Medic': { icon: '✚', color: '#30c870', members: ['Medic', 'Field Medic', 'Surgeon', 'Miracle Worker', 'Chief Medical Officer'] },
+  'Quartermaster': { icon: '⚖', color: '#c8c030', members: ['Quartermaster', 'Logistics Officer', 'Guild Treasurer', 'Trade Baron', 'Advisor', 'General', 'Commander'] },
+  'Farmer': { icon: '🌾', color: '#9aaa30', members: ['Farmer', 'Master Farmer', 'Harvest Lord', 'Beast Tamer', 'Apex Predator', 'Wild Master', 'Forager', 'Scavenger', 'Hoarder', 'Tracker'] },
+  'Merchant': { icon: '💰', color: '#d4af37', members: ['Merchant', 'Trader', 'Guild Master', 'Trade Prince', 'Smuggler', 'Black Market Baron', 'Spy', 'Spymaster', 'Tycoon', 'Guildmaster'] },
+  'Alchemist': { icon: '⚗', color: '#30c8a0', members: ['Alchemist', 'Master Alchemist', 'Transmuter', 'Philosopher', 'Apothecary', 'Grand Alchemist', 'Herbalist', 'Poisoner', 'Plague Doctor'] },
+  'Magic Engineer': { icon: '⚙', color: '#30b8c8', members: ['Magic Engineer'] },
+  'Classless': { icon: '✦', color: '#888899', members: ['Classless', 'Adventurer', 'Veteran', 'Mercenary', 'Bounty Hunter', 'Hero', 'Champion'] },
+}
+
+const CLASS_ICONS = {}
+const CLASS_COLORS = {}
+for (const family of Object.values(CLASS_FAMILIES)) {
+  for (const name of family.members) {
+    CLASS_ICONS[name] = family.icon
+    CLASS_COLORS[name] = family.color
+  }
 }
 
 const SKILL_RARITY_COLORS = {
@@ -29,13 +50,6 @@ const SKILL_RARITY_COLORS = {
   rare: '#4a7aaa',
   epic: '#8030c8',
   legendary: '#c9a84c',
-}
-
-const CLASS_ICONS = {
-  'Warrior': '⚔', 'Spearman': '🔱', 'Thief': '🗡', 'Archer': '🏹',
-  'Mage': '🔮', 'Magic Engineer': '⚙', 'Chef': '🍳', 'Medic': '✚',
-  'Scout': '🦅', 'Blacksmith': '⚒', 'Quartermaster': '⚖',
-  'Tactician': '♔', 'Priest': '☀️', 'Alchemist': '⚗', 'Classless': '♢',
 }
 
 const APTITUDE_ORDER = ['Combat', 'Survival', 'Tactical', 'Mental', 'Leadership']
@@ -48,13 +62,11 @@ function getAptitudeColor(value) {
   return 'var(--red)' // very low
 }
 
-const RAINBOW_COLORS = ['#ff4444', '#ffaa00', '#ffff00', '#44ff44', '#4444ff', '#8a2be2', '#ee82ee'];
-
 export function Stars({ count, max = 7 }) {
   return (
     <div className={`stars birth-star-${count}`}>
       {Array.from({ length: max }).map((_, i) => (
-        <span key={i} className={count === 7 && i < count ? 'cyan-text' : 'star'}>
+        <span key={i} className={count === 7 && i < count ? 'rainbow-text' : 'star'}>
           {i < count ? '★' : '☆'}
         </span>
       ))}
@@ -62,31 +74,83 @@ export function Stars({ count, max = 7 }) {
   )
 }
 
+const CLASS_TOOLTIPS = {
+  'Warrior': 'A durable frontline fighter that absorbs damage and protects allies.',
+  'Spearman': 'A versatile melee fighter capable of piercing enemy defenses.',
+  'Thief': 'A nimble combatant that strikes from the shadows with high crit chance.',
+  'Archer': 'A ranged attacker that rains arrows on the enemy backline.',
+  'Mage': 'A spellcaster dealing devastating magical area damage.',
+  'Magic Engineer': 'A master of magical contraptions, building turrets and traps.',
+  'Chef': 'Provides powerful morale and HP recovery buffs after combat.',
+  'Medic': 'Heals wounds and significantly reduces trauma and stress.',
+  'Scout': 'Reveals hidden paths and traps, reducing ambush chances.',
+  'Blacksmith': 'Upgrades team equipment and provides a baseline stat aura.',
+  'Quartermaster': 'Manages the party inventory, increasing gold and supply gains.',
+  'Tactician': 'A strategic mastermind that provides combat buffs and re-rolls.',
+  'Priest': 'Offers divine protection and massive morale recovery.',
+  'Alchemist': 'Brews potent potions and increases rare material drop rates.',
+  'Classless': 'A blank slate. Though weak now, it harbors the potential for unique, secret evolutions at higher levels.',
+  'Adventurer': 'A seasoned explorer adaptable to any situation, ready for the unknown.',
+  'Paladin': 'A holy warrior who smites evil and shields the weak with divine magic.',
+  'Rogue': 'Fights dirty, stealing items, crippling enemies, and striking from shadows.',
+  'Warrior': 'A durable frontline fighter that deals solid melee damage.',
+  'Spearman': 'A frontline combatant wielding a long-reaching weapon with high pierce damage.',
+  'Spellsword': 'A hybrid combatant mixing martial prowess with devastating magical strikes.',
+  'Acolyte': 'A devout follower providing essential support and minor healing to allies.',
+  'Farmer': 'A hardy worker who increases resource yields and supplies for the team.',
+  'Merchant': 'A savvy trader who boosts gold income and finds better deals.'
+};
+
+const EGO_TOOLTIPS = {
+  'Aggressive': 'Desires a team full of damage dealers (Mage, Warrior, etc).',
+  'Cautious': 'Desires a team with strong defense and healing support.',
+  'Tactical': 'Desires a perfectly balanced formation (2 Frontline, 3 Backline).',
+  'Leader': 'Desires to be the undisputed leader (highest star rarity on the team).',
+  'Lone Wolf': 'Desires a smaller team (3 or fewer heroes) for maximum glory.',
+  'Resonant': 'Desires a team composed entirely of the exact same class.'
+};
+
+const FRONTLINE_FAMILIES = ['Warrior', 'Spearman', 'Thief', 'Spellsword', 'Scout', 'Blacksmith', 'Farmer', 'Rogue', 'Paladin']
+
 export function ClassBadge({ heroClass }) {
   if (!heroClass) return null
   const color = CLASS_COLORS[heroClass] || '#555'
   const icon = CLASS_ICONS[heroClass] || '?'
+  
+  let familyName = 'Classless'
+  for (const [fam, data] of Object.entries(CLASS_FAMILIES)) {
+    if (data.members.includes(heroClass)) {
+      familyName = fam; break;
+    }
+  }
+  let archetype = 'Backline'
+  if (heroClass === 'Classless') archetype = 'Wildcard'
+  else if (FRONTLINE_FAMILIES.includes(familyName)) archetype = 'Frontline'
+
   return (
-    <span style={{
+    <span 
+      title={`[${archetype}] ${CLASS_TOOLTIPS[heroClass] || 'A powerful hero.'}`}
+      style={{
       display: 'inline-flex', alignItems: 'center', gap: '3px',
       background: `${color}22`, border: `1px solid ${color}66`,
       color: color, borderRadius: 3,
       padding: '1px 6px', fontSize: '0.7em',
       fontFamily: 'Cinzel, serif', letterSpacing: '0.05em',
       marginTop: '0.3em',
+      cursor: 'help',
     }}>
       {icon} {heroClass}
     </span>
   )
 }
 
-export function LevelBadge({ level, ascensionStar }) {
+export function LevelBadge({ level, ascensionStar, large = false }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center',
       background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)',
       color: 'var(--gold)', borderRadius: 3,
-      padding: '1px 6px', fontSize: '0.7em',
+      padding: large ? '2px 9px' : '1px 6px', fontSize: large ? '1.15em' : '0.7em',
       fontFamily: 'Cinzel, serif', marginLeft: '0.3em',
     }}>
       Lv.{level}
@@ -94,9 +158,20 @@ export function LevelBadge({ level, ascensionStar }) {
   )
 }
 
+// Mirrors the real combat formula in calc_damage() (combat_service.py):
+// below 40 morale, a hero's own damage output is multiplied by
+// 0.5 + morale/80 — a sliding penalty, not a stepped one. At 40+ morale
+// there is currently no penalty at all (the "shaken" tier is cosmetic only).
+function moraleEffectDesc(morale) {
+  if (morale >= 40) return 'No combat penalty at this morale.'
+  const factor = 0.5 + morale / 80
+  const pct = Math.round((1 - factor) * 100)
+  return `Damage output reduced by ${pct}% while attacking, until morale recovers to 40+.`
+}
+
 export function MoraleBar({ morale, state }) {
   return (
-    <div className="morale-bar-wrap">
+    <div className="morale-bar-wrap" title={moraleEffectDesc(morale)} style={{ cursor: 'help' }}>
       <div className="morale-label">
         <span>Morale</span>
         <span className={`text-${state === 'steady' ? 'green' : state === 'broken' ? 'red' : 'gold'}`}>
@@ -196,6 +271,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
   const dead = !hero.is_alive
   const [refreshing, setRefreshing] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const [showSynergyTip, setShowSynergyTip] = useState(false)
 
   const handleRegenerateProfile = async (e) => {
     e.stopPropagation()
@@ -221,7 +297,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
 
   return (
     <div
-      className={`hero-card ${selected ? 'selected' : ''} ${dead ? 'dead' : ''}`} style={{ fontSize: showFull ? "1.6em" : "1em" }}
+      className={`hero-card ${selected ? 'selected' : ''} ${dead ? 'dead' : ''} ${showFull ? 'full' : ''}`} style={{ fontSize: showFull ? "1.6em" : "1em" }}
       onClick={!dead && onClick ? onClick : undefined}
     >
       {onToggleSelect && (
@@ -240,7 +316,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
           {selected && '✓'}
         </div>
       )}
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', flexShrink: 0 }}>
         {hero.is_on_team > 0 && !showFull && (
           <div style={{
             position: 'absolute', top: 5, right: 5, zIndex: 10,
@@ -266,7 +342,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
             alignItems: 'center', 
             justifyContent: 'center',
             background: `radial-gradient(circle at top, ${CLASS_COLORS[hero.hero_class] || '#444'}, #1a1a24)`,
-            height: showFull ? '400px' : '100%',
+            ...(showFull ? { height: '400px' } : {}),
             width: '100%',
             position: 'relative',
             overflow: 'hidden'
@@ -285,14 +361,15 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
           </div>
         )}
         
-        {showFull && !dead && !hero.portrait_path.includes('custom_') && (
-          <button 
-            className="btn btn-gold" 
+        {showFull && !dead && (
+          <button
+            className="btn btn-gold"
             style={{ position: 'absolute', bottom: '5px', right: '5px', padding: '2px 6px', fontSize: '0.6em' }}
             onClick={handleRegenerateProfile}
             disabled={refreshing}
+            title="Reroll this hero's portrait — keeps their name, lore, and stats."
           >
-            {refreshing ? '...' : 'Regenerate Profile'}
+            {refreshing ? '...' : 'Regenerate Portrait'}
           </button>
         )}
       </div>
@@ -300,43 +377,116 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
       <div className="hero-name">{hero.name}</div>
       <div className="hero-title">{hero.title}</div>
       {hero.synergy_group && (
-        <div style={{ marginTop: '0.4em', marginBottom: '0.2em' }}>
-          <span style={{ 
-            fontSize: '0.65em', 
-            background: 'rgba(200, 160, 48, 0.2)', 
-            color: '#e8c050', 
-            padding: '0.2rem 0.5em', 
-            borderRadius: '4px', 
-            fontFamily: 'Cinzel, serif', 
-            fontWeight: 'bold',
-            border: '1px solid rgba(200, 160, 48, 0.4)'
-          }}>
+        <div style={{ marginTop: '0.4em', marginBottom: '0.2em', position: 'relative', display: 'inline-block' }}>
+          <span
+            onMouseEnter={(e) => { e.stopPropagation(); setShowSynergyTip(true) }}
+            onMouseLeave={() => setShowSynergyTip(false)}
+            style={{
+              fontSize: '0.65em',
+              background: 'rgba(200, 160, 48, 0.2)',
+              color: '#e8c050',
+              padding: '0.2rem 0.5em',
+              borderRadius: '4px',
+              fontFamily: 'Cinzel, serif',
+              fontWeight: 'bold',
+              border: '1px solid rgba(200, 160, 48, 0.4)',
+              cursor: 'help',
+            }}
+          >
             <span style={{ marginRight: '4px' }}>🛡️</span>
             {hero.synergy_group}
           </span>
+          {showSynergyTip && (
+            <div style={{
+              position: 'absolute',
+              bottom: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              marginBottom: '6px',
+              width: '220px',
+              background: '#1a1a1a',
+              border: '1px solid rgba(200, 160, 48, 0.5)',
+              borderRadius: '4px',
+              padding: '0.6em 0.7em',
+              fontSize: '0.7em',
+              fontFamily: 'inherit',
+              fontWeight: 'normal',
+              color: '#ddd',
+              lineHeight: 1.4,
+              zIndex: 20,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+              pointerEvents: 'none',
+            }}>
+              <strong style={{ color: '#e8c050' }}>{hero.synergy_group} Synergy</strong><br/>
+              Deploying multiple "{hero.synergy_group}" heroes on the same team grants +5% ATK/DEF/SPD/HP per group member in combat (stacks with team size).
+            </div>
+          )}
         </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3em', marginTop: '0.3em' }}>
         <Stars count={hero.birth_star} />
-        <LevelBadge level={hero.level || 1} ascensionStar={hero.ascension_star || 0} />
+        <LevelBadge level={hero.level || 1} ascensionStar={hero.ascension_star || 0} large={showFull} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3em', marginTop: '0.3em' }}>
         <ClassBadge heroClass={hero.hero_class} />
-        {hero.ego_type && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center',
-            background: 'rgba(255,100,100,0.1)', border: '1px solid rgba(255,100,100,0.3)',
-            color: '#ff8888', borderRadius: 3,
+        {hero.ego_type && hero.ego_type.toLowerCase() !== 'null' && (
+          <span
+            title={`Ego Preference: ${EGO_TOOLTIPS[hero.ego_type] || 'Unknown desires.'}\nPatience: ${hero.ego_patience ?? 100}/100\n\n${
+              hero.is_ego_satisfied === undefined ? '"I await deployment."' :
+              hero.is_ego_satisfied ? '"This formation is acceptable."' :
+              (hero.ego_patience ?? 100) > 50 ? '"This team composition displeases me. Fix it."' :
+              '"My patience wears thin... I will take matters into my own hands soon."'
+            }`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              background: 'rgba(255,100,100,0.1)', border: '1px solid rgba(255,100,100,0.3)',
+              color: '#ff8888', borderRadius: 3,
+              padding: '1px 6px', fontSize: '0.7em',
+              fontFamily: 'Cinzel, serif',
+              marginTop: '0.3em',
+              cursor: 'help'
+            }}>
+            ⚡ Ego: {hero.ego_type}
+            <span style={{ display: 'inline-block', width: '28px', height: '4px', background: 'rgba(255,255,255,0.15)', borderRadius: 2, overflow: 'hidden' }}>
+              <span style={{
+                display: 'block', height: '100%',
+                width: `${hero.ego_patience ?? 100}%`,
+                background: (hero.ego_patience ?? 100) <= 30 ? '#ff4444' : (hero.ego_patience ?? 100) <= 60 ? '#ffaa44' : '#88ff88',
+              }} />
+            </span>
+          </span>
+        )}
+        {hero.bonds && hero.bonds.length > 0 && (
+          <span 
+            title={hero.bonds.map(b => `${b.hero_a_name} & ${b.hero_b_name} (Lv ${b.bond_level})`).join('\n')}
+            style={{
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            background: 'rgba(255,105,180,0.15)', border: '1px solid rgba(255,105,180,0.4)',
+            color: '#ff69b4', borderRadius: 3,
             padding: '1px 6px', fontSize: '0.7em',
-            fontFamily: 'Cinzel, serif',
-            marginTop: '0.3em',
+            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
           }}>
-            dY` Ego: {hero.ego_type}
+            ❤️ {hero.bonds.length}
+          </span>
+        )}
+        {hero.legacies && hero.legacies.length > 0 && (
+          <span 
+            title={hero.legacies.join('\n')}
+            style={{
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            background: 'rgba(180,180,255,0.15)', border: '1px solid rgba(180,180,255,0.4)',
+            color: '#a0a0ff', borderRadius: 3,
+            padding: '1px 6px', fontSize: '0.7em',
+            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
+          }}>
+            🕯️ {hero.legacies.length}
           </span>
         )}
       </div>
+
+      <div style={{ flex: 1 }} />
 
       {/* Ascension stars */}
       <AscensionStars count={hero.ascension_star || 0} />
@@ -356,18 +506,6 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
 
           {showFull && (
             <div style={{ marginTop: '0.75em', borderTop: '1px solid var(--border)', paddingTop: '0.75em' }}>
-              <div className="text-sm text-dim" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>
-                <span>{unlockedStory}</span>
-                {lockedStory && <span style={{ opacity: 0.3, letterSpacing: '2px' }}>{lockedStory}</span>}
-                {unlockPct < 1 && (
-                  <div style={{ fontSize: '0.65em', color: 'var(--gold)', marginTop: '0.3em', opacity: 0.8 }}>
-                    [Story locked. Promote hero to reveal more.]
-                  </div>
-                )}
-              </div>
-              <div className="text-sm text-dim" style={{ marginTop: '0.4em', lineHeight: 1.5 }}>
-                {hero.personality}
-              </div>
               <div className="stats-row" style={{ marginTop: '0.5em' }}>
                 <div className="stat">Kills <span>{hero.kills}</span></div>
                 <div className="stat">Floors <span>{hero.floors_survived}</span></div>
@@ -390,7 +528,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3em' }}>
                   {['weapon', 'armor', 'accessory'].map(slot => {
-                    const eq = hero.equipment ? hero.equipment.find(e => e.slot === slot) : null;
+                    const eq = hero.equipment ? hero.equipment.find(e => e.type?.toLowerCase() === slot) : null;
                     return (
                       <div key={slot} style={{ 
                         padding: '0.3rem 0.5em', 
@@ -518,6 +656,21 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
                 </div>
               )}
               
+              <div className="story-block" style={{ marginTop: '1em', paddingTop: '0.75em', borderTop: '1px solid var(--border)' }}>
+                <div className="text-dim" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>
+                  <span>{unlockedStory}</span>
+                  {lockedStory && <span style={{ opacity: 0.3, letterSpacing: '2px' }}>{lockedStory}</span>}
+                  {unlockPct < 1 && (
+                    <div style={{ fontSize: '0.85em', color: 'var(--gold)', marginTop: '0.3em', opacity: 0.8 }}>
+                      [Story locked. Promote hero to reveal more.]
+                    </div>
+                  )}
+                </div>
+                <div className="text-dim" style={{ marginTop: '0.4em', lineHeight: 1.5 }}>
+                  {hero.personality}
+                </div>
+              </div>
+
               {actions && (
                 <div style={{ marginTop: '1.2em', paddingTop: '0.8em', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                   {actions}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { listHeroes, setTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam } from '../api/client'
+import { listHeroes, setTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation } from '../api/client'
 import HeroCard from '../components/HeroCard'
 import ClassEvolutionModal from '../components/ClassEvolutionModal'
 
@@ -8,7 +8,6 @@ export default function HeroesPage() {
   const [selected, setSelected] = useState(new Set())
   const [activeTab, setActiveTab] = useState('all') // 'all' | 1 | 2 | ... | 10
   const [assignTargetTeam, setAssignTargetTeam] = useState(1)
-  const [filter, setFilter] = useState('alive') // alive | dead
   const [searchQuery, setSearchQuery] = useState('')
   
   const [starFilter, setStarFilter] = useState('any')
@@ -18,6 +17,7 @@ export default function HeroesPage() {
   const [expandedId, setExpandedId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [egoPreview, setEgoPreview] = useState(null)
   const [eqModal, setEqModal] = useState(null)
   const [allEq, setAllEq] = useState([])
   const [evoModal, setEvoModal] = useState(null)
@@ -34,11 +34,11 @@ export default function HeroesPage() {
   const [promoting, setPromoting] = useState(false)
   const [evolving, setEvolving] = useState(false)
 
-  useEffect(() => { load() }, [filter])
+  useEffect(() => { load() }, [])
 
   async function load() {
-    const data = await listHeroes(filter === 'alive')
-    setHeroes(filter === 'dead' ? data.filter(h => !h.is_alive) : data)
+    const data = await listHeroes(true)
+    setHeroes(data)
     try {
       const eqData = await listEquipment()
       setAllEq(eqData.unequipped || [])
@@ -313,7 +313,7 @@ export default function HeroesPage() {
 
   const STAR_CAPS = { 1: 10, 2: 20, 3: 40, 4: 60, 5: 80, 6: 99, 7: 120 }
 
-  const baseHeroes = filter === 'dead' ? heroes.filter(h => !h.is_alive) : heroes.filter(h => h.is_alive)
+  const baseHeroes = heroes.filter(h => h.is_alive)
   
   // Filter by Tab
   let displayHeroes = baseHeroes
@@ -367,6 +367,9 @@ export default function HeroesPage() {
       <div key={hero.id} 
            style={{ 
              position: 'relative', 
+             width: '220px',
+             display: 'flex',
+             flexDirection: 'column',
              ...getSynthBorderStyle(hero.id), 
              borderRadius: 6,
              opacity: draggedHeroId === hero.id ? 0.5 : 1,
@@ -449,21 +452,9 @@ export default function HeroesPage() {
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <div className="section-header" style={{ marginBottom: 0 }}>
-          Heroes — {heroes.filter(h=>h.is_alive).length} alive · {heroes.filter(h=>!h.is_alive).length} fallen
+          Heroes — {heroes.length} alive
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
-            {['alive', 'dead'].map(f => (
-              <button
-                key={f}
-                className={`btn ${filter === f ? 'btn-gold' : ''}`}
-                onClick={() => setFilter(f)}
-                style={{ padding: '0.3rem 0.8rem', fontSize: '0.72rem' }}
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
           {!synthMode ? (
             <button
               className="btn"
@@ -496,16 +487,35 @@ export default function HeroesPage() {
               actions={heroes.find(h => h.id === expandedId)?.is_alive && (
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                   {typeof activeTab === 'number' && heroes.find(h => h.id === expandedId)?.ego_type && (
-                    <button className="btn" style={{ border: '1px solid #ff8888', color: '#ff8888', background: 'rgba(255,100,100,0.1)', fontFamily: 'Cinzel, serif', padding: '0.3rem 0.8rem', fontSize: '0.75rem', borderRadius: 4 }} onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        await egoAutoTeam(activeTab, expandedId);
-                        await load();
-                        setExpandedId(null);
-                      } catch (err) { setMsg(err.message) }
-                    }}>
-                      Let {heroes.find(h => h.id === expandedId)?.name} form Team {activeTab}
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
+                      {egoPreview && egoPreview.heroId === expandedId && (
+                        <div className="text-dim" style={{ fontSize: '0.7rem', textAlign: 'right', maxWidth: '260px' }}>
+                          Wants: {egoPreview.recommended_team.map(h => h.name).join(', ')}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button className="btn" style={{ border: '1px solid #ff8888', color: '#ff8888', background: 'rgba(255,100,100,0.05)', fontFamily: 'Cinzel, serif', padding: '0.3rem 0.6rem', fontSize: '0.7rem', borderRadius: 4 }} onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const rec = await getEgoRecommendation(expandedId);
+                            setEgoPreview({ heroId: expandedId, ...rec });
+                          } catch (err) { setMsg(err.message) }
+                        }}>
+                          Preview Wishes
+                        </button>
+                        <button className="btn" style={{ border: '1px solid #ff8888', color: '#ff8888', background: 'rgba(255,100,100,0.1)', fontFamily: 'Cinzel, serif', padding: '0.3rem 0.8rem', fontSize: '0.75rem', borderRadius: 4 }} onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await egoAutoTeam(activeTab, expandedId);
+                            await load();
+                            setExpandedId(null);
+                            setEgoPreview(null);
+                          } catch (err) { setMsg(err.message) }
+                        }}>
+                          Let {heroes.find(h => h.id === expandedId)?.name} form Team {activeTab}
+                        </button>
+                      </div>
+                    </div>
                   )}
                   {(heroes.find(h => h.id === expandedId)?.ascension_star || 0) < 7 && (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -537,7 +547,7 @@ export default function HeroesPage() {
         </div>
       )}
 
-      {!synthMode && filter === 'alive' && (
+      {!synthMode && (
         <div style={{ marginBottom: '1.5rem' }}>
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '0.25rem', overflowX: 'auto', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
@@ -744,16 +754,21 @@ export default function HeroesPage() {
             )}
 
             <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Available {eqModal.slot}s in Storage:</div>
-            {allEq.filter(e => e.slot === eqModal.slot).length === 0 ? (
+            {allEq.filter(e => e.type?.toLowerCase() === eqModal.slot).length === 0 ? (
               <div className="text-dim text-sm" style={{ fontStyle: 'italic' }}>No unequipped {eqModal.slot}s available.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {allEq.filter(e => e.slot === eqModal.slot).map(eq => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                {allEq.filter(e => e.type?.toLowerCase() === eqModal.slot)
+                  .sort((a, b) => {
+                    const tiers = ["F-", "F", "F+", "E-", "E", "E+", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+", "S-", "S", "S+", "SS", "SSS", "Z"];
+                    return tiers.indexOf(b.rarity) - tiers.indexOf(a.rarity);
+                  })
+                  .map(eq => (
                   <div key={eq.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border)', borderRadius: 4 }}>
                     <div>
                       <div style={{ color: 'var(--text-hi)', fontFamily: 'Cinzel, serif' }}>{eq.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                        Rarity: {eq.rarity} | Level: {eq.level} | {eq.base_atk > 0 && `ATK +${eq.base_atk}`} {eq.base_def > 0 && `DEF +${eq.base_def}`} {eq.base_hp > 0 && `HP +${eq.base_hp}`} {eq.base_spd > 0 && `SPD +${eq.base_spd}`}
+                        Rarity: {eq.rarity} | Level: {eq.level} | {eq.base_atk > 0 && `ATK +${eq.base_atk} `}{eq.base_def > 0 && `DEF +${eq.base_def} `}{eq.base_hp > 0 && `HP +${eq.base_hp} `}{eq.base_spd > 0 && `SPD +${eq.base_spd} `}{eq.atk_pct > 0 && `ATK +${(eq.atk_pct*100).toFixed(0)}% `}{eq.def_pct > 0 && `DEF +${(eq.def_pct*100).toFixed(0)}% `}{eq.hp_pct > 0 && `HP +${(eq.hp_pct*100).toFixed(0)}% `}{eq.spd_pct > 0 && `SPD +${(eq.spd_pct*100).toFixed(0)}% `}{eq.crit_chance > 0 && `Crit +${(eq.crit_chance*100).toFixed(0)}% `}{eq.dodge_chance > 0 && `Dodge +${(eq.dodge_chance*100).toFixed(0)}% `}{eq.armor_pen > 0 && `ArmorPen +${(eq.armor_pen*100).toFixed(0)}%`}
                       </div>
                     </div>
                     <button className="btn btn-primary" onClick={async () => {

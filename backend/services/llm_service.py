@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import concurrent.futures
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
@@ -10,10 +11,32 @@ load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+# Tower combat resolution must never block on flavor text (zone theme, boss
+# naming, narration) — none of it affects combat math. Calls submitted here
+# keep running in the background even after a timeout; we just stop waiting
+# on them and use a fallback instead.
+_flavor_text_pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+
+def call_with_timeout(fn, *args, timeout=2.5, fallback=None, **kwargs):
+    return await_flavor_text(submit_flavor_text(fn, *args, **kwargs), timeout=timeout, fallback=fallback)
+
+def submit_flavor_text(fn, *args, **kwargs):
+    """Kick off a flavor-text call in the background without waiting — pair with
+    await_flavor_text() once the result is actually needed. Lets independent
+    calls (e.g. zone theme + boss naming) run concurrently instead of stacking
+    into a sequential wait."""
+    return _flavor_text_pool.submit(fn, *args, **kwargs)
+
+def await_flavor_text(future, timeout=1.5, fallback=None):
+    try:
+        return future.result(timeout=timeout)
+    except Exception:
+        return fallback
+
 # Fallback chain 
 MODELS_BY_PRIORITY = [
     "gemini-2.5-flash",
-    "gemini-2.5-flash-8b",
+    "gemini-2.5-flash-lite",
 ]
 
 RARITY_FLAVOR = {
@@ -48,6 +71,7 @@ def _generate_with_fallback(prompt: str, max_tokens: int = 600, temperature: flo
                 config=types.GenerateContentConfig(
                     temperature=temperature,
                     max_output_tokens=max_tokens,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
             )
             return response.text.strip()
@@ -88,7 +112,32 @@ def generate_hero_profile(birth_star: int, aptitudes: dict, extra_prompt: str = 
 
     heterochromia_rule = "" if birth_star >= 5 else "CRITICAL RULE: Heterochromia (two-colored eyes) is explicitly FORBIDDEN. "
 
-    ego_instruction = "null unless birth_star >= 4 AND their personality warrants an ego. If so, pick ONE: 'Aggressive', 'Cautious', 'Tactical', 'Leader', 'Lone Wolf'" if birth_star >= 4 else "null"
+    ego_instruction = (
+        "For ego_type: this hero may have an Ego (an awakened trait) only because birth_star >= 4. Grant one ONLY if "
+        "their personality strongly warrants it. If so, set ego_type to exactly one of: \"Aggressive\", \"Cautious\", "
+        "\"Tactical\", \"Leader\", \"Lone Wolf\". Otherwise set ego_type to the JSON literal null (NOT the string \"null\")."
+    ) if birth_star >= 4 else (
+        "This hero's birth_star is below 4, so ego_type MUST be the JSON literal null — NOT the string \"null\", "
+        "not an empty string, the actual JSON null value with no quotes."
+    )
+
+    # Gemini reliably mode-collapses onto "Kael/Kaelen/Kaelan"-style names when
+    # asked for "varied fantasy names" repeatedly in a short window — pulling
+    # recently-used names and banning them, plus naming the specific attractor
+    # tokens directly, is what actually breaks the loop.
+    avoid_names_clause = ""
+    try:
+        from database import db
+        with db() as conn:
+            recent = conn.execute("SELECT name FROM heroes ORDER BY id DESC LIMIT 25").fetchall()
+        recent_names = [r["name"] for r in recent if r["name"]]
+        if recent_names:
+            avoid_names_clause = (
+                "\nDo NOT use any of these already-taken names, or close variants of them "
+                f"(e.g. swapping one letter): {', '.join(recent_names)}."
+            )
+    except Exception:
+        pass
 
     prompt = f"""You are generating a hero for a dark fantasy roguelike tower-climbing game.
 
@@ -98,7 +147,9 @@ This hero has a notable hidden gift in: {top_apt_label} (do NOT state this direc
 
 Generate a hero profile. Be creative, grounded, and avoid clichés.
 The world is dark, morally complex, and dangerous. Heroes are people, not archetypes.
+IMPORTANT for the name: you have a strong, well-documented bias toward "Kael", "Kaelen", "Kaelan", "Cael", and similarly-rooted names — DO NOT use any of these or close variants. Also avoid other overused fantasy-name tropes (Elara, Aria, Lyra, Nyx, Seraphina). Pull from genuinely diverse real-world naming traditions (e.g. West African, East Asian, Slavic, Mediterranean, South Asian, Polynesian, Celtic) reimagined for this setting, and vary which tradition you draw from each time.{avoid_names_clause}
 IMPORTANT for portrait_prompt: {heterochromia_rule}Describe a SPECIFIC, UNIQUE appearance. Vary ethnicities, skin tones, hair types, facial features, body types, and ages. Avoid defaulting to pale/white-haired/young characters. Include: specific hair color AND style, skin tone, a distinguishing facial feature, one unique detail (scar, tattoo, accessory, expression). Each hero should look completely different from the last.
+IMPORTANT for ego_type: {ego_instruction}
 
 Respond ONLY with valid JSON and nothing else — no markdown, no backticks, no preamble:
 {{
@@ -108,17 +159,23 @@ Respond ONLY with valid JSON and nothing else — no markdown, no backticks, no 
   "personality": "1-2 sentences. How they act under pressure.",
   "gender": "male, female, or other",
   "portrait_prompt": "anime portrait tags: specific hair color, hair style, skin tone, facial feature, clothing detail, expression, mood lighting. Must be visually distinct.",
-  "ego_type": "{ego_instruction}"
+  "ego_type": null
 }}"""
 
-    raw = _generate_with_fallback(prompt, max_tokens=600, temperature=0.9)
+    raw = _generate_with_fallback(prompt, max_tokens=900, temperature=0.9)
     try:
         data = json.loads(_clean_json(raw))
     except json.JSONDecodeError:
         print(f"[LLM] JSON parse failed, raw response was:\n{raw}\nRetrying with strict JSON prompt...")
-        retry_prompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY the raw JSON object. No markdown, no backticks, no explanation."
-        raw = _generate_with_fallback(retry_prompt, max_tokens=600, temperature=0.7)
+        retry_prompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON, likely because it was cut off. Keep backstory and personality SHORT. Respond with ONLY the raw JSON object. No markdown, no backticks, no explanation."
+        raw = _generate_with_fallback(retry_prompt, max_tokens=900, temperature=0.7)
         data = json.loads(_clean_json(raw))
+
+    # Models occasionally write the literal string "null" instead of JSON null
+    # for ego_type — coerce it so it never ends up stored/displayed as text.
+    if isinstance(data.get("ego_type"), str) and data["ego_type"].strip().lower() in ("null", "none", ""):
+        data["ego_type"] = None
+
     return HeroProfile(**data)
 
 

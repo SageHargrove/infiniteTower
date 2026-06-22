@@ -74,8 +74,14 @@ def calculate_legacy_bonus(hero: dict) -> dict:
     }
 
 
-def create_legacy(hero: dict, title: str = None, flavor: str = None) -> dict:
-    """Create and save a legacy record for a fallen hero."""
+def create_legacy(hero: dict, title: str = None, flavor: str = None, is_sacrifice: bool = False) -> dict:
+    """Create and save a legacy record for a fallen hero.
+
+    Portraits are only preserved for sacrificed heroes — sacrifice is a
+    deliberate, memorialized death, so the team chooses to immortalize their
+    face. An ordinary combat death is just gone; the legacy keeps their name
+    and story, not their portrait.
+    """
     bonus = calculate_legacy_bonus(hero)
 
     # Try LLM-generated title and flavor
@@ -99,17 +105,20 @@ def create_legacy(hero: dict, title: str = None, flavor: str = None) -> dict:
     if not flavor:
         flavor = f"They survived {bonus['floors_survived']} floors and slew {bonus['kills']} foes."
 
+    portrait_path = hero.get("portrait_path") if is_sacrifice else None
+
     with db() as conn:
         conn.execute("""
             INSERT INTO legacies (hero_id, hero_name, hero_star, title, flavor_text,
-                                  bonus_json, score, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                  bonus_json, score, is_sacrifice, portrait_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (
             hero["id"], hero.get("name", "Unknown"), hero.get("birth_star", 1),
             title, flavor, json.dumps(bonus), bonus["score"],
+            1 if is_sacrifice else 0, portrait_path,
         ))
 
-    return {"title": title, "flavor": flavor, **bonus}
+    return {"title": title, "flavor": flavor, "is_sacrifice": is_sacrifice, "portrait_path": portrait_path, **bonus}
 
 
 def get_all_legacies() -> list[dict]:
@@ -122,8 +131,11 @@ def get_all_legacies() -> list[dict]:
 
 
 def get_active_legacy_bonuses() -> dict:
-    """Calculate total legacy bonuses from all fallen heroes."""
-    legacies = get_all_legacies()
+    """Calculate total legacy bonuses — only sacrificed/memorialized heroes
+    contribute a stat bonus. An ordinary combat death is remembered (title,
+    flavor, the legacy entry itself) but doesn't buff the team; that's
+    reserved for the deliberate, rare act of sacrifice."""
+    legacies = [l for l in get_all_legacies() if l.get("is_sacrifice")]
     total = {
         "atk_pct": 0, "def_pct": 0, "hp_pct": 0, "spd_pct": 0,
         "team_crit_pct": 0, "team_stress_reduce": 0, "team_fear_resist": 0,

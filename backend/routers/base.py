@@ -10,11 +10,17 @@ def get_base():
     from services.time_service import process_fatigue_decay, process_passive_generation
     from services.training_service import process_training_xp
     from services.research_service import process_mage_research
+    from services.alchemist_service import process_alchemist_lab
+    from services.restaurant_service import process_restaurant
+    from services.infirmary_service import process_infirmary
     with db() as conn:
         process_fatigue_decay(conn)
         process_passive_generation(conn)
         process_training_xp(conn)
         process_mage_research(conn)
+        process_alchemist_lab(conn)
+        process_restaurant(conn)
+        process_infirmary(conn)
         row = conn.execute("SELECT * FROM base WHERE id = 1").fetchone()
     return dict(row)
 
@@ -43,6 +49,68 @@ def rename_base(req: RenameRequest):
         conn.execute("UPDATE base SET name = ? WHERE id = 1", (req.name.strip()[:30],))
     return {"ok": True, "name": req.name.strip()[:30]}
 
+class GrantResourcesRequest(BaseModel):
+    gold: int = 0
+    gems: int = 0
+    supplies: int = 0
+
+@router.post("/dev/grant")
+def grant_resources(req: GrantResourcesRequest):
+    """
+    Dev/testing helper — adds resources to the currently active profile.
+    Intended for use on a dedicated test save, not your main progress.
+    """
+    import database
+    with db() as conn:
+        conn.execute(
+            "UPDATE base SET gold = gold + ?, gems = gems + ?, supplies = supplies + ? WHERE id = 1",
+            (max(0, req.gold), max(0, req.gems), max(0, req.supplies))
+        )
+        row = conn.execute("SELECT gold, gems, supplies FROM base WHERE id = 1").fetchone()
+    return {"ok": True, "profile": database.ACTIVE_PROFILE, "gold": row["gold"], "gems": row["gems"], "supplies": row["supplies"]}
+
+@router.post("/dev/clear-inventory")
+def dev_clear_inventory():
+    """Dev/testing helper — wipes equipment, materials, potions, and scrolls.
+    Refuses to run outside a profile named 'test*' since this is destructive."""
+    import database
+    if not database.ACTIVE_PROFILE or not database.ACTIVE_PROFILE.lower().startswith("test"):
+        raise HTTPException(status_code=400, detail="Refused: this only runs on a 'test' profile.")
+    with db() as conn:
+        conn.execute("DELETE FROM equipment")
+        conn.execute("DELETE FROM inventory")
+        conn.execute("UPDATE base SET materials = '{}' WHERE id = 1")
+    return {"ok": True}
+
+class DevSetLevelRequest(BaseModel):
+    hero_id: int
+    level: int
+
+@router.post("/dev/set-level")
+def dev_set_level(req: DevSetLevelRequest):
+    """Dev/testing helper — force a hero to a target level by backfilling
+    just enough XP to satisfy the normal level formula, so it doesn't get
+    silently recalculated back down on the next floor/synthesis."""
+    import database
+    if not database.ACTIVE_PROFILE or not database.ACTIVE_PROFILE.lower().startswith("test"):
+        raise HTTPException(status_code=400, detail="Refused: this only runs on a 'test' profile.")
+
+    from services.level_service import level_cap, get_hero_star
+    with db() as conn:
+        hero = conn.execute("SELECT * FROM heroes WHERE id = ?", (req.hero_id,)).fetchone()
+        if not hero:
+            raise HTTPException(status_code=404, detail="Hero not found.")
+        hero = dict(hero)
+
+        cap = level_cap(get_hero_star(hero), hero.get("ascension_star", 0))
+        target = max(1, min(req.level, cap))
+
+        needed = (target - 1) - (hero.get("floors_survived", 0) // 3) - (hero.get("kills", 0) // 5)
+        new_xp = max(hero.get("xp", 0), needed * 100) if needed > 0 else hero.get("xp", 0)
+
+        conn.execute("UPDATE heroes SET level = ?, xp = ? WHERE id = ?", (target, new_xp, req.hero_id))
+    return {"ok": True, "level": target, "capped": target < req.level}
+
 @router.post("/rest")
 def rest_heroes():
     """Rest all active heroes at base. Costs 50 supplies, 5 min cooldown."""
@@ -66,8 +134,8 @@ def rest_heroes():
             
         conn.execute("UPDATE base SET supplies = supplies - ?, last_rest_time = ? WHERE id = 1", (supply_cost, now))
         
-        # Only rest heroes that are actually on a team
-        heroes = conn.execute("SELECT * FROM heroes WHERE is_alive = 1 AND is_on_team > 0").fetchall()
+        # Button says "Rest All Heroes" — rest the whole living roster, not just deployed ones
+        heroes = conn.execute("SELECT * FROM heroes WHERE is_alive = 1").fetchall()
         for hero in heroes:
             recovery = rest_at_base_recovery(dict(hero))
             # Also reset fatigue and HP completely on rest
@@ -105,7 +173,7 @@ def get_base_floors():
             }
             
         # Get hero assignments (all alive heroes)
-        heroes = conn.execute("SELECT id, name, base_floor, hero_class, portrait_path, is_alive, level FROM heroes WHERE is_alive = 1").fetchall()
+        heroes = conn.execute("SELECT id, name, base_floor, hero_class, portrait_path, is_alive, level, birth_star, current_star FROM heroes WHERE is_alive = 1").fetchall()
         
         base_heroes = []
         for h in heroes:
@@ -224,6 +292,78 @@ def add_inventory_item(item_name: str, item_type: str, quantity: int = 1, descri
                 (item_name, item_type, quantity, description)
             )
             return {"ok": True, "item": item_name, "new_quantity": quantity}
+
+
+class UseItemRequest(BaseModel):
+    item_name: str
+    hero_id: int
+    target_skill_id: str = None
+
+@router.post("/inventory/use")
+def use_item(req: UseItemRequest):
+    """Consume a potion or scroll on a target hero."""
+    from services.alchemist_service import POTION_CATALOG
+    from services.research_service import SCROLL_CATALOG
+    catalog = {p["name"]: p["effect"] for p in POTION_CATALOG}
+    catalog.update({s["name"]: s["effect"] for s in SCROLL_CATALOG})
+
+    effect = catalog.get(req.item_name)
+    if not effect:
+        raise HTTPException(status_code=400, detail="Unknown or unusable item.")
+
+    with db() as conn:
+        item = conn.execute(
+            "SELECT * FROM inventory WHERE item_name = ? AND quantity > 0", (req.item_name,)
+        ).fetchone()
+        if not item:
+            raise HTTPException(status_code=400, detail="You don't have any of that item.")
+
+        hero = conn.execute("SELECT * FROM heroes WHERE id = ? AND is_alive = 1", (req.hero_id,)).fetchone()
+        if not hero:
+            raise HTTPException(status_code=400, detail="Hero not available.")
+        hero = dict(hero)
+
+        applied = {}
+        if "heal_pct" in effect:
+            heal = int(hero["max_hp"] * effect["heal_pct"])
+            new_hp = min(hero["max_hp"], hero["hp"] + heal)
+            conn.execute("UPDATE heroes SET hp = ? WHERE id = ?", (new_hp, hero["id"]))
+            applied["hp"] = new_hp
+
+        if "stress_delta" in effect:
+            new_stress = max(0, hero["stress"] + effect["stress_delta"])
+            conn.execute("UPDATE heroes SET stress = ? WHERE id = ?", (new_stress, hero["id"]))
+            applied["stress"] = new_stress
+
+        if "trauma_delta" in effect:
+            new_trauma = max(0, hero["trauma"] + effect["trauma_delta"])
+            conn.execute("UPDATE heroes SET trauma = ? WHERE id = ?", (new_trauma, hero["id"]))
+            applied["trauma"] = new_trauma
+
+        if "skill_xp" in effect:
+            skills = json.loads(hero.get("skills") or "[]")
+            target = None
+            if req.target_skill_id:
+                target = next((s for s in skills if s["id"] == req.target_skill_id), None)
+            elif skills:
+                target = skills[0]
+            if target:
+                target["xp"] = target.get("xp", 0) + effect["skill_xp"]
+                max_xp = target.get("max_xp", 100)
+                if target["xp"] >= max_xp:
+                    target["xp"] -= max_xp
+                    target["level"] = target.get("level", 1) + 1
+                    target["max_xp"] = int(max_xp * 1.5)
+                conn.execute("UPDATE heroes SET skills = ? WHERE id = ?", (json.dumps(skills), hero["id"]))
+                applied["skill"] = target["name"]
+
+        new_qty = item["quantity"] - 1
+        if new_qty <= 0:
+            conn.execute("DELETE FROM inventory WHERE id = ?", (item["id"],))
+        else:
+            conn.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_qty, item["id"]))
+
+    return {"ok": True, "item": req.item_name, "applied": applied, "remaining": max(0, new_qty)}
 
 
 # ─── Base upgrades endpoints ────────────────────────────────────────
@@ -355,11 +495,14 @@ class CraftRequest(BaseModel):
 
 @router.post("/forge/craft")
 def forge_craft(req: CraftRequest):
-    from services.equipment_service import craft_equipment, save_equipment
+    from services.equipment_service import craft_equipment_for_slot, save_equipment, get_vault_capacity, get_equipment_count
     with db() as conn:
+        if get_equipment_count(conn) >= get_vault_capacity(conn):
+            raise HTTPException(status_code=400, detail="The Vault is full. Upgrade it or clear out some equipment first.")
+
         # Check base gold and materials
         base = conn.execute("SELECT gold, materials FROM base WHERE id = 1").fetchone()
-        
+
         mats = json.loads(base["materials"]) if base["materials"] else {}
         recipe = {}
         if req.slot == "weapon":
@@ -419,8 +562,8 @@ def forge_craft(req: CraftRequest):
         conn.execute("UPDATE base SET gold = gold - 100, materials = ? WHERE id = 1", (json.dumps(mats),))
         
         # Craft
-        equip = craft_equipment(req.slot, level, apt)
-        equip_id = save_equipment(equip)
+        equip = craft_equipment_for_slot(req.slot, level, apt)
+        equip_id = save_equipment(equip, conn=conn)
         equip["id"] = equip_id
         
         # Grant XP to assigned heroes

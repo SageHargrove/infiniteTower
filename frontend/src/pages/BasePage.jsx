@@ -4,14 +4,14 @@ import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility,
 const FACILITY_TOOLTIPS = {
   "Forge": "Crafts powerful weapons and armor. Assign Blacksmiths to increase crafting speed and quality.",
   "Infirmary": "Heals trauma and severe injuries passively over time. Assign Medics and Priests for better results.",
-  "Vault": "Increases max gold capacity and provides interest. Quartermasters manage the Vault effectively.",
+  "Vault": "Expands equipment storage capacity. Quartermasters manage the Vault effectively.",
   "Restaurant": "Cooks advanced meals to increase morale. Assign Chefs to maximize food quality.",
   "Alchemist Lab": "Brews potions and elixirs. Alchemists and Mages excel in this facility.",
   "Workshop": "Builds base upgrades and gadgets. Magic Engineers are the best fit.",
-  "The Market": "Generates passive gold over time. Merchants, Alchemists, and Quartermasters excel here.",
-  "The Farm": "Generates passive supplies over time. Merchants, Chefs, and Druids excel here.",
+  "The Market": "Generates passive gold over time. Merchants and Quartermasters excel here.",
+  "The Farm": "Generates passive supplies over time. Merchants and Druids excel here.",
   "Training Grounds": "Allows heroes to spar for EXP. Warriors, Spearmen, and Tacticians thrive here.",
-  "Mage Tower": "Conducts magical research. Mages and Spellswords are required."
+  "Mage Tower": "Conducts magical research. Magic Engineers are the most effective, with Mages and Spellswords close behind."
 }
 
 export default function BasePage({ onGoldChange }) {
@@ -27,11 +27,42 @@ export default function BasePage({ onGoldChange }) {
   
   // Legacy & Floors
   const [legacies, setLegacies] = useState([])
+  const [expandedLegacyId, setExpandedLegacyId] = useState(null)
+  const [legacyPage, setLegacyPage] = useState(0)
+  const LEGACIES_PER_PAGE = 10
   const [floorsData, setFloorsData] = useState(null)
   const [assigning, setAssigning] = useState(false)
   const [chats, setChats] = useState([])
+  const [newChatIds, setNewChatIds] = useState(new Set())
+  const seenChatIds = React.useRef(new Set())
+  const hasLoadedChatsOnce = React.useRef(false)
+
+  function applyChats(ch) {
+    const list = ch || []
+    const fresh = hasLoadedChatsOnce.current ? list.filter(c => !seenChatIds.current.has(c.id)).map(c => c.id) : []
+    list.forEach(c => seenChatIds.current.add(c.id))
+    hasLoadedChatsOnce.current = true
+    setChats(list)
+    if (fresh.length) {
+      setNewChatIds(new Set(fresh))
+      setTimeout(() => setNewChatIds(new Set()), 3000)
+    }
+  }
+  
+  const [sortMode, setSortMode] = useState('level-desc')
+  const [filterClass, setFilterClass] = useState('All')
   
   useEffect(() => { loadAll() }, [])
+
+  // Hero Chatter feed polls on its own, faster cadence than the rest of the
+  // page — it should feel like an ongoing conversation, not a static log
+  // that only updates on a full page reload.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getChatLogs(5).then(applyChats).catch(() => {})
+    }, 20000)
+    return () => clearInterval(interval)
+  }, [])
 
   async function loadAll() {
     try {
@@ -41,14 +72,14 @@ export default function BasePage({ onGoldChange }) {
         listHeroes(true),
         getLegacies().catch(() => ({ legacies: [] })),
         getBaseFloors().catch(() => ({ floors: [], base_heroes: [] })),
-        getChatLogs(10).catch(() => ({ chats: [] }))
+        getChatLogs(5).catch(() => [])
       ])
       setBase(b)
       setFacilitiesData(fac)
       setBaseHeroes(heroes.filter(h => h.is_alive === 1 && h.is_on_team === 0))
       setLegacies(leg.legacies || [])
       setFloorsData(flrs)
-      setChats(ch.chats || [])
+      applyChats(ch)
       
       const hasMage = fac.built?.some(f => f.type === 'Mage Tower')
       if (hasMage) {
@@ -327,15 +358,25 @@ const getGenRate = (fac) => {
             
             {/* Bottom Row: Hero Chatter Box */}
           <div className="card" style={{ padding: '1.5rem', minHeight: '250px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.4rem', color: 'var(--gold)', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+            <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.4rem', color: 'var(--gold)', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
               Hero Chatter
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.7rem', color: 'var(--green)', fontFamily: 'monospace', letterSpacing: '1px' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--green)', animation: 'pulse-live 1.5s ease-in-out infinite' }} />
+                LIVE
+              </span>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
               {chats && chats.length > 0 ? chats.map(chat => (
-                <div key={chat.id} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                  <span className="text-dim" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>[{new Date(chat.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}]</span>
-                  <span style={{ color: 'var(--gold)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>[{chat.location}]</span>
-                  <span style={{ fontSize: '1.05rem' }}>{chat.message}</span>
+                <div key={chat.id} style={{ marginBottom: '0.6rem', transition: 'background 1s ease', background: newChatIds.has(chat.id) ? 'rgba(201,168,76,0.12)' : 'transparent', borderRadius: 4, padding: newChatIds.has(chat.id) ? '0.4rem' : '0' }}>
+                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.2rem' }}>
+                    <span className="text-dim" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>[{new Date(chat.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}]</span>
+                    <span style={{ color: 'var(--gold)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>[{chat.location}]</span>
+                  </div>
+                  {(chat.messages || []).map((m, i) => (
+                    <div key={i} style={{ fontSize: '1.05rem', marginLeft: '0.5rem' }}>
+                      <span className="text-hi" style={{ fontFamily: 'Cinzel, serif' }}>{m.speaker}:</span> {m.message}
+                    </div>
+                  ))}
                 </div>
               )) : (
                 <div className="text-dim" style={{ fontStyle: 'italic', textAlign: 'center', marginTop: '2rem' }}>The lobby is quiet...</div>
@@ -454,26 +495,51 @@ const getGenRate = (fac) => {
 
       {activeTab === 'legacy' && (
         <div>
-          <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '1rem' }}>Fallen Heroes</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
-            {legacies.length === 0 && <div className="text-dim text-sm">No legacies found.</div>}
-            {legacies.map(leg => (
-              <div key={leg.id} className="card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-                  <img src={`http://localhost:8000/${leg.portrait_path}`} alt={leg.hero_name} style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover' }} />
-                  <div>
-                    <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--text-hi)' }}>{leg.hero_name}</div>
-                    <div className="text-dim text-xs">Level {leg.level} {leg.class_name}</div>
+          <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '1rem' }}>
+            Fallen Heroes {legacies.length > 0 && <span className="text-dim text-sm">({legacies.length})</span>}
+          </h3>
+          {legacies.length === 0 && <div className="text-dim text-sm">No legacies found.</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {legacies.slice(legacyPage * LEGACIES_PER_PAGE, (legacyPage + 1) * LEGACIES_PER_PAGE).map(leg => {
+              const bonus = (() => { try { return JSON.parse(leg.bonus_json || '{}') } catch { return {} } })()
+              const expanded = expandedLegacyId === leg.id
+              return (
+                <div key={leg.id} className="card" style={{ padding: '0.6rem 0.9rem', cursor: 'pointer' }}
+                     onClick={() => setExpandedLegacyId(expanded ? null : leg.id)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {leg.is_sacrifice && leg.portrait_path ? (
+                      <img src={`http://localhost:8000/${leg.portrait_path}`} alt={leg.hero_name} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--gold)', flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', color: '#555', flexShrink: 0 }}>
+                        ✦
+                      </div>
+                    )}
+                    <div style={{ minWidth: 110, fontFamily: 'Cinzel, serif', color: 'var(--text-hi)', fontSize: '0.9rem' }}>{leg.hero_name}</div>
+                    <div className="text-dim text-xs" style={{ minWidth: 90 }}>{leg.is_sacrifice ? 'Sacrificed' : 'Fallen'} · {leg.hero_star}★</div>
+                    <div className="text-xs" style={{ color: 'var(--gold)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leg.title}</div>
+                    <div className="text-dim text-xs" style={{ flexShrink: 0 }}>{expanded ? '▲' : '▼'}</div>
                   </div>
+                  {expanded && (
+                    <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' }}>
+                      <div className="text-xs text-dim" style={{ lineHeight: 1.4, marginBottom: '0.4rem' }}>{leg.flavor_text}</div>
+                      <div className="text-xs text-dim">
+                        Floors survived: {bonus.floors_survived ?? 0} · Kills: {bonus.kills ?? 0} · Legacy: {bonus.primary_bonus?.desc || 'None'}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs text-dim">
-                  Died on Floor {leg.floor_reached}<br/>
-                  Kills: {leg.kills}<br/>
-                  Passed down: {leg.passed_down_item || 'Nothing'}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
+          {legacies.length > LEGACIES_PER_PAGE && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '1rem' }}>
+              <button className="btn" disabled={legacyPage === 0} onClick={() => setLegacyPage(p => Math.max(0, p - 1))}>← Prev</button>
+              <div className="text-dim text-sm" style={{ alignSelf: 'center' }}>
+                Page {legacyPage + 1} of {Math.ceil(legacies.length / LEGACIES_PER_PAGE)}
+              </div>
+              <button className="btn" disabled={(legacyPage + 1) * LEGACIES_PER_PAGE >= legacies.length} onClick={() => setLegacyPage(p => p + 1)}>Next →</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -484,44 +550,78 @@ const getGenRate = (fac) => {
             <div className="text-dim text-sm" style={{ lineHeight: 1.5 }}>
               Assign idle heroes to protect base floors. Drag an unassigned hero onto an empty slot on a floor to assign them. Drag an assigned hero back to unassign them.
             </div>
+            <div className="text-dim text-sm" style={{ lineHeight: 1.5, marginTop: '0.5rem' }}>
+              <span className="text-hi">Benefit:</span> a stationed hero gets a stat bonus (HP/ATK/DEF/SPD) while climbing the Tower, and recovers from fatigue faster at the base. Each floor has a fixed bonus pool that's split evenly among whoever's stationed there — higher floors have a bigger pool, but spreading more heroes across one floor shrinks everyone's individual share. Check each floor's current bonus % below before assigning.
+            </div>
           </div>
           
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            {/* Unassigned Pool */}
-            <div className="card" style={{ flex: '1 1 300px' }}>
-              <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '1rem' }}>Unassigned Heroes</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '0.5rem' }}
-                   onDragOver={(e) => e.preventDefault()}
-                   onDrop={(e) => {
-                     e.preventDefault();
-                     const heroId = e.dataTransfer.getData('heroId');
-                     if (heroId) {
-                       handleAssignFloor(heroId, null);
-                     }
-                   }}>
-                {floorsData.base_heroes.map(h => (
-                  <div key={h.id} 
-                       draggable
-                       onDragStart={(e) => {
-                         e.dataTransfer.setData('heroId', h.id);
-                       }}
-                       style={{ 
-                         cursor: 'grab', 
-                         border: '2px solid transparent',
-                         borderRadius: '50%',
-                         padding: '2px',
-                         transition: 'transform 0.2s'
-                       }}
-                       onDragEnd={(e) => e.target.style.transform = 'scale(1)'}
-                       onDrag={(e) => e.target.style.transform = 'scale(0.9)'}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} title={`${h.name} (Lv ${h.level} ${h.hero_class})`} />
-                      <div className="text-hi" style={{ fontSize: '0.8rem', marginTop: '0.3rem', textAlign: 'center' }}>{h.name}</div>
-                      <div className="text-dim" style={{ fontSize: '0.7rem', textAlign: 'center' }}>{h.hero_class}</div>
+            {/* Unassigned Heroes with Sorting & Filtering */}
+            <div className="card" style={{ flex: '1 1 300px', background: 'var(--bg-card)', padding: '1rem', borderRadius: '8px' }}
+                 onDragOver={(e) => e.preventDefault()}
+                 onDrop={(e) => {
+                   e.preventDefault();
+                   const heroId = e.dataTransfer.getData('heroId');
+                   if (heroId) {
+                     handleAssignFloor(heroId, null);
+                   }
+                 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', margin: 0 }}>Unassigned Heroes</h3>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                <select 
+                  className="input" 
+                  value={filterClass} 
+                  onChange={e => setFilterClass(e.target.value)}
+                  style={{ flex: 1, padding: '0.4rem', background: 'var(--bg-dark)', color: 'var(--text-hi)' }}>
+                  <option value="All">All Classes</option>
+                  {[...new Set(floorsData.base_heroes.map(h => h.hero_class))].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <select 
+                  className="input" 
+                  value={sortMode} 
+                  onChange={e => setSortMode(e.target.value)}
+                  style={{ flex: 1, padding: '0.4rem', background: 'var(--bg-dark)', color: 'var(--text-hi)' }}>
+                  <option value="level-desc">Level (High-Low)</option>
+                  <option value="level-asc">Level (Low-High)</option>
+                  <option value="star-desc">Star (High-Low)</option>
+                  <option value="star-asc">Star (Low-High)</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', maxHeight: '500px', overflowY: 'auto' }}>
+                {(() => {
+                  let heroes = [...floorsData.base_heroes]
+                  if (filterClass !== 'All') {
+                    heroes = heroes.filter(h => h.hero_class === filterClass)
+                  }
+                  heroes.sort((a, b) => {
+                    if (sortMode === 'level-desc') return b.level - a.level
+                    if (sortMode === 'level-asc') return a.level - b.level
+                    if (sortMode === 'star-desc') return b.birth_star - a.birth_star
+                    if (sortMode === 'star-asc') return a.birth_star - b.birth_star
+                    return 0
+                  })
+                  return heroes.map(h => (
+                    <div key={h.id} 
+                         draggable 
+                         onDragStart={(e) => e.dataTransfer.setData('heroId', h.id)}
+                         style={{ cursor: 'grab' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ position: 'relative' }}>
+                          <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} title={`${h.name} (Lv ${h.level} ${h.hero_class})`} />
+                          <div style={{ position: 'absolute', bottom: -5, right: -5, background: 'var(--bg-dark)', border: '1px solid var(--gold)', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                            {h.birth_star}★
+                          </div>
+                        </div>
+                        <div className="text-hi" style={{ fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center' }}>{h.name}</div>
+                        <div className="text-dim" style={{ fontSize: '0.7rem', textAlign: 'center' }}>Lv.{h.level} {h.hero_class}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                })()}
                 {floorsData.base_heroes.length === 0 && <div className="text-dim text-sm">No unassigned heroes.</div>}
               </div>
             </div>
@@ -531,7 +631,12 @@ const getGenRate = (fac) => {
               <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '0.5rem' }}>Floors</h3>
               {floorsData.floors.map(f => (
                 <div key={f.floor_number} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem' }}>
-                  <div style={{ width: '80px', fontFamily: 'Cinzel, serif', color: 'var(--gold)' }}>Floor {f.floor_number}</div>
+                  <div style={{ width: '80px' }}>
+                    <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)' }}>Floor {f.floor_number}</div>
+                    <div className="text-green" style={{ fontSize: '0.75rem', fontWeight: 'bold' }} title="Stat bonus per stationed hero, and bonus fatigue recovery rate">
+                      +{f.stat_bonus_pct}% stats
+                    </div>
+                  </div>
                   <div style={{ flex: 1, display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                     {/* Render assigned heroes */}
                     {f.heroes.map(h => (
