@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { getAllTeams, getBase, enterFloor, resolveEvent, resolveExplore, previewFloor } from '../api/client'
+import { emitToast } from '../toastBus'
 import CombatArena from '../components/CombatArena'
+import FairyGuide from '../components/FairyGuide'
+import { CardFrame } from '../components/HeroCard'
 
 const FLOOR_ICONS = {
   combat: '⚔️',
@@ -66,6 +69,29 @@ function FloorTypeCallout({ type }) {
   )
 }
 
+// Multi-team floors run as N parallel arenas (see team_results), each with
+// its own initial_state — the post-combat summary screen still wants one
+// combined roster, so merge them here instead of duplicating this in both
+// call sites.
+function mergedCombatEntities(result) {
+  const teamResults = (result?.combat?.team_results || result?.team_results || []).filter(Boolean)
+  if (teamResults.length > 0) {
+    const heroes = teamResults.flatMap(tr => tr.initial_state?.heroes || [])
+    const enemies = teamResults.flatMap(tr => tr.initial_state?.enemies || [])
+    return { heroes, enemies }
+  }
+  return result?.initial_state || result?.combat?.initial_state || null
+}
+
+function heroCombatStatus(heroId, lastResult, combatEntities) {
+  if (lastResult.combat?.dead_heroes?.includes(heroId)) return 'kia'
+  const surv = lastResult.combat?.surviving_heroes?.find(s => s.id === heroId)
+  if (!surv) return 'unknown'
+  const entity = combatEntities?.heroes?.find(h => h.id === heroId)
+  if (entity && surv.health < entity.max_health) return 'injured'
+  return 'alive'
+}
+
 function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy }) {
   if (!lastResult) return null;
 
@@ -76,8 +102,40 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', marginTop: '2rem' }}>
+
+      {/* Team Status */}
+      <div className="card">
+        <div className="section-header">Team Status</div>
+        <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap' }}>
+          {combatEntities?.heroes?.map(h => {
+            const status = heroCombatStatus(h.id, lastResult, combatEntities)
+            const STATUS_LABEL = { injured: 'Injured', kia: 'Killed In Action' }
+            return (
+              <div key={h.id} style={{ width: 96, textAlign: 'center' }}>
+                <CardFrame birthStar={h.hero_star} status={status === 'alive' ? null : status}>
+                  {h.portrait_path ? (
+                    <img
+                      src={`http://localhost:8000/heroes/${h.id}/card-image`}
+                      draggable={false}
+                      style={{ width: '100%', height: 96, objectFit: 'cover', objectPosition: 'center 15%', borderRadius: 4 }}
+                      onError={(e) => { e.target.onerror = null; e.target.src = `http://localhost:8000/${h.portrait_path}` }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: 96, borderRadius: 4, background: 'var(--bg-panel)' }} />
+                  )}
+                </CardFrame>
+                <div style={{ fontSize: '0.72rem', marginTop: '0.3rem' }}>{h.name}</div>
+                {status !== 'alive' && status !== 'unknown' && (
+                  <div className={status === 'injured' ? 'text-red' : 'text-dim'} style={{ fontSize: '0.62rem' }}>{STATUS_LABEL[status]}</div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-        
+
         {/* Combat Metrics */}
         <div className="card">
           <div className="section-header">Combat Metrics</div>
@@ -127,10 +185,17 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
               </div>
             )}
             
-            {lastResult.materials_gained > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
+            {lastResult.materials_gained && Object.keys(lastResult.materials_gained).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
                 <span>Materials Found</span>
-                <span style={{ color: 'var(--text-hi)', fontFamily: 'Cinzel, serif' }}>+{lastResult.materials_gained.toLocaleString()}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                  {Object.entries(lastResult.materials_gained).map(([mat, qty]) => (
+                    <div key={mat} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                      <span className="text-dim">{mat}</span>
+                      <span style={{ color: 'var(--text-hi)', fontFamily: 'Cinzel, serif' }}>+{qty}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -150,7 +215,7 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
               ))
             ))}
 
-            {(!lastResult.gold_gained && !lastResult.gems_gained && !lastResult.equipment_drop && !lastResult.combat?.skill_upgrades && !lastResult.supplies_gained && !lastResult.materials_gained) && (
+            {(!lastResult.gold_gained && !lastResult.gems_gained && !lastResult.equipment_drop && !lastResult.combat?.skill_upgrades && !lastResult.supplies_gained && !(lastResult.materials_gained && Object.keys(lastResult.materials_gained).length > 0)) && (
                <div className="text-dim text-center" style={{ padding: '2rem' }}>No loot found.</div>
             )}
 
@@ -198,7 +263,7 @@ export default function TowerPage({ onGoldChange }) {
   const [selectedZone, setSelectedZone] = useState(0)
   const [selectedFloor, setSelectedFloor] = useState(1)
   const [resolvedFloor, setResolvedFloor] = useState(null)
-  const [deployTeamId, setDeployTeamId] = useState(1)
+  const [deployTeamIds, setDeployTeamIds] = useState([1, 2, 3, 4, 5])
 
   // Combat/Event State
   const [advancing, setAdvancing] = useState(false)
@@ -211,6 +276,7 @@ export default function TowerPage({ onGoldChange }) {
   
   const [combatEntities, setCombatEntities] = useState(null)
   const [postCombatPhase, setPostCombatPhase] = useState(false)
+  const [arenasFinished, setArenasFinished] = useState(0)
   const [floorPreview, setFloorPreview] = useState(null)
 
   useEffect(() => {
@@ -259,14 +325,13 @@ export default function TowerPage({ onGoldChange }) {
     setResolvedFloor(floorNumber)
     setCombatEntities(null)
     setPostCombatPhase(false)
+    setArenasFinished(0)
 
     try {
-      const result = await enterFloor(floorNumber, deployTeamId)
+      const requiredTeams = (floorNumber - 1) === 0 ? 1 : Math.floor((floorNumber - 1) / 20) + 1
+      const result = await enterFloor(floorNumber, deployTeamIds.slice(0, requiredTeams))
       setLastResult(result)
-
-      if (result.initial_state || result.combat?.initial_state) {
-        setCombatEntities(result.initial_state || result.combat.initial_state)
-      }
+      setCombatEntities(mergedCombatEntities(result))
 
       if (result.awaiting_choice && result.event) {
         setPendingEvent(result)
@@ -313,7 +378,8 @@ export default function TowerPage({ onGoldChange }) {
     setResolving(true)
     setError(null)
     try {
-      const result = await resolveEvent(resolvedFloor || selectedFloor, deployTeamId, pendingEvent.event.id, choiceId, pendingEvent.theme)
+      const requiredTeams = ((resolvedFloor || selectedFloor) - 1) === 0 ? 1 : Math.floor(((resolvedFloor || selectedFloor) - 1) / 20) + 1
+      const result = await resolveEvent(resolvedFloor || selectedFloor, deployTeamIds.slice(0, requiredTeams), pendingEvent.event.id, choiceId, pendingEvent.theme)
       setEventResolution(result)
       setPendingEvent(null)
 
@@ -332,15 +398,15 @@ export default function TowerPage({ onGoldChange }) {
     setResolving(true)
     setError(null)
     try {
-      const result = await resolveExplore(resolvedFloor || selectedFloor, deployTeamId, choiceId)
+      const requiredTeams = ((resolvedFloor || selectedFloor) - 1) === 0 ? 1 : Math.floor(((resolvedFloor || selectedFloor) - 1) / 20) + 1
+      const result = await resolveExplore(resolvedFloor || selectedFloor, deployTeamIds.slice(0, requiredTeams), choiceId)
       // Explore always ends in a real fight now — route through the same
       // combat animation as a normal floor, instead of jumping straight to
       // a static result box.
       setExploreResolution(result)
       setLastResult(result)
-      if (result.initial_state || result.combat?.initial_state) {
-        setCombatEntities(result.initial_state || result.combat.initial_state)
-      }
+      setArenasFinished(0)
+      setCombatEntities(mergedCombatEntities(result))
       setPendingExplore(null)
 
       await refresh()
@@ -406,12 +472,14 @@ export default function TowerPage({ onGoldChange }) {
                     className="btn"
                     onClick={() => handleEventChoice(choice.id)}
                     disabled={resolving}
-                    style={{ 
-                      textAlign: 'center', 
-                      padding: '1rem', 
+                    style={{
+                      textAlign: 'center',
+                      padding: '1rem',
                       background: 'rgba(0,0,0,0.3)',
                       border: '1px solid rgba(255,255,255,0.15)',
-                      fontSize: '1rem'
+                      fontSize: '1rem',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
                     }}
                     onMouseOver={e => {
                       if (!resolving) e.target.style.background = 'rgba(255,255,255,0.1)'
@@ -466,7 +534,9 @@ export default function TowerPage({ onGoldChange }) {
                       padding: '1rem',
                       background: 'rgba(0,0,0,0.3)',
                       border: '1px solid rgba(255,255,255,0.15)',
-                      fontSize: '1rem'
+                      fontSize: '1rem',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
                     }}
                     onMouseOver={e => {
                       if (!resolving) e.target.style.background = 'rgba(255,255,255,0.1)'
@@ -503,7 +573,31 @@ export default function TowerPage({ onGoldChange }) {
           {/* Battlefield UI */}
           {!postCombatPhase && !pendingEvent && !pendingExplore && (
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-              {lastResult && !lastResult.awaiting_choice && <CombatArena combatData={lastResult?.combat || lastResult} onComplete={() => setPostCombatPhase(true)} />}
+              {lastResult && !lastResult.awaiting_choice && (() => {
+                const teamResults = (lastResult?.combat?.team_results || lastResult?.team_results || []).filter(Boolean)
+                if (teamResults.length > 1) {
+                  const onArenaComplete = () => {
+                    setArenasFinished(prev => {
+                      const next = prev + 1
+                      if (next >= teamResults.length) setPostCombatPhase(true)
+                      return next
+                    })
+                  }
+                  return (
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {teamResults.map((tr, i) => (
+                        <div key={i} style={{ flex: '1 1 480px', minWidth: '420px' }}>
+                          <div style={{ textAlign: 'center', color: 'var(--text-hi)', fontFamily: 'Cinzel, serif', marginBottom: '0.3rem' }}>
+                            Team {i + 1}
+                          </div>
+                          <CombatArena combatData={tr} onComplete={onArenaComplete} />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }
+                return <CombatArena combatData={lastResult?.combat || lastResult} onComplete={() => setPostCombatPhase(true)} />
+              })()}
               <div style={{ textAlign: 'center', marginTop: '1rem' }}>
                 <button className="btn" onClick={handleExit} style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem' }}>
                   Exit
@@ -658,34 +752,40 @@ export default function TowerPage({ onGoldChange }) {
               Deploy
             </div>
             
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="text-dim text-sm" style={{ display: 'block', marginBottom: '0.5rem' }}>Select Team</label>
-              <select 
-                value={deployTeamId}
-                onChange={e => setDeployTeamId(parseInt(e.target.value))}
-                style={{ width: '100%', background: 'var(--bg)', color: '#fff', border: '1px solid var(--border)', padding: '0.6rem 0.8rem', borderRadius: 4, fontFamily: 'inherit', fontSize: '0.9rem' }}
-              >
-                {[1,2,3,4,5,6,7,8,9,10].map(id => {
-                  const count = team[id.toString()] ? team[id.toString()].length : 0
-                  return <option key={id} value={id}>Team {id} ({count}/5)</option>
-                })}
-              </select>
-            </div>
-
-            {team[deployTeamId.toString()] && team[deployTeamId.toString()].length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                {team[deployTeamId.toString()].map(h => (
-                  <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: 4 }}>
-                    <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.9rem' }}>{h.name}</span>
-                    <span className="text-dim" style={{ fontSize: '0.8rem' }}>Lv.{h.level} {h.hero_class}</span>
+            {Array.from({length: selectedFloor === 1 ? 1 : Math.floor((selectedFloor - 1) / 20) + 1}).map((_, idx) => (
+              <div key={idx} style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
+                <label className="text-dim text-sm" style={{ display: 'block', marginBottom: '0.5rem' }}>Select Team {idx + 1}</label>
+                <select 
+                  value={deployTeamIds[idx]}
+                  onChange={e => {
+                    const newIds = [...deployTeamIds]
+                    newIds[idx] = parseInt(e.target.value)
+                    setDeployTeamIds(newIds)
+                  }}
+                  style={{ width: '100%', background: 'var(--bg)', color: '#fff', border: '1px solid var(--border)', padding: '0.6rem 0.8rem', borderRadius: 4, fontFamily: 'inherit', fontSize: '0.9rem', marginBottom: '0.5rem' }}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10].map(id => {
+                    const count = team[id.toString()] ? team[id.toString()].length : 0
+                    return <option key={id} value={id}>Team {id} ({count}/5)</option>
+                  })}
+                </select>
+                
+                {team[deployTeamIds[idx].toString()] && team[deployTeamIds[idx].toString()].length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    {team[deployTeamIds[idx].toString()].map(h => (
+                      <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '0.3rem', borderRadius: 4 }}>
+                        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '0.8rem' }}>{h.name}</span>
+                        <span className="text-dim" style={{ fontSize: '0.7rem' }}>Lv.{h.level}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <div className="text-dim text-sm" style={{ fontStyle: 'italic' }}>
+                    No heroes assigned to Team {deployTeamIds[idx]}.
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="text-dim text-sm" style={{ marginBottom: '1.5rem', fontStyle: 'italic' }}>
-                No heroes assigned to Team {deployTeamId}. Go to the Heroes tab to assign heroes.
-              </div>
-            )}
+            ))}
 
             {floorPreview?.blurb && (
               <div style={{
@@ -709,7 +809,7 @@ export default function TowerPage({ onGoldChange }) {
                 className="btn btn-primary"
                 style={{ flex: 1, padding: '1rem', fontSize: '1.1rem' }}
                 onClick={handleEnterFloor}
-                disabled={advancing || !team[deployTeamId.toString()] || team[deployTeamId.toString()].length === 0}
+                disabled={advancing || deployTeamIds.slice(0, selectedFloor === 1 ? 1 : Math.floor((selectedFloor - 1) / 20) + 1).some(id => !team[id.toString()] || team[id.toString()].length === 0)}
               >
                 {advancing ? 'Entering...' : `Enter Floor ${selectedFloor}`}
               </button>
@@ -718,7 +818,7 @@ export default function TowerPage({ onGoldChange }) {
                   className="btn"
                   style={{ padding: '1rem 1.2rem', fontSize: '1.1rem' }}
                   onClick={handleSkipFloor}
-                  disabled={advancing || !team[deployTeamId.toString()] || team[deployTeamId.toString()].length === 0}
+                  disabled={advancing || deployTeamIds.slice(0, selectedFloor === 1 ? 1 : Math.floor((selectedFloor - 1) / 20) + 1).some(id => !team[id.toString()] || team[id.toString()].length === 0)}
                   title="Re-run this already-cleared floor instantly for XP and gold, no animation"
                 >
                   Rush
@@ -731,6 +831,7 @@ export default function TowerPage({ onGoldChange }) {
           </div>
         </div>
       )}
+      <FairyGuide floor={resolvedFloor || selectedFloor} lastResult={lastResult} fairyGender={base.fairy_gender} />
     </div>
   )
 }

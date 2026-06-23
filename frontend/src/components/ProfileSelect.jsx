@@ -94,7 +94,7 @@ export default function ProfileSelect({ onSelect }) {
     <div className="page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg)' }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontFamily: 'Cinzel, serif', fontSize: '3rem', color: 'var(--gold)', textShadow: '0 0 20px rgba(201,168,76,0.5)', margin: 0 }}>⬡</h1>
-        <h1 style={{ fontFamily: 'Cinzel, serif', fontSize: '2rem', color: 'var(--text)', margin: '0.5rem 0' }}>Tower Gacha</h1>
+        <h1 style={{ fontFamily: 'Cinzel, serif', fontSize: '2rem', color: 'var(--text)', margin: '0.5rem 0' }}>Infinite Gacha</h1>
         <div className="text-dim" style={{ fontSize: '0.9rem', letterSpacing: '2px' }}>SELECT SAVE PROFILE</div>
       </div>
 

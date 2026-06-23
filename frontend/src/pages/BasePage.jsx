@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs } from '../api/client'
+import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase } from '../api/client'
 
 const FACILITY_TOOLTIPS = {
-  "Forge": "Crafts powerful weapons and armor. Assign Blacksmiths to increase crafting speed and quality.",
-  "Infirmary": "Heals trauma and severe injuries passively over time. Assign Medics and Priests for better results.",
+  "Forge": "Crafts powerful weapons and armor. Assign Blacksmiths to increase crafting agility and quality.",
+  "Infirmary": "Heals trauma passively over time and crafts Bandages (auto-used to patch up your most injured heroes before the next floor). Assign Medics and Priests for better results.",
   "Vault": "Expands equipment storage capacity. Quartermasters manage the Vault effectively.",
   "Restaurant": "Cooks advanced meals to increase morale. Assign Chefs to maximize food quality.",
   "Alchemist Lab": "Brews potions and elixirs. Alchemists and Mages excel in this facility.",
@@ -95,32 +95,21 @@ const handleRenameBase = async () => {
     const newName = prompt("Enter a new name for your base:", base.name);
     if (!newName) return;
     try {
-      const res = await fetch('/api/base/rename', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName })
-      });
-      if (!res.ok) {
-        alert("Failed to rename base.");
-        return;
-      }
+      await renameBase(newName);
       loadAll();
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      alert(e.message || "Failed to rename base.");
+    }
   };
 
   const handleRest = async () => {
     setResting(true)
     try {
-      const res = await fetch('/api/base/rest', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) {
-        alert(data.detail || "Cannot rest.")
-        return
-      }
-      alert(`Rested ${data.rested} heroes. Cost: ${data.cost} supplies.`)
+      const data = await restHeroes()
+      alert(`Rested ${data.rested} heroes — Health fully restored, morale/stress/trauma recovered. Cost: ${data.cost} supplies.`)
       loadAll()
     } catch (e) {
-      console.error(e)
+      alert(e.message || "Cannot rest.")
     } finally {
       setResting(false)
     }
@@ -128,16 +117,11 @@ const handleRenameBase = async () => {
 
   const handleUpgradeBase = async () => {
     try {
-      const res = await fetch('/api/base/upgrade', { method: 'POST' })
-      if (!res.ok) {
-         const data = await res.json()
-         alert(data.detail || "Failed to upgrade")
-         return
-      }
+      await upgradeBase()
       alert("Base Upgraded! Max Roster Size increased.")
       loadAll()
       if (onGoldChange) onGoldChange()
-    } catch(e) { console.error(e) }
+    } catch(e) { alert(e.message || "Failed to upgrade") }
   }
 
 
@@ -211,6 +195,20 @@ const handleRenameBase = async () => {
       loadAll()
       if (onGoldChange) onGoldChange()
       alert("Crafted successfully!")
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setCrafting(false)
+    }
+  }
+
+  async function handleCraftBandages(heroId) {
+    setCrafting(true)
+    try {
+      const res = await craftBandages(heroId, 1)
+      loadAll()
+      if (onGoldChange) onGoldChange()
+      alert(`Crafted a Bandage (${res.total} in stock). Auto-used on your most injured heroes before your next floor.`)
     } catch (e) {
       alert(e.message)
     } finally {
@@ -416,7 +414,7 @@ const getGenRate = (fac) => {
                   {fac.heroes.map(h => (
                     <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(0,0,0,0.3)', padding: '0.5rem 0.75rem', borderRadius: 6 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} />
+                            <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', objectPosition: 'center 15%', border: '1px solid var(--border)' }} />
                             <div className="text-hi" style={{ fontSize: '0.8rem', marginTop: '0.3rem', textAlign: 'center' }}>{h.name}</div>
                           </div>
                       <span style={{ fontSize: '0.95rem' }}>{h.name}</span>
@@ -426,6 +424,11 @@ const getGenRate = (fac) => {
                           <button onClick={() => handleCraft(h.id, 'weapon')} disabled={crafting} className="btn btn-gold" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>Weapon (100g, 3 Iron, 1 Bone)</button>
                           <button onClick={() => handleCraft(h.id, 'armor')} disabled={crafting} className="btn btn-gold" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>Armor (100g, 2 Slime, 2 Iron)</button>
                           <button onClick={() => handleCraft(h.id, 'accessory')} disabled={crafting} className="btn btn-gold" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>Accessory (100g, 3 Dust, 1 Ear)</button>
+                        </div>
+                      )}
+                      {fac.type === 'Infirmary' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginLeft: '0.5rem' }}>
+                          <button onClick={() => handleCraftBandages(h.id)} disabled={crafting} className="btn btn-gold" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>Bandage (15 supplies)</button>
                         </div>
                       )}
                     </div>
@@ -508,7 +511,7 @@ const getGenRate = (fac) => {
                      onClick={() => setExpandedLegacyId(expanded ? null : leg.id)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     {leg.is_sacrifice && leg.portrait_path ? (
-                      <img src={`http://localhost:8000/${leg.portrait_path}`} alt={leg.hero_name} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--gold)', flexShrink: 0 }} />
+                      <img src={`http://localhost:8000/${leg.portrait_path}`} alt={leg.hero_name} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', objectPosition: 'center 15%', border: '1px solid var(--gold)', flexShrink: 0 }} />
                     ) : (
                       <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', color: '#555', flexShrink: 0 }}>
                         ✦
@@ -551,7 +554,7 @@ const getGenRate = (fac) => {
               Assign idle heroes to protect base floors. Drag an unassigned hero onto an empty slot on a floor to assign them. Drag an assigned hero back to unassign them.
             </div>
             <div className="text-dim text-sm" style={{ lineHeight: 1.5, marginTop: '0.5rem' }}>
-              <span className="text-hi">Benefit:</span> a stationed hero gets a stat bonus (HP/ATK/DEF/SPD) while climbing the Tower, and recovers from fatigue faster at the base. Each floor has a fixed bonus pool that's split evenly among whoever's stationed there — higher floors have a bigger pool, but spreading more heroes across one floor shrinks everyone's individual share. Check each floor's current bonus % below before assigning.
+              <span className="text-hi">Benefit:</span> a stationed hero gets a stat bonus (Health/STR/INT/AGI) while climbing the Tower, and recovers from fatigue faster at the base. Each floor has a fixed bonus pool that's split evenly among whoever's stationed there — higher floors have a bigger pool, but spreading more heroes across one floor shrinks everyone's individual share. Check each floor's current bonus % below before assigning.
             </div>
           </div>
           
@@ -611,7 +614,7 @@ const getGenRate = (fac) => {
                          style={{ cursor: 'grab' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <div style={{ position: 'relative' }}>
-                          <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} title={`${h.name} (Lv ${h.level} ${h.hero_class})`} />
+                          <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} draggable={false} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', objectPosition: 'center 15%', border: '1px solid var(--border)' }} title={`${h.name} (Lv ${h.level} ${h.hero_class})`} />
                           <div style={{ position: 'absolute', bottom: -5, right: -5, background: 'var(--bg-dark)', border: '1px solid var(--gold)', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 'bold' }}>
                             {h.birth_star}★
                           </div>
@@ -640,11 +643,13 @@ const getGenRate = (fac) => {
                   <div style={{ flex: 1, display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                     {/* Render assigned heroes */}
                     {f.heroes.map(h => (
-                      <div key={h.id} 
+                      <div key={h.id}
+                           draggable
+                           onDragStart={(e) => e.dataTransfer.setData('heroId', h.id)}
                            onClick={() => handleAssignFloor(h.id, null)}
-                           style={{ cursor: 'pointer', position: 'relative' }} title="Click to remove">
+                           style={{ cursor: 'grab', position: 'relative' }} title="Click, or drag back to Unassigned, to remove">
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} />
+                            <img src={`http://localhost:8000/${h.portrait_path}`} alt={h.name} draggable={false} style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', objectPosition: 'center 15%', border: '1px solid var(--border)' }} />
                             <div className="text-hi" style={{ fontSize: '0.8rem', marginTop: '0.3rem', textAlign: 'center' }}>{h.name}</div>
                           </div>
                         <div style={{ position: 'absolute', top: -5, right: -5, background: 'var(--red)', color: 'white', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>&times;</div>

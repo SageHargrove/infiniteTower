@@ -123,6 +123,7 @@ h1, h2, h3, .title-font {
   display: flex;
   flex-direction: column;
   flex: 1;
+  height: 100%;
   box-sizing: border-box;
 }
 
@@ -179,6 +180,24 @@ h1, h2, h3, .title-font {
   animation: star-rainbow 2s linear infinite;
 }
 
+/* Status overlay drawn over the backend-templated card image (the frame
+   border itself is baked into that image now — see card_template_service.py). */
+.card-frame { position: relative; border-radius: 4px; }
+
+.card-frame-overlay {
+  position: absolute; inset: 0; border-radius: 4px; pointer-events: none; z-index: 5;
+}
+.card-frame-overlay-injured { background: rgba(180,30,30,0.32); mix-blend-mode: multiply; }
+.card-frame-overlay-kia { background: rgba(0,0,0,0.7); }
+
+.card-frame-banner {
+  position: absolute; bottom: 18%; left: -8%; right: -8%; z-index: 6;
+  background: #000; color: var(--red); text-align: center;
+  font-family: 'Cinzel', serif; letter-spacing: 1px; font-size: 0.75em;
+  padding: 0.2em 0; transform: rotate(-4deg);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+
 /* Vault Selection Ring */
 .vault-item-selected {
   outline: 2px solid cyan;
@@ -201,10 +220,10 @@ h1, h2, h3, .title-font {
 .morale-bar-fill.fearful { background: #c87030; }
 .morale-bar-fill.broken  { background: var(--red); }
 
-/* HP bar */
-.hp-bar-wrap { margin-top: 0.4rem; }
-.hp-bar-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-.hp-bar-fill { height: 100%; background: var(--red); border-radius: 2px; transition: width 0.4s; }
+/* Health bar */
+.health-bar-wrap { margin-top: 0.4rem; }
+.health-bar-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.health-bar-fill { height: 100%; background: var(--red); border-radius: 2px; transition: width 0.4s; }
 
 /* Stat row */
 .stats-row {
@@ -217,15 +236,15 @@ h1, h2, h3, .title-font {
 }
 .stat span { color: var(--text); font-weight: 600; }
 
-/* Expanded hero detail view — name/title/HP/level are what the user is
+/* Expanded hero detail view — name/title/Health/level are what the user is
    scanning for first, so they get bumped up relative to the rest; the
    backstory is real but not immediately actionable, so it's de-emphasized
    and relocated to the bottom of the panel (see HeroCard.jsx showFull). */
 .hero-card.full .hero-name { font-size: 1.7em; margin-bottom: 0.15em; }
 .hero-card.full .hero-title { font-size: 1.25em; margin-bottom: 0.6em; }
-.hero-card.full .hp-bar-wrap .morale-label,
+.hero-card.full .health-bar-wrap .morale-label,
 .hero-card.full .morale-bar-wrap .morale-label { font-size: 1.05em; }
-.hero-card.full .hp-bar-bg,
+.hero-card.full .health-bar-bg,
 .hero-card.full .morale-bar-bg { height: 7px; }
 .hero-card.full .stats-row { font-size: 1em; }
 .hero-card.full .story-block { font-size: 0.62em; }
@@ -235,19 +254,24 @@ h1, h2, h3, .title-font {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .hero-grid > div {
   position: relative;
+  height: 100%;
 }
 
-/* Portrait image in hero cards — consistent height */
+/* Portrait image in hero cards — the composited card image is a fixed
+   700x1050 (2:3) frame; matching that ratio here means object-fit: cover
+   has nothing to crop (a mismatched box forces cover to zoom in until the
+   wider axis fits, chewing into the character/hair to fill the rest). */
 .hero-card .hero-portrait {
   width: 100%;
-  height: 200px;
+  aspect-ratio: 2 / 3;
+  height: auto;
   object-fit: cover;
-  object-position: center 15%;
+  object-position: center top;
   border-radius: 2px;
   margin-bottom: 0.5em;
   display: block;
@@ -256,7 +280,7 @@ h1, h2, h3, .title-font {
 /* Placeholder when no portrait exists */
 .hero-card .hero-portrait-placeholder {
   width: 100%;
-  height: 200px;
+  aspect-ratio: 2 / 3;
   background: linear-gradient(135deg, var(--bg) 0%, var(--bg-panel) 50%, var(--border) 100%);
   border-radius: 2px;
   margin-bottom: 0.5em;
@@ -287,6 +311,8 @@ h1, h2, h3, .title-font {
   letter-spacing: 0.06em;
   cursor: pointer;
   transition: all 0.2s;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .btn:hover { border-color: var(--border-hi); color: var(--text-hi); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }

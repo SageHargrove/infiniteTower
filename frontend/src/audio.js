@@ -79,6 +79,54 @@ export function playClick() {
   osc.stop(audioCtx.currentTime + 0.05)
 }
 
+// kind: 'melee' | 'caster' | 'ranged' | 'enemy' — a rough archetype bucket
+// derived from the attacker's existing power_stat/is_ranged combat fields
+// (see CombatArena's classifyAttacker), not a separate per-class sound list.
+export function playHitSound(kind, isCrit = false) {
+  if (!soundEnabled || !audioCtx) return
+  if (globalSfxVolume === 0) return
+  if (audioCtx.state === 'suspended') audioCtx.resume()
+
+  const osc = audioCtx.createOscillator()
+  const gain = audioCtx.createGain()
+  const vol = (isCrit ? 0.05 : 0.03) * globalSfxVolume
+  const now = audioCtx.currentTime
+
+  if (kind === 'caster') {
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(isCrit ? 1100 : 900, now)
+    osc.frequency.exponentialRampToValueAtTime(isCrit ? 1900 : 1400, now + 0.12)
+    gain.gain.setValueAtTime(vol, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18)
+    osc.connect(gain); gain.connect(audioCtx.destination)
+    osc.start(); osc.stop(now + 0.18)
+  } else if (kind === 'ranged') {
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(700, now)
+    osc.frequency.exponentialRampToValueAtTime(200, now + 0.08)
+    gain.gain.setValueAtTime(vol, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09)
+    osc.connect(gain); gain.connect(audioCtx.destination)
+    osc.start(); osc.stop(now + 0.09)
+  } else if (kind === 'enemy') {
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(150, now)
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.1)
+    gain.gain.setValueAtTime(vol, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12)
+    osc.connect(gain); gain.connect(audioCtx.destination)
+    osc.start(); osc.stop(now + 0.12)
+  } else { // melee
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(isCrit ? 320 : 220, now)
+    osc.frequency.exponentialRampToValueAtTime(isCrit ? 180 : 130, now + 0.07)
+    gain.gain.setValueAtTime(vol, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+    osc.connect(gain); gain.connect(audioCtx.destination)
+    osc.start(); osc.stop(now + 0.08)
+  }
+}
+
 let bgmAudio = null
 
 function stopBgm() {

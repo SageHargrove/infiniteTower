@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { listHeroes, setTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation } from '../api/client'
+import { listHeroes, setTeam, reorderTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, getAscensionInfo, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation, assignTeamLeader } from '../api/client'
 import HeroCard from '../components/HeroCard'
 import ClassEvolutionModal from '../components/ClassEvolutionModal'
 
@@ -237,11 +237,23 @@ export default function HeroesPage() {
   // --- Ascension ---
   async function handleAscend(heroId, e) {
     e.stopPropagation()
-    if (!confirm('Ascend this hero? This will consume materials and increase their ascension star.')) return
+    try {
+      const info = await getAscensionInfo(heroId)
+      const costStr = Object.entries(info.materials_required || {}).map(([m, q]) => `${q} ${m}`).join(', ')
+      const pct = Math.round((info.fail_chance || 0) * 100)
+      if (!confirm(`Ascend this hero? Costs ${costStr}.\nThis ritual has a ${pct}% chance to fail — materials are consumed either way.`)) return
+    } catch (e) {
+      // If the info lookup fails, fall through to attempting the ascend anyway — the
+      // endpoint itself validates materials/level and will surface a clear error.
+    }
     setAscending(true)
     try {
       const result = await ascendHero(heroId)
-      setMsg(`Ascension successful! ${result.message || ''}`)
+      if (result.failed) {
+        setMsg(`Ascension failed! ${result.message || ''}`)
+      } else {
+        setMsg(`Ascension successful! ${result.message || ''}`)
+      }
       await load()
     } catch (e) {
       setMsg(e.message)
@@ -251,6 +263,17 @@ export default function HeroesPage() {
   }
 
 
+
+  async function handleAssignLeader(heroId, e) {
+    e.stopPropagation()
+    try {
+      const result = await assignTeamLeader(heroId)
+      setMsg(result.message || '')
+      await load()
+    } catch (e) {
+      setMsg(e.message)
+    }
+  }
 
   // --- Drag and Drop ---
   const [draggedHeroId, setDraggedHeroId] = useState(null)
@@ -279,12 +302,7 @@ export default function HeroesPage() {
       const newIds = currentTeam.map(h => h.id);
       
       try {
-        const res = await fetch('/api/heroes/team/reorder', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ team_id: activeTab, hero_ids: newIds })
-        });
-        if (!res.ok) throw new Error('Failed to reorder team');
+        await reorderTeam(activeTab, newIds);
         await load();
       } catch (e) {
         setMsg(e.message)
@@ -364,20 +382,23 @@ export default function HeroesPage() {
   }
   const renderHeroCard = (hero, index) => {
     return (
-      <div key={hero.id} 
-           style={{ 
-             position: 'relative', 
+      <div key={hero.id}
+           style={{
+             position: 'relative',
              width: '220px',
+             height: '100%',
              display: 'flex',
              flexDirection: 'column',
-             ...getSynthBorderStyle(hero.id), 
+             ...getSynthBorderStyle(hero.id),
              borderRadius: 6,
-             opacity: draggedHeroId === hero.id ? 0.5 : 1,
-             transform: dragOverHeroId === hero.id ? 'scale(1.02)' : 'scale(1)',
-             transition: 'transform 0.2s',
-             cursor: (activeTab !== 'all' && !synthMode) ? 'grab' : 'pointer'
+             cursor: activeTab !== 'all' && !synthMode && hero.condition !== 'Retired' ? 'grab' : 'pointer',
+             opacity: hero.is_alive ? 1 : 0.6,
+             filter: synthMode && !selectedForSynth.includes(hero.id) && !hero.is_on_team && hero.birth_star !== 7 ? 'grayscale(0.6)' : 'none',
+             transform: dragOverHeroId === hero.id ? 'scale(1.05)' : 'scale(1)',
+             transition: 'transform 0.1s ease',
+             boxShadow: dragOverHeroId === hero.id ? '0 0 15px rgba(200,160,48,0.8)' : 'none'
            }}
-           draggable={activeTab !== 'all' && !synthMode}
+           draggable={activeTab !== 'all' && !synthMode && hero.condition !== 'Retired'}
            onDragStart={(e) => handleDragStart(e, hero.id)}
            onDragOver={(e) => handleDragOver(e, hero.id)}
            onDrop={(e) => handleDrop(e, hero.id)}
@@ -393,6 +414,16 @@ export default function HeroesPage() {
             boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
           }}>
             {index < 2 ? 'FRONTLINE' : 'BACKLINE'}
+          </div>
+        )}
+        {hero.is_team_leader && (
+          <div title="Team Leader" style={{
+            position: 'absolute', top: -10, right: 8,
+            background: 'rgba(201, 168, 76, 0.95)', color: '#000',
+            padding: '2px 6px', borderRadius: 12, fontSize: '0.75rem',
+            zIndex: 10, boxShadow: '0 0 8px rgba(201,168,76,0.6)'
+          }}>
+            👑
           </div>
         )}
         <HeroCard
@@ -411,12 +442,27 @@ export default function HeroesPage() {
           onManageEquipment={(h, s, e) => setEqModal({ hero: h, slot: s, currentEq: e })}
           actions={!synthMode && hero.is_alive && (
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+              {activeTab !== 'all' && (
+                <button
+                  className="btn"
+                  style={{
+                    border: hero.is_team_leader ? '1px solid var(--gold)' : '1px solid var(--border)',
+                    color: hero.is_team_leader ? 'var(--gold)' : 'var(--text-dim)',
+                    background: hero.is_team_leader ? 'rgba(201,168,76,0.15)' : 'transparent',
+                    fontFamily: 'Cinzel, serif', padding: '0.3rem 0.7rem', fontSize: '0.72rem', borderRadius: 4
+                  }}
+                  onClick={(e) => handleAssignLeader(hero.id, e)}
+                  title={hero.battle_tendency ? `Battle Tendency: ${hero.battle_tendency}` : undefined}
+                >
+                  👑 {hero.is_team_leader ? 'Leader' : 'Make Leader'}
+                </button>
+              )}
               {(hero.ascension_star || 0) < 7 && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                   <button className="btn" style={{ border: '1px solid var(--gold)', color: 'var(--gold)', background: 'rgba(201,168,76,0.1)', fontFamily: 'Cinzel, serif', padding: '0.3rem 0.8rem', fontSize: '0.75rem', borderRadius: 4 }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleAscend(hero.id, e); }} disabled={ascending || promoting || evolving}>
                     {ascending ? '...' : `◆ Ascend`}
                   </button>
-                  <div className="text-dim" style={{ fontSize: '0.6rem', marginTop: '0.2rem' }}>{hero.birth_star * 1000} Gold  5 Elemental Stones</div>
+                  <div className="text-dim" style={{ fontSize: '0.6rem', marginTop: '0.2rem' }}>Costs materials · risk of failure</div>
                 </div>
               )}
               {hero.evolution_options?.length > 0 && (
@@ -584,9 +630,9 @@ export default function HeroesPage() {
                 <option value="level">Level</option>
                 <option value="stars">Star Rating</option>
                 <option value="name">Name</option>
-                <option value="hp">Max HP</option>
-                <option value="atk">Attack</option>
-                <option value="def">Defense</option>
+                <option value="health">Max Health</option>
+                <option value="atk">Strength</option>
+                <option value="def">Intelligence</option>
               </select>
             </div>
 
@@ -768,7 +814,7 @@ export default function HeroesPage() {
                     <div>
                       <div style={{ color: 'var(--text-hi)', fontFamily: 'Cinzel, serif' }}>{eq.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                        Rarity: {eq.rarity} | Level: {eq.level} | {eq.base_atk > 0 && `ATK +${eq.base_atk} `}{eq.base_def > 0 && `DEF +${eq.base_def} `}{eq.base_hp > 0 && `HP +${eq.base_hp} `}{eq.base_spd > 0 && `SPD +${eq.base_spd} `}{eq.atk_pct > 0 && `ATK +${(eq.atk_pct*100).toFixed(0)}% `}{eq.def_pct > 0 && `DEF +${(eq.def_pct*100).toFixed(0)}% `}{eq.hp_pct > 0 && `HP +${(eq.hp_pct*100).toFixed(0)}% `}{eq.spd_pct > 0 && `SPD +${(eq.spd_pct*100).toFixed(0)}% `}{eq.crit_chance > 0 && `Crit +${(eq.crit_chance*100).toFixed(0)}% `}{eq.dodge_chance > 0 && `Dodge +${(eq.dodge_chance*100).toFixed(0)}% `}{eq.armor_pen > 0 && `ArmorPen +${(eq.armor_pen*100).toFixed(0)}%`}
+                        Rarity: {eq.rarity} | Level: {eq.level} | {eq.base_str > 0 && `STR +${eq.base_str} `}{eq.base_int > 0 && `INT +${eq.base_int} `}{eq.base_hlt > 0 && `Health +${eq.base_hlt} `}{eq.base_agi > 0 && `AGI +${eq.base_agi} `}{eq.str_pct > 0 && `STR +${(eq.str_pct*100).toFixed(0)}% `}{eq.int_pct > 0 && `INT +${(eq.int_pct*100).toFixed(0)}% `}{eq.hlt_pct > 0 && `Health +${(eq.hlt_pct*100).toFixed(0)}% `}{eq.agi_pct > 0 && `AGI +${(eq.agi_pct*100).toFixed(0)}% `}{eq.crit_chance > 0 && `Crit +${(eq.crit_chance*100).toFixed(0)}% `}{eq.dodge_chance > 0 && `Dodge +${(eq.dodge_chance*100).toFixed(0)}% `}{eq.armor_pen > 0 && `ArmorPen +${(eq.armor_pen*100).toFixed(0)}%`}
                       </div>
                     </div>
                     <button className="btn btn-primary" onClick={async () => {

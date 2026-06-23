@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { playHitSound } from '../audio'
 
 const TEAM_POSITIONS = {
   hero: [
@@ -26,6 +27,28 @@ const ENEMY_SIZE_TIERS = {
   elite:    { circle: 220, container: 240, icon: '3.6rem', name: '1.15rem', pos: { x: '70%', y: '50%' } },
   miniboss: { circle: 320, container: 340, icon: '4.4rem', name: '1.3rem', pos: { x: '73%', y: '50%' } },
   boss:     { circle: 460, container: 480, icon: '5.5rem', name: '1.5rem', pos: { x: '77%', y: '50%' } },
+  // Swarms (6+ units on one side) no longer fit the fixed 5-slot formation —
+  // they're laid out on a grid (see getGridPosition) and sized down further
+  // still as the count climbs, so a 20-rat horde doesn't overlap itself.
+  swarm:    { circle: 80,  container: 90,  icon: '1.6rem', name: '0.68rem', pos: null },
+  swarmTiny:{ circle: 56,  container: 64,  icon: '1.2rem', name: '0.6rem',  pos: null },
+}
+
+// TEAM_POSITIONS only has 5 hand-placed slots per side, matching the 5-hero
+// team cap — fine for normal encounters, but a swarm (or a hero side padded
+// out by a summoned Construct past 5 units) needs a layout that scales with
+// however many units actually showed up. Lays units out in an evenly-spaced
+// grid within that side's half of the arena instead of hand-placed slots.
+function getGridPosition(idx, count, team) {
+  const cols = Math.ceil(Math.sqrt(count * 1.4))
+  const rows = Math.ceil(count / cols)
+  const col = idx % cols
+  const row = Math.floor(idx / cols)
+  const [xMin, xMax] = team === 'hero' ? [6, 44] : [56, 94]
+  const [yMin, yMax] = [8, 92]
+  const x = xMin + ((col + 0.5) / cols) * (xMax - xMin)
+  const y = rows > 1 ? yMin + ((row + 0.5) / rows) * (yMax - yMin) : 50
+  return { x: `${x}%`, y: `${y}%` }
 }
 
 function FloatingDamage({ number, isCrit, onComplete }) {
@@ -61,14 +84,14 @@ function FloatingDamage({ number, isCrit, onComplete }) {
   )
 }
 
-function CombatUnitSprite({ unit, team, position, pos: posOverride, isActive, isHit, hp, maxHp, damageInfo, tier = 'normal' }) {
+function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverride, isActive, isHit, health, maxHp, damageInfo, tier = 'normal' }) {
   const [imgError, setImgError] = useState(false)
   if (!unit) return null
 
-  const isDead = hp <= 0
-  const hpPercent = Math.max(0, (hp / maxHp) * 100)
+  const isDead = health <= 0
+  const hpPercent = Math.max(0, (health / maxHp) * 100)
 
-  const pos = posOverride || TEAM_POSITIONS[team][position] || TEAM_POSITIONS[team][0]
+  const pos = posOverride || (teamCount > 5 ? getGridPosition(position, teamCount, team) : TEAM_POSITIONS[team][position]) || TEAM_POSITIONS[team][0]
   const size = ENEMY_SIZE_TIERS[tier] || ENEMY_SIZE_TIERS.normal
 
   return (
@@ -133,7 +156,7 @@ function CombatUnitSprite({ unit, team, position, pos: posOverride, isActive, is
         textOverflow: 'ellipsis',
         maxWidth: '100%'
       }}>
-        {unit.name}
+        {unit.name}{unit.level ? ` [Lv ${unit.level}]` : ''}
       </div>
 
       {damageInfo && (
@@ -147,7 +170,7 @@ export default function CombatArena({ combatData, onComplete }) {
   const [currentTurnIndex, setCurrentTurnIndex] = useState(-1)
   const [playing, setPlaying] = useState(false)
   
-  // Local state for HP tracking
+  // Local state for Health tracking
   const [unitHPs, setUnitHPs] = useState({})
   
   const heroes = combatData?.initial_state?.heroes || []
@@ -158,16 +181,34 @@ export default function CombatArena({ combatData, onComplete }) {
 
   // Solo enemies (elite mobs, minibosses, bosses) read as more threatening
   // rendered bigger than a regular swarm/pack unit. A true boss is sized to
-  // dominate its entire side of the field.
-  const enemyTier = isBoss ? 'boss' : isMiniboss ? 'miniboss' : enemies.length === 1 ? 'elite' : 'normal'
+  // dominate its entire side of the field. Swarms (6+) drop to a smaller,
+  // grid-laid-out size instead — see getGridPosition/ENEMY_SIZE_TIERS.swarm*.
+  const enemyTier = isBoss ? 'boss' : isMiniboss ? 'miniboss'
+    : enemies.length === 1 ? 'elite'
+    : enemies.length > 12 ? 'swarmTiny'
+    : enemies.length > 5 ? 'swarm'
+    : 'normal'
+  const heroTier = heroes.length > 5 ? 'swarm' : 'normal'
   const soloEnemyPos = enemies.length === 1 ? ENEMY_SIZE_TIERS[enemyTier].pos : null
+
+  // Hit-sound archetype, reusing the same power_stat/is_ranged fields combat
+  // already tracks per-unit instead of a separate per-class sound table —
+  // a caster's hits chime, a ranged attacker thwips, melee clangs, enemies
+  // get one shared growl.
+  function classifyAttacker(unitId) {
+    const hero = heroes.find(h => h.id === unitId)
+    if (!hero) return 'enemy'
+    if (hero.power_stat === 'intelligence') return 'caster'
+    if (hero.is_ranged) return 'ranged'
+    return 'melee'
+  }
 
   useEffect(() => {
     if (combatData) {
       // Initialize HPs
       const initialHps = {}
-      heroes.forEach(h => initialHps[h.id] = h.hp)
-      enemies.forEach(e => initialHps[e.id] = e.hp)
+      heroes.forEach(h => initialHps[h.id] = h.health)
+      enemies.forEach(e => initialHps[e.id] = e.health)
       setUnitHPs(initialHps)
       setCurrentTurnIndex(-1)
       setPlaying(true)
@@ -192,6 +233,7 @@ export default function CombatArena({ combatData, onComplete }) {
           ...prev,
           [turn.target_id]: turn.target_hp
         }))
+        playHitSound(classifyAttacker(turn.attacker_id), turn.is_crit)
       }
     }
 
@@ -230,15 +272,17 @@ export default function CombatArena({ combatData, onComplete }) {
         const isTarget = currentTurn?.target_id === hero.id
         const dmgInfo = isTarget ? { amount: currentTurn.damage, crit: currentTurn.is_crit } : null
         return (
-          <CombatUnitSprite 
-            key={hero.id} 
-            unit={hero} 
-            team="hero" 
-            position={idx} 
+          <CombatUnitSprite
+            key={hero.id}
+            unit={hero}
+            team="hero"
+            position={idx}
+            teamCount={heroes.length}
+            tier={heroTier}
             isActive={isAttacker}
             isHit={isTarget}
-            hp={unitHPs[hero.id] ?? hero.hp}
-            maxHp={hero.max_hp}
+            health={unitHPs[hero.id] ?? hero.health}
+            maxHp={hero.max_health}
             damageInfo={dmgInfo}
           />
         )
@@ -255,12 +299,13 @@ export default function CombatArena({ combatData, onComplete }) {
             unit={enemy}
             team="enemy"
             position={idx}
+            teamCount={enemies.length}
             pos={soloEnemyPos}
             tier={enemyTier}
             isActive={isAttacker}
             isHit={isTarget}
-            hp={unitHPs[enemy.id] ?? enemy.hp}
-            maxHp={enemy.max_hp}
+            health={unitHPs[enemy.id] ?? enemy.health}
+            maxHp={enemy.max_health}
             damageInfo={dmgInfo}
           />
         )

@@ -26,9 +26,9 @@ export default function App() {
   const [supplies, setSupplies] = useState(null)
   const [gems, setGems] = useState(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [soundOn, setSoundOn] = useState(true)
-  const [bgmVol, setBgmVol] = useState(50)
-  const [sfxVol, setSfxVol] = useState(50)
+  const [soundOn, setSoundOn] = useState(localStorage.getItem('soundEnabled') !== 'false')
+  const [bgmVol, setBgmVol] = useState(parseFloat(localStorage.getItem('bgmVolume') || '0.5') * 100)
+  const [sfxVol, setSfxVol] = useState(parseFloat(localStorage.getItem('sfxVolume') || '0.5') * 100)
   const [devHeroes, setDevHeroes] = useState([])
   const [devHeroId, setDevHeroId] = useState('')
   const [devLevel, setDevLevel_] = useState(10)
@@ -136,7 +136,7 @@ export default function App() {
     <div className="app">
       <header className="app-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '1rem 2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <h1 style={{ fontSize: '2.5rem', margin: 0 }}>⬡ Tower Gacha</h1>
+          <h1 style={{ fontSize: '2.5rem', margin: 0 }}>♾️ Infinite Gacha</h1>
           <div className="text-dim" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '2rem', fontSize: '1.6rem' }}>
             Profile: <span className="text-gold" style={{ fontSize: '2.2rem', fontWeight: 'bold' }}>{activeProfile}</span>
           </div>
@@ -270,7 +270,7 @@ export default function App() {
             </div>
             
             <div className="text-dim" style={{ fontSize: '0.65rem', marginTop: '1.5rem' }}>
-              Tower Gacha Pre-Alpha
+              Infinite Gacha Pre-Alpha
             </div>
           </div>
         </div>

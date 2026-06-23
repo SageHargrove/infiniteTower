@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { pullHeroes, getOdds, getBase, getPityInfo, redeemSpark } from '../api/client'
+import { pullHeroes, getOdds, getBase, getPityInfo, redeemSpark, pullEquipment } from '../api/client'
 import HeroCard from '../components/HeroCard'
 import SummoningOverlay from '../components/SummoningOverlay'
 
@@ -33,9 +33,28 @@ export default function SummonPage({ onGoldChange }) {
     try {
       const data = await pullHeroes(count, usePortrait)
       setResults(data.pulled)
-      const cost = count === 10 ? 900 : count * 100
+      const cost = count * 100
       setGems(g => g - cost)
       setShowAnimation(true)
+      await refreshData()
+      if (onGoldChange) onGoldChange()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setPulling(false)
+    }
+  }
+
+  async function doPullEquipment(count) {
+    setPulling(true)
+    setError(null)
+    setResults([])
+    try {
+      const data = await pullEquipment(count)
+      setResults(data.results.map(e => ({...e, is_equipment: true})))
+      const cost = count * 500
+      setGold(g => g - cost)
+      // setShowAnimation(true) // We can use the same or a different animation later, for now just show results
       await refreshData()
       if (onGoldChange) onGoldChange()
     } catch (e) {
@@ -103,11 +122,33 @@ export default function SummonPage({ onGoldChange }) {
             <button 
               className="btn btn-gold" 
               onClick={() => doPull(10)} 
-              disabled={pulling || gems < 900}
+              disabled={pulling || gems < 1000}
               style={{ flex: 1, padding: '2rem', fontSize: '1.6rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', border: '2px solid var(--gold)', borderRadius: 8, background: 'rgba(201,168,76,0.15)', boxShadow: '0 0 20px rgba(201,168,76,0.3)' }}
             >
               <div>{pulling ? 'Summoning...' : 'Summon 10x'}</div>
-              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>900 GEMS 💎</div>
+              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>1000 GEMS 💎</div>
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem' }}>
+            <button 
+              className="btn btn-gold" 
+              onClick={() => doPullEquipment(1)} 
+              disabled={pulling || gold < 500}
+              style={{ flex: 1, padding: '2rem', fontSize: '1.6rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', border: '2px solid var(--star1)', borderRadius: 8, background: 'rgba(150,150,150,0.1)' }}
+            >
+              <div>{pulling ? 'Summoning...' : 'Equip Summon 1x'}</div>
+              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>500 GOLD 💰</div>
+            </button>
+
+            <button 
+              className="btn btn-gold" 
+              onClick={() => doPullEquipment(10)} 
+              disabled={pulling || gold < 5000}
+              style={{ flex: 1, padding: '2rem', fontSize: '1.6rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', border: '2px solid var(--star1)', borderRadius: 8, background: 'rgba(150,150,150,0.15)', boxShadow: '0 0 20px rgba(150,150,150,0.3)' }}
+            >
+              <div>{pulling ? 'Summoning...' : 'Equip Summon 10x'}</div>
+              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>5000 GOLD 💰</div>
             </button>
           </div>
 
@@ -143,14 +184,7 @@ export default function SummonPage({ onGoldChange }) {
           {pityInfo && (
             <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
-                <div className="section-header" style={{ marginBottom: '1rem', textAlign: 'center' }}>Pity & Sparks</div>
-                <div style={{ marginBottom: '2rem', textAlign: 'center', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: 6 }}>
-                  <div className="text-dim" style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>Guaranteed 4★+ in:</div>
-                  <div style={{ fontSize: '2.5rem', color: 'var(--star4)', fontFamily: 'Cinzel, serif', textShadow: '0 0 10px var(--star4)' }}>
-                    {Math.max(0, 50 - pityInfo.pity_counter)}
-                  </div>
-                  <div className="text-dim text-sm" style={{ marginTop: '0.5rem' }}>(Resets on 4★+ pull)</div>
-                </div>
+                <div className="section-header" style={{ marginBottom: '1rem', textAlign: 'center' }}>Sparks</div>
 
                 <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.8rem' }}>
@@ -189,9 +223,20 @@ export default function SummonPage({ onGoldChange }) {
         <div style={{ marginTop: '2rem' }}>
           <div className="section-header">Summoned</div>
           <div className="hero-grid">
-            {results.map(hero => (
-              <HeroCard key={hero.id} hero={hero} onClick={() => setExpandedId(hero.id)} />
-            ))}
+            {results.map((item, idx) => {
+              if (item.is_equipment) {
+                return (
+                  <div key={idx} className="card" style={{ border: '1px solid var(--border)', textAlign: 'center', padding: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>
+                      {item.type === 'Weapon' ? '⚔️' : item.type === 'Armor' ? '🛡️' : '💍'}
+                    </div>
+                    <div style={{ fontSize: '1.2rem', fontFamily: 'Cinzel, serif', fontWeight: 'bold' }}>{item.name}</div>
+                    <div style={{ fontSize: '1rem', marginTop: '0.5rem', color: 'var(--star5)' }}>{item.rarity} Rank</div>
+                  </div>
+                )
+              }
+              return <HeroCard key={item.id} hero={item} onClick={() => setExpandedId(item.id)} />
+            })}
           </div>
         </div>
       )}
@@ -203,7 +248,7 @@ export default function SummonPage({ onGoldChange }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           backdropFilter: 'blur(5px)'
         }} onClick={() => setExpandedId(null)}>
-          <div style={{ width: '400px', maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+          <div style={{ width: '1000px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', borderRadius: '8px' }} onClick={e => e.stopPropagation()}>
             <HeroCard
               hero={results.find(h => h.id === expandedId)}
               showFull={true}

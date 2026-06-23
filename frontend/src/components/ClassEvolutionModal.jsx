@@ -34,7 +34,7 @@ const CLASS_LORE = {
 
   // Evolution Tier 1 (Level 30)
   "Knight": { desc: "A heavily armored defender, swearing an oath to protect.", team: "Primary Tank. Taunts enemies and absorbs damage." },
-  "Berserker": { desc: "A raging warrior who trades defense for raw, bloody power.", team: "Front-line burst DPS. High risk, high reward." },
+  "Berserker": { desc: "A raging warrior who trades intelligence for raw, bloody power.", team: "Front-line burst DPS. High risk, high reward." },
   "Halberdier": { desc: "Masters the halberd, striking multiple foes in a sweeping arc.", team: "Front-line AoE physical DPS." },
   "Dragoon": { desc: "Leaps high into the air, crashing down with immense force.", team: "Burst DPS with mobility and evasion." },
   "Assassin": { desc: "Strikes from the shadows, executing low-health targets instantly.", team: "Single-target executioner." },
@@ -135,7 +135,7 @@ export default function ClassEvolutionModal({ hero, onClose, onEvolve }) {
             <img 
               src={`http://localhost:8000/${hero.portrait_path}`} 
               alt={hero.name} 
-              style={{ width: '150px', height: '150px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--border)' }}
+              style={{ width: '150px', height: '150px', borderRadius: '50%', objectFit: 'cover', objectPosition: 'center 15%', border: '3px solid var(--border)' }}
             />
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.5rem', color: 'var(--text-hi)' }}>{hero.name}</div>

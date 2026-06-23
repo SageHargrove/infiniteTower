@@ -215,7 +215,7 @@ export default function InventoryPage() {
       {['All', 'Equipment', 'Weapon', 'Armor', 'Accessory'].includes(filter) && (
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="text-dim" style={{ fontSize: '0.9rem', marginRight: '0.5rem' }}>Filter by Rarity (Multi-select):</span>
-          {['Z', 'S+', 'S', 'S-', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'E', 'F', 'F-'].map(r => (
+          {['Z', 'SSS', 'SS', 'S+', 'S', 'S-', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-'].map(r => (
             <button 
               key={r} 
               className={`btn ${rarityFilter.has(r) ? 'btn-gold' : ''}`} 
@@ -406,10 +406,10 @@ export default function InventoryPage() {
                   </div>
 
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                    {selectedItem.base_atk > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Attack</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_atk}</span></div>}
-                    {selectedItem.base_def > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Defense</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_def}</span></div>}
-                    {selectedItem.base_hp > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Max HP</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_hp}</span></div>}
-                    {selectedItem.base_spd > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Speed</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_spd}</span></div>}
+                    {selectedItem.base_str > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Strength</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_str}</span></div>}
+                    {selectedItem.base_int > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Intelligence</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_int}</span></div>}
+                    {selectedItem.base_hlt > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Max Health</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_hlt}</span></div>}
+                    {selectedItem.base_agi > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(201,168,76,0.1)', padding: '0.8rem 1rem', borderRadius: 4 }}><span className="text-dim">Agility</span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>+{selectedItem.base_agi}</span></div>}
                   </div>
 
                   <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>

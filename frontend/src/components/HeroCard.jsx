@@ -74,43 +74,82 @@ export function Stars({ count, max = 7 }) {
   )
 }
 
+// Keyed by CLASS_FAMILIES name (not individual evolution name) — an
+// evolution like Rogue, Paladin, or Adventurer inherits its family's
+// tooltip via the same family lookup ClassBadge already does for
+// icon/color/archetype below. Per-evolution-name entries previously left
+// most of the ~90 evolutions (and, embarrassingly, two base classes that
+// had silently-overwritten duplicate keys) falling through to the generic
+// "A powerful hero." fallback.
 const CLASS_TOOLTIPS = {
   'Warrior': 'A durable frontline fighter that absorbs damage and protects allies.',
-  'Spearman': 'A versatile melee fighter capable of piercing enemy defenses.',
+  'Spearman': 'A frontline combatant wielding a long-reaching weapon with high pierce damage.',
   'Thief': 'A nimble combatant that strikes from the shadows with high crit chance.',
   'Archer': 'A ranged attacker that rains arrows on the enemy backline.',
   'Mage': 'A spellcaster dealing devastating magical area damage.',
-  'Magic Engineer': 'A master of magical contraptions, building turrets and traps.',
-  'Chef': 'Provides powerful morale and HP recovery buffs after combat.',
-  'Medic': 'Heals wounds and significantly reduces trauma and stress.',
-  'Scout': 'Reveals hidden paths and traps, reducing ambush chances.',
-  'Blacksmith': 'Upgrades team equipment and provides a baseline stat aura.',
-  'Quartermaster': 'Manages the party inventory, increasing gold and supply gains.',
-  'Tactician': 'A strategic mastermind that provides combat buffs and re-rolls.',
-  'Priest': 'Offers divine protection and massive morale recovery.',
-  'Alchemist': 'Brews potent potions and increases rare material drop rates.',
-  'Classless': 'A blank slate. Though weak now, it harbors the potential for unique, secret evolutions at higher levels.',
-  'Adventurer': 'A seasoned explorer adaptable to any situation, ready for the unknown.',
-  'Paladin': 'A holy warrior who smites evil and shields the weak with divine magic.',
-  'Rogue': 'Fights dirty, stealing items, crippling enemies, and striking from shadows.',
-  'Warrior': 'A durable frontline fighter that deals solid melee damage.',
-  'Spearman': 'A frontline combatant wielding a long-reaching weapon with high pierce damage.',
   'Spellsword': 'A hybrid combatant mixing martial prowess with devastating magical strikes.',
   'Acolyte': 'A devout follower providing essential support and minor healing to allies.',
+  'Priest': 'Offers divine protection and massive morale recovery.',
+  'Tactician': 'A strategic mastermind that provides combat buffs and re-rolls.',
+  'Scout': 'Reveals hidden paths and traps, reducing ambush chances.',
+  'Blacksmith': 'Upgrades team equipment and provides a baseline stat aura.',
+  'Chef': 'Provides powerful morale and Health recovery buffs after combat.',
+  'Medic': 'Heals wounds and significantly reduces trauma and stress.',
+  'Quartermaster': 'Manages the party inventory, increasing gold and supply gains.',
   'Farmer': 'A hardy worker who increases resource yields and supplies for the team.',
-  'Merchant': 'A savvy trader who boosts gold income and finds better deals.'
+  'Merchant': 'A savvy trader who boosts gold income and finds better deals.',
+  'Alchemist': 'Brews potent potions and increases rare material drop rates.',
+  'Magic Engineer': 'A master of magical contraptions, building turrets and traps.',
+  'Classless': 'A blank slate. Though weak now, it harbors the potential for unique, secret evolutions at higher levels.',
 };
 
 const EGO_TOOLTIPS = {
   'Aggressive': 'Desires a team full of damage dealers (Mage, Warrior, etc).',
-  'Cautious': 'Desires a team with strong defense and healing support.',
+  'Cautious': 'Desires a team with strong intelligence and healing support.',
   'Tactical': 'Desires a perfectly balanced formation (2 Frontline, 3 Backline).',
   'Leader': 'Desires to be the undisputed leader (highest star rarity on the team).',
   'Lone Wolf': 'Desires a smaller team (3 or fewer heroes) for maximum glory.',
   'Resonant': 'Desires a team composed entirely of the exact same class.'
 };
 
-const FRONTLINE_FAMILIES = ['Warrior', 'Spearman', 'Thief', 'Spellsword', 'Scout', 'Blacksmith', 'Farmer', 'Rogue', 'Paladin']
+const BATTLE_TENDENCY_TOOLTIPS = {
+  'Reckless': 'Fights without caution — as squad Leader, pushes the team to finish off the weakest enemy first. If 1-2★, prone to panicking and fleeing a losing fight.',
+  'Calculating': 'Fights with cold precision — as squad Leader, pushes the team to remove the biggest threat first. If 1-2★, may calculate that retreat is the smart play.',
+  'Protective': 'Fights to shield others above all else — never breaks and runs, regardless of star.',
+  'Glory-Seeking': 'Fights for the kill, not the plan — as squad Leader, pushes the team to finish off the weakest enemy first. Too proud to flee.',
+  'Stoic': 'Fights without flair or hesitation, unreadable under pressure — never breaks and runs.',
+  'Vengeful': 'Fights like every battle is personal — anger keeps them in the fight, never fleeing.',
+};
+
+const FRONTLINE_FAMILIES = ['Warrior', 'Spearman', 'Thief', 'Spellsword', 'Scout', 'Blacksmith', 'Farmer']
+
+export function tierForStar(birthStar) {
+  if (birthStar >= 7) return 'prismatic'
+  if (birthStar >= 5) return 'gold'
+  if (birthStar >= 3) return 'silver'
+  return 'bronze'
+}
+
+// Status overlay (injured/kia) drawn over the templated card-image background
+// (see card_template_service.py — the border/frame itself is now baked into
+// that backend-composited image, not drawn here, to avoid a doubled border).
+// Reused by both the full HeroCard portrait and the lightweight post-combat
+// Team Status summary cards.
+export function CardFrame({ birthStar, status, children, style }) {
+  const tier = tierForStar(birthStar)
+  return (
+    <div className={`card-frame card-frame-${tier}`} style={style}>
+      {children}
+      {status === 'injured' && <div className="card-frame-overlay card-frame-overlay-injured" />}
+      {status === 'kia' && (
+        <>
+          <div className="card-frame-overlay card-frame-overlay-kia" />
+          <div className="card-frame-banner">KILLED IN ACTION</div>
+        </>
+      )}
+    </div>
+  )
+}
 
 export function ClassBadge({ heroClass }) {
   if (!heroClass) return null
@@ -129,7 +168,7 @@ export function ClassBadge({ heroClass }) {
 
   return (
     <span 
-      title={`[${archetype}] ${CLASS_TOOLTIPS[heroClass] || 'A powerful hero.'}`}
+      title={`[${archetype}] ${CLASS_TOOLTIPS[familyName] || 'A powerful hero.'}`}
       style={{
       display: 'inline-flex', alignItems: 'center', gap: '3px',
       background: `${color}22`, border: `1px solid ${color}66`,
@@ -185,16 +224,16 @@ export function MoraleBar({ morale, state }) {
   )
 }
 
-export function HpBar({ hp, maxHp }) {
-  const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100))
+export function HpBar({ health, maxHp }) {
+  const pct = Math.max(0, Math.min(100, (health / maxHp) * 100))
   return (
-    <div className="hp-bar-wrap">
+    <div className="health-bar-wrap">
       <div className="morale-label">
-        <span>HP</span>
-        <span>{hp} / {maxHp}</span>
+        <span>Health</span>
+        <span>{health} / {maxHp}</span>
       </div>
-      <div className="hp-bar-bg">
-        <div className="hp-bar-fill" style={{ width: `${pct}%` }} />
+      <div className="health-bar-bg">
+        <div className="health-bar-fill" style={{ width: `${pct}%` }} />
       </div>
     </div>
   )
@@ -270,6 +309,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
   if (!hero) return null
   const dead = !hero.is_alive
   const [refreshing, setRefreshing] = useState(false)
+  const [cardImgError, setCardImgError] = useState(false)
   const [imgError, setImgError] = useState(false)
   const [showSynergyTip, setShowSynergyTip] = useState(false)
 
@@ -316,7 +356,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
           {selected && '✓'}
         </div>
       )}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
+      <CardFrame birthStar={hero.birth_star} style={{ position: 'relative', flexShrink: 0 }}>
         {hero.is_on_team > 0 && !showFull && (
           <div style={{
             position: 'absolute', top: 5, right: 5, zIndex: 10,
@@ -329,11 +369,14 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
         )}
         {hero.portrait_path && !imgError && !hero.portrait_path.includes('default_') ? (
           <img
-            src={`http://localhost:8000/${hero.portrait_path}?t=${new Date().getTime()}`}
+            src={cardImgError
+              ? `http://localhost:8000/${hero.portrait_path}?t=${new Date().getTime()}`
+              : `http://localhost:8000/heroes/${hero.id}/card-image?t=${new Date().getTime()}`}
             alt={hero.name}
             className="hero-portrait"
+            draggable={false}
             style={showFull ? { height: 'auto', maxHeight: '700px', objectFit: 'contain' } : {}}
-            onError={() => setImgError(true)}
+            onError={() => cardImgError ? setImgError(true) : setCardImgError(true)}
           />
         ) : (
           <div className="hero-portrait-placeholder" style={{ 
@@ -372,7 +415,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
             {refreshing ? '...' : 'Regenerate Portrait'}
           </button>
         )}
-      </div>
+      </CardFrame>
 
       <div className="hero-name">{hero.name}</div>
       <div className="hero-title">{hero.title}</div>
@@ -418,7 +461,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
               pointerEvents: 'none',
             }}>
               <strong style={{ color: '#e8c050' }}>{hero.synergy_group} Synergy</strong><br/>
-              Deploying multiple "{hero.synergy_group}" heroes on the same team grants +5% ATK/DEF/SPD/HP per group member in combat (stacks with team size).
+              Deploying multiple "{hero.synergy_group}" heroes on the same team grants +5% STR/INT/AGI/Health per group member in combat (stacks with team size).
             </div>
           )}
         </div>
@@ -458,8 +501,30 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
             </span>
           </span>
         )}
+        {hero.is_team_leader && (
+          <span title="Team Leader — sets the squad's tactical doctrine in combat (if they have an Ego, their preferences also shape the recommended lineup)." style={{
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.4)',
+            color: 'var(--gold)', borderRadius: 3,
+            padding: '1px 6px', fontSize: '0.7em',
+            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
+          }}>
+            👑 Leader
+          </span>
+        )}
+        {hero.battle_tendency && (
+          <span title={BATTLE_TENDENCY_TOOLTIPS[hero.battle_tendency] || 'Their instinct in a fight.'} style={{
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            background: 'rgba(140,140,160,0.12)', border: '1px solid rgba(140,140,160,0.35)',
+            color: '#b0b0c8', borderRadius: 3,
+            padding: '1px 6px', fontSize: '0.7em',
+            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
+          }}>
+            {hero.battle_tendency}
+          </span>
+        )}
         {hero.bonds && hero.bonds.length > 0 && (
-          <span 
+          <span
             title={hero.bonds.map(b => `${b.hero_a_name} & ${b.hero_b_name} (Lv ${b.bond_level})`).join('\n')}
             style={{
             display: 'inline-flex', alignItems: 'center', gap: '3px',
@@ -484,6 +549,19 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
             🕯️ {hero.legacies.length}
           </span>
         )}
+        {hero.condition && hero.condition !== 'Normal' && (
+          <span 
+            title={hero.condition === 'Depressed' ? `Depressed (-75% Stats) until ${new Date(hero.condition_until).toLocaleString()}` : "Mind broken from Survivor's Guilt. Permanently retired from combat."}
+            style={{
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            background: hero.condition === 'Depressed' ? 'rgba(100,150,255,0.15)' : 'rgba(100,100,100,0.15)', border: `1px solid ${hero.condition === 'Depressed' ? 'rgba(100,150,255,0.4)' : 'rgba(100,100,100,0.4)'}`,
+            color: hero.condition === 'Depressed' ? '#88bbff' : '#888', borderRadius: 3,
+            padding: '1px 6px', fontSize: '0.7em',
+            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
+          }}>
+            {hero.condition === 'Depressed' ? '🌧️ Depressed' : '👴 Retired'}
+          </span>
+        )}
       </div>
 
       <div style={{ flex: 1 }} />
@@ -495,13 +573,14 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
 
       {!dead && (
         <>
-          <HpBar hp={hero.hp} maxHp={hero.max_hp} />
+          <HpBar health={hero.health} maxHp={hero.max_health} />
           <MoraleBar morale={hero.morale} state={hero.morale_state || 'steady'} />
 
           <div className="stats-row">
-            <div className="stat">ATK <span>{hero.attack}</span></div>
-            <div className="stat">DEF <span>{hero.defense}</span></div>
-            <div className="stat">SPD <span>{hero.speed}</span></div>
+            <div className="stat" title={`Base: ${hero.base_strength ?? hero.strength}`}>STR <span>{hero.strength}</span></div>
+            <div className="stat" title={`Base: ${hero.base_intelligence ?? hero.intelligence}`}>INT <span>{hero.intelligence}</span></div>
+            <div className="stat" title={`Base: ${hero.base_defense ?? hero.defense ?? 5}`}>DEF <span>{hero.defense ?? 5}</span></div>
+            <div className="stat" title={`Base: ${hero.base_agility ?? hero.agility}`}>AGI <span>{hero.agility}</span></div>
           </div>
 
           {showFull && (

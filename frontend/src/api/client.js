@@ -1,6 +1,6 @@
 import { emitToast } from '../toastBus'
 
-const BASE = '/api'
+const BASE = ''
 
 // Every reward-granting endpoint in this codebase uses a slightly different
 // response shape (flat gold_gained/gems_gained on tower floors, {type,
@@ -69,6 +69,8 @@ export const getEgoRecommendation = (heroId) => request(`/heroes/${heroId}/ego_r
 
 // Base
 export const getBase = () => request('/base/')
+export const renameBase = (name) => request('/base/rename', { method: 'POST', body: JSON.stringify({ name }) })
+export const upgradeBase = () => request('/base/upgrade', { method: 'POST' })
 export const restHeroes = () => request('/base/rest', { method: 'POST' })
 export const runDailyDungeon = (type) => request(`/base/daily_dungeon/${type}`, { method: 'POST' })
 export const getBaseFloors = () => request('/base/floors')
@@ -97,13 +99,20 @@ export const useItem = (itemName, heroId, targetSkillId = null) => request('/bas
 export const listHeroes = (aliveOnly = false) => request(`/heroes/?alive_only=${aliveOnly}`)
 export const getHero = (id) => request(`/heroes/${id}`)
 export const setTeam = (teamId, heroIds) => request('/heroes/team/set', { method: 'POST', body: JSON.stringify({ team_id: teamId, hero_ids: heroIds }) })
+export const reorderTeam = (teamId, heroIds) => request('/heroes/team/reorder', { method: 'POST', body: JSON.stringify({ team_id: teamId, hero_ids: heroIds }) })
 export const getTeam = (teamId = 1) => request(`/heroes/team/${teamId}`)
 export const getAllTeams = () => request('/heroes/teams/all')
+export const assignTeamLeader = (heroId) => request('/heroes/team/assign-leader', { method: 'POST', body: JSON.stringify({ hero_id: heroId }) })
+export const getLeaderRecommendation = (teamId) => request(`/heroes/team/${teamId}/leader-recommendation`)
 export const dismissHero = (id) => request(`/heroes/${id}`, { method: 'DELETE' })
 export const dismissHeroesBulk = (heroIds) => request('/heroes/dismiss-bulk', { method: 'POST', body: JSON.stringify({ hero_ids: heroIds }) })
 export const synthesizeHero = (targetId, sacrificeId) => request('/heroes/synthesize', { method: 'POST', body: JSON.stringify({ target_id: targetId, sacrifice_id: sacrificeId }) })
 export const ascendHero = (heroId) => request(`/heroes/${heroId}/ascend`, { method: 'POST' })
+export const getAscensionInfo = (heroId) => request(`/heroes/${heroId}/ascension-info`)
 export const promoteHero = (heroId) => request(`/heroes/${heroId}/promote`, { method: 'POST' })
+export const regeneratePortraits = () => request('/heroes/regenerate-portraits', { method: 'POST' })
+export const craftMaterialEquipment = (material, targetClass) => request('/base/craft-equipment', { method: 'POST', body: JSON.stringify({ material, target_class: targetClass }) })
+export const craftBandages = (crafterId, quantity = 1) => request('/base/infirmary/craft-bandages', { method: 'POST', body: JSON.stringify({ crafter_id: crafterId, quantity }) })
 export const evolveHero = (heroId, targetClass) => request(`/heroes/${heroId}/evolve`, { method: 'POST', body: JSON.stringify({ target_class: targetClass }) })
 export const getClassEvolutions = () => request('/heroes/classes/evolutions')
 export const getLegacies = () => request('/heroes/legacies')
@@ -120,12 +129,13 @@ export const scrapEquipment = (equipmentId) => request('/equipment/scrap', { met
 
 // Gacha
 export const pullHeroes = (count = 1, usePortrait = false) => request('/gacha/pull', { method: 'POST', body: JSON.stringify({ count, use_portrait: usePortrait }) })
+export const pullEquipment = (count = 1) => request('/gacha/equipment-pull', { method: 'POST', body: JSON.stringify({ count }) })
 export const getOdds = () => request('/gacha/odds')
 export const getPityInfo = () => request('/gacha/pity-info')
 export const redeemSpark = () => request('/gacha/spark-redeem', { method: 'POST' })
 
 // Tower / Runs
-export const enterFloor = (floorNumber, teamId) => request('/tower/floor/enter', { method: 'POST', body: JSON.stringify({ floor_number: floorNumber, team_id: teamId }) })
+export const enterFloor = (floorNumber, teamIds) => request('/tower/floor/enter', { method: 'POST', body: JSON.stringify({ floor_number: floorNumber, team_ids: Array.isArray(teamIds) ? teamIds : [teamIds] }) })
 export const previewFloor = (floorNumber) => request(`/tower/floor/preview/${floorNumber}`)
 export const resolveEvent = (floorNumber, teamId, templateId, choiceId, theme) => request('/tower/floor/event/resolve', { method: 'POST', body: JSON.stringify({ floor_number: floorNumber, team_id: teamId, template_id: templateId, choice_id: choiceId, theme: theme }) })
 export const resolveExplore = (floorNumber, teamId, choiceId) => request('/tower/floor/explore/resolve', { method: 'POST', body: JSON.stringify({ floor_number: floorNumber, team_id: teamId, choice_id: choiceId }) })
@@ -139,8 +149,3 @@ export const renameProfile = (oldName, newName) => request('/profiles/rename', {
 export const deleteProfile = (name) => request('/profiles/delete', { method: 'POST', body: JSON.stringify({ name }) })
 
 // Portrait Cache
-export const regeneratePortraits = () => request('/portrait-cache/regenerate', { method: 'POST' })
-export const cleanupPortraits = () => request('/portrait-cache/cleanup', { method: 'POST' })
-export const getCacheStatus = () => request('/portrait-cache/status')
-
-export const craftMaterialEquipment = (heroId, slot) => request('/base/forge/craft', { method: 'POST', body: JSON.stringify({ hero_id: heroId, slot }) })
