@@ -59,15 +59,16 @@ BASE_STYLE = (
     "highly detailed facial shading, multiple distinct shading tones, colored midtones in shadow, "
     "detailed hair strands, textured hair shading, "
     "rich saturated colors, vivid true-to-color hair, natural skin tone unaffected by lighting, "
-    "dark moody background with soft radial gradient lighting, faint atmospheric haze, "
-    "subtle background color variation, gentle vignette, "
+    "vivid saturated emerald-green studio backdrop, soft radial gradient lighting on the backdrop, "
+    "faint atmospheric haze, subtle backdrop color variation, "
     "sharp rim lighting along silhouette edge, intense contrast, "
     "intricate details, masterpiece, best quality, same universe aesthetic"
 )
 
 FRAMING = (
     "centered face, head and shoulders portrait, face focused, close up, "
-    "portrait, fully clothed, wearing detailed outfit"
+    "portrait, fully clothed, wearing detailed outfit, "
+    "hair fully contained within frame, hair tucked within the portrait bounds"
 )
 
 # Pushes generation away from the failure modes seen in practice:
@@ -96,7 +97,9 @@ NEGATIVE_STYLE = (
     "skin tinted blue, unnatural skin discoloration from background lighting, "
     "huge oversized eyes, exaggerated eye proportions, disproportionate giant eyes, "
     "blurry, low quality, watermark, text, signature, bad anatomy, "
-    "deformed, ugly, disfigured, worst quality, jpeg artifacts"
+    "deformed, ugly, disfigured, worst quality, jpeg artifacts, "
+    "hair extending beyond frame edges, hair cropped at image border, hair cut off by frame, "
+    "long hair flowing out of frame, hair touching image edge"
 )
 
 # ---------------------------------------------------------------------------
