@@ -28,3 +28,4 @@ ComfyUI/
 /build/
 /dist/
 *.exe
+/build_venv/
