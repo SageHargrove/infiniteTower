@@ -86,6 +86,36 @@ def list_heroes(alive_only: bool = False):
             
     return [row_to_hero(r, equipment_rows, satisfaction_map.get(r["id"])) for r in rows]
 
+# ─── Legacy & Bond endpoints ───────────────────────────────────────
+# Must be registered before /{hero_id} below — FastAPI matches routes in
+# registration order, so a static single-segment path like /legacies or
+# /bonds registered AFTER /{hero_id} gets swallowed by it (hero_id="legacies"
+# fails int parsing -> 422) and is never reachable. Both were silently dead
+# routes until this reordering.
+
+@router.get("/legacies")
+def list_legacies():
+    """List all fallen hero legacies and their bonuses."""
+    from services.legacy_service import get_all_legacies, get_active_legacy_bonuses
+    return {
+        "legacies": get_all_legacies(),
+        "active_bonuses": get_active_legacy_bonuses(),
+    }
+
+@router.get("/bonds")
+def list_bonds():
+    """List all hero bonds."""
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT hb.*, h1.name as hero_a_name, h2.name as hero_b_name
+            FROM hero_bonds hb
+            JOIN heroes h1 ON h1.id = hb.hero_a_id
+            JOIN heroes h2 ON h2.id = hb.hero_b_id
+            WHERE hb.bond_level > 0
+            ORDER BY hb.bond_level DESC
+        """).fetchall()
+    return [dict(r) for r in rows]
+
 @router.get("/{hero_id}")
 def get_hero(hero_id: int):
     with db() as conn:
@@ -212,6 +242,14 @@ def set_team(data: TeamUpdate):
             conn.execute("UPDATE heroes SET is_on_team = ?, team_position = ? WHERE id = ? AND is_alive = 1", (data.team_id, idx, hid))
     return {"ok": True, "team_id": data.team_id, "team": data.hero_ids}
 
+@router.post("/{hero_id}/remove-from-team")
+def remove_hero_from_team(hero_id: int):
+    """Pull one hero off whatever team they're currently on — usable directly
+    from the All Heroes view without first switching to that team's tab."""
+    with db() as conn:
+        conn.execute("UPDATE heroes SET is_on_team = 0, team_position = 0, is_team_leader = 0 WHERE id = ?", (hero_id,))
+    return {"ok": True, "hero_id": hero_id}
+
 class AssignLeaderReq(BaseModel):
     hero_id: int
 
@@ -281,19 +319,22 @@ def get_team_leader_recommendation(team_id: int):
         "conflicts": conflicts,
     }
 
-@router.get("/team/{team_id}")
-def get_team_by_id(team_id: int):
-    with db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM heroes WHERE is_on_team = ? AND is_alive = 1 ORDER BY team_position ASC, id ASC", (team_id,)
-        ).fetchall()
-    return [row_to_hero(r) for r in rows]
-
 @router.get("/team/current")
 def get_team():
     with db() as conn:
         rows = conn.execute(
             "SELECT * FROM heroes WHERE is_on_team = 1 AND is_alive = 1 ORDER BY team_position ASC, id ASC"
+        ).fetchall()
+    return [row_to_hero(r) for r in rows]
+
+# Must be registered after /team/current above — /team/{team_id} would
+# otherwise swallow it (team_id="current" fails int parsing -> 422), same
+# anti-pattern as /{hero_id} vs /legacies and /bonds elsewhere in this file.
+@router.get("/team/{team_id}")
+def get_team_by_id(team_id: int):
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM heroes WHERE is_on_team = ? AND is_alive = 1 ORDER BY team_position ASC, id ASC", (team_id,)
         ).fetchall()
     return [row_to_hero(r) for r in rows]
 
@@ -689,33 +730,6 @@ def promote_hero(hero_id: int):
         "unlocked_class": unlocked_class,
         "message": msg
     }
-
-
-# ─── Legacy & Bond endpoints ───────────────────────────────────────
-
-@router.get("/legacies")
-def list_legacies():
-    """List all fallen hero legacies and their bonuses."""
-    from services.legacy_service import get_all_legacies, get_active_legacy_bonuses
-    return {
-        "legacies": get_all_legacies(),
-        "active_bonuses": get_active_legacy_bonuses(),
-    }
-
-
-@router.get("/bonds")
-def list_bonds():
-    """List all hero bonds."""
-    with db() as conn:
-        rows = conn.execute("""
-            SELECT hb.*, h1.name as hero_a_name, h2.name as hero_b_name
-            FROM hero_bonds hb
-            JOIN heroes h1 ON h1.id = hb.hero_a_id
-            JOIN heroes h2 ON h2.id = hb.hero_b_id
-            WHERE hb.bond_level > 0
-            ORDER BY hb.bond_level DESC
-        """).fetchall()
-    return [dict(r) for r in rows]
 class EvolveRequest(BaseModel):
     target_class: str
 

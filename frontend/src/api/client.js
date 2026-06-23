@@ -99,6 +99,7 @@ export const useItem = (itemName, heroId, targetSkillId = null) => request('/bas
 export const listHeroes = (aliveOnly = false) => request(`/heroes/?alive_only=${aliveOnly}`)
 export const getHero = (id) => request(`/heroes/${id}`)
 export const setTeam = (teamId, heroIds) => request('/heroes/team/set', { method: 'POST', body: JSON.stringify({ team_id: teamId, hero_ids: heroIds }) })
+export const removeHeroFromTeam = (heroId) => request(`/heroes/${heroId}/remove-from-team`, { method: 'POST' })
 export const reorderTeam = (teamId, heroIds) => request('/heroes/team/reorder', { method: 'POST', body: JSON.stringify({ team_id: teamId, hero_ids: heroIds }) })
 export const getTeam = (teamId = 1) => request(`/heroes/team/${teamId}`)
 export const getAllTeams = () => request('/heroes/teams/all')

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { listHeroes, setTeam, reorderTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, getAscensionInfo, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation, assignTeamLeader } from '../api/client'
+import { listHeroes, setTeam, removeHeroFromTeam, reorderTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, getAscensionInfo, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation, assignTeamLeader, getBonds } from '../api/client'
 import HeroCard from '../components/HeroCard'
 import ClassEvolutionModal from '../components/ClassEvolutionModal'
 
@@ -38,6 +38,16 @@ export default function HeroesPage() {
 
   async function load() {
     const data = await listHeroes(true)
+    try {
+      // Attach each hero's own bonds so HeroCard's heart-icon tooltip (and the
+      // bond-driven combat stat boost — 1% per total bond level shared with
+      // current teammates, see bonds_service.py) can actually show real data
+      // instead of an always-undefined hero.bonds.
+      const allBonds = await getBonds()
+      data.forEach(h => {
+        h.bonds = allBonds.filter(b => b.hero_a_id === h.id || b.hero_b_id === h.id)
+      })
+    } catch (e) {}
     setHeroes(data)
     try {
       const eqData = await listEquipment()
@@ -90,6 +100,23 @@ export default function HeroesPage() {
       
       await setTeam(activeTab, nextTeam)
       setMsg(`Removed ${selected.size} heroes from Team ${activeTab}.`)
+      setSelected(new Set())
+      await load()
+    } catch (e) {
+      setMsg(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Selected heroes here can be on any (or no) team — unlike removeFromTeam
+  // above, which only makes sense within a single team's tab.
+  async function removeFromTeamFromAll() {
+    setSaving(true)
+    try {
+      const ids = [...selected]
+      await Promise.all(ids.map(id => removeHeroFromTeam(id)))
+      setMsg(`Removed ${ids.length} heroes from their teams.`)
       setSelected(new Set())
       await load()
     } catch (e) {
@@ -644,6 +671,9 @@ export default function HeroesPage() {
                 </select>
                 <button className="btn btn-primary" onClick={saveTeamFromAll} disabled={saving || selected.size === 0}>
                   {saving ? 'Assigning...' : 'Assign'}
+                </button>
+                <button className="btn btn-danger" onClick={removeFromTeamFromAll} disabled={saving || selected.size === 0}>
+                  {saving ? 'Removing...' : 'Remove from Team'}
                 </button>
               </div>
             ) : (

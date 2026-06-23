@@ -523,19 +523,30 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
             {hero.battle_tendency}
           </span>
         )}
-        {hero.bonds && hero.bonds.length > 0 && (
-          <span
-            title={hero.bonds.map(b => `${b.hero_a_name} & ${b.hero_b_name} (Lv ${b.bond_level})`).join('\n')}
-            style={{
-            display: 'inline-flex', alignItems: 'center', gap: '3px',
-            background: 'rgba(255,105,180,0.15)', border: '1px solid rgba(255,105,180,0.4)',
-            color: '#ff69b4', borderRadius: 3,
-            padding: '1px 6px', fontSize: '0.7em',
-            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
-          }}>
-            ❤️ {hero.bonds.length}
-          </span>
-        )}
+        {hero.bonds && hero.bonds.length > 0 && (() => {
+          // 1% stat boost per total bond level shared with current teammates
+          // in combat (see bonds_service.get_team_bonds_multiplier) — only
+          // actually applies when teammates with these bonds are deployed
+          // together, but the total here is the cap that boost can reach.
+          const totalBondLevel = hero.bonds.reduce((sum, b) => sum + b.bond_level, 0)
+          const tooltip = [
+            ...hero.bonds.map(b => `${b.hero_a_name} & ${b.hero_b_name} (Lv ${b.bond_level})`),
+            `Up to +${totalBondLevel}% stats when bonded teammates fight together`,
+          ].join('\n')
+          return (
+            <span
+              title={tooltip}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                background: 'rgba(255,105,180,0.15)', border: '1px solid rgba(255,105,180,0.4)',
+                color: '#ff69b4', borderRadius: 3,
+                padding: '1px 6px', fontSize: '0.7em',
+                fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
+              }}>
+              ❤️ {hero.bonds.length} (+{totalBondLevel}%)
+            </span>
+          )
+        })()}
         {hero.legacies && hero.legacies.length > 0 && (
           <span 
             title={hero.legacies.join('\n')}
