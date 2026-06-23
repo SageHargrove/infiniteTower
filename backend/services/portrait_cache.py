@@ -366,8 +366,18 @@ def add_to_cache(birth_star: int, path: str, gender: str, class_name: str):
         )
 
 def update_hero_portrait(hero_id: int, path: str):
+    """Point a hero at a new portrait file, deleting the old custom one it
+    replaces — regeneration (promotion upgrades, manual regen) otherwise
+    leaves every previous version behind on disk forever."""
     with db() as conn:
+        old = conn.execute("SELECT portrait_path FROM heroes WHERE id = ?", (hero_id,)).fetchone()
+        old_path = old["portrait_path"] if old else None
         conn.execute("UPDATE heroes SET portrait_path = ? WHERE id = ?", (path, hero_id))
+    if old_path and old_path != path and "default_" not in old_path and os.path.exists(old_path):
+        try:
+            os.remove(old_path)
+        except Exception:
+            pass
 
 def handle_fallen_portrait(hero_id: int, portrait_path: str, is_sacrifice: bool) -> str | None:
     """A fallen hero's portrait is only worth keeping if they were sacrificed
@@ -453,9 +463,25 @@ def _generate_custom_portrait(hero_id: int, portrait_prompt: str, hero_name: str
         success = generate_portrait_comfy(full_prompt, filename, negative=NEGATIVE_STYLE)
         if success:
             update_hero_portrait(hero_id, filename)
+            _prewarm_card(hero_id, filename)
             print(f"[Cache] Custom portrait ready for hero {hero_id}")
     except Exception as e:
         print(f"[Cache] Custom portrait failed for hero {hero_id}: {e}")
+
+def _prewarm_card(hero_id: int, portrait_path: str):
+    """Run the (slow, ~several-second) rembg cutout + card composite now,
+    in this background thread, instead of leaving it to happen on whichever
+    request first loads this hero's card — that first request used to be
+    the player's own page load, stalling every portrait on screen at once."""
+    try:
+        with db() as conn:
+            hero = conn.execute("SELECT birth_star, name FROM heroes WHERE id = ?", (hero_id,)).fetchone()
+        if not hero:
+            return
+        from services.card_template_service import composite_card
+        composite_card(hero_id, portrait_path, hero["birth_star"], hero["name"])
+    except Exception as e:
+        print(f"[Cache] Card prewarm failed for hero {hero_id}: {e}")
 
 def queue_custom_portrait(hero_id: int, portrait_prompt: str, hero_name: str, gender: str = "unknown"):
     """A hero is waiting on a portrait right now — jump to the front of the generation queue."""

@@ -1,17 +1,22 @@
 """
-Composites hero portraits onto a tier-colored decorative card background —
-the AI-generated portrait's own background is cut away (via rembg) and the
-character is pasted onto a procedurally-drawn template instead, rather than
-just drawing a border over the original art. Templates are generated once
-(deterministic, no AI image calls — avoids the real risk that an AI model
-botches a precise ornamental frame) and cached to disk; composited cards are
-also cached per (hero portrait, tier) so the rembg pass only runs once per
-hero, not on every page view.
+Composites hero portraits onto a tier-colored decorative card background.
+
+Originally cut the portrait's own background away with rembg and pasted just
+the character onto the template. Dropped that — rembg's saliency segmentation
+kept misjudging the boundary on this flat-cel-shaded art style (chopping off
+hair, necks, shoulders at random), and no amount of prompt tuning toward a
+"keyable" background fixed it reliably. Instead the full rectangular portrait
+(background included) gets fit into the frame with its edges feathered to
+transparency, blending into the template's own dark vignette — no AI step
+that can fail, and the portraits already use a dark/gradient background that
+reads fine inside the card. Templates are generated once (deterministic, no
+AI image calls) and cached to disk; composited cards are cached per (hero
+portrait, tier) so this work only runs once per hero, not on every page view.
 """
 import os
 import math
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 CANVAS_SIZE = (700, 1050)
 TEMPLATE_DIR = os.path.join("static", "card_templates")
@@ -138,12 +143,23 @@ def get_template(tier: str) -> Image.Image:
     return Image.open(path).convert("RGB")
 
 
-def _remove_background(portrait_path: str) -> Image.Image:
-    from rembg import remove
+FEATHER_PX = 36
+
+def _fit_with_feathered_edges(portrait_path: str) -> Image.Image:
+    """Load the portrait as-is (background included) with its outer edges
+    faded to transparent, so pasting it onto the template blends into the
+    template's own dark vignette instead of leaving a hard rectangular seam."""
     raw = Image.open(portrait_path).convert("RGBA")
-    # Using standard U2Net without alpha_matting prevents aggressive eating of the subject
-    out = remove(raw, post_process_mask=True)
-    return out
+    w, h = raw.size
+    mask = Image.new("L", (w, h), 255)
+    mdraw = ImageDraw.Draw(mask)
+    mdraw.rectangle([0, 0, w, FEATHER_PX], fill=0)
+    mdraw.rectangle([0, h - FEATHER_PX, w, h], fill=0)
+    mdraw.rectangle([0, 0, FEATHER_PX, h], fill=0)
+    mdraw.rectangle([w - FEATHER_PX, 0, w, h], fill=0)
+    mask = mask.filter(ImageFilter.GaussianBlur(FEATHER_PX * 0.6))
+    raw.putalpha(mask)
+    return raw
 
 
 def _fit_name_font(draw: ImageDraw.ImageDraw, name: str, max_width: int, max_size: int = 52, min_size: int = 18) -> ImageFont.FreeTypeFont:
@@ -171,21 +187,21 @@ def composite_card(hero_id: int, portrait_path: str, birth_star: int, hero_name:
         return out_path
 
     template = get_template(tier).convert("RGBA")
-    cutout = _remove_background(portrait_path)
+    portrait = _fit_with_feathered_edges(portrait_path)
 
     w, h = template.size
     # Character fills most of the frame, anchored a bit above center so the
     # nameplate band and top icon stay clear.
     target_h = int(h * 0.78)
-    scale = target_h / cutout.height
-    target_w = int(cutout.width * scale)
-    cutout = cutout.resize((target_w, target_h), Image.LANCZOS)
+    scale = target_h / portrait.height
+    target_w = int(portrait.width * scale)
+    portrait = portrait.resize((target_w, target_h), Image.LANCZOS)
 
     paste_x = (w - target_w) // 2
     paste_y = int(h * 0.10)
 
     canvas = template.copy()
-    canvas.alpha_composite(cutout, (paste_x, paste_y))
+    canvas.alpha_composite(portrait, (paste_x, paste_y))
 
     # Redraw the border/banner on top so the character never occludes the frame edges.
     border_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))

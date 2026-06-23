@@ -396,6 +396,12 @@ def pull_heroes(req: PullRequest):
                     conn.execute("UPDATE heroes SET portrait_path = ? WHERE id = ?", (new_path, hero_id))
                     conn.execute("DELETE FROM portrait_cache WHERE path = ?", (portrait_path,))
                     portrait_path = new_path
+                    # Card compositing (rembg cutout) is slow — do it now in the
+                    # background instead of leaving it for whichever request
+                    # first loads this hero's card, which used to be the
+                    # player's own page load stalling every portrait at once.
+                    from services.portrait_cache import _prewarm_card
+                    threading.Thread(target=_prewarm_card, args=(hero_id, new_path), daemon=True).start()
                 except Exception as e:
                     print(f"Failed to rename cached portrait: {e}")
 
@@ -630,6 +636,8 @@ def spark_redeem():
                 conn.execute("UPDATE heroes SET portrait_path = ? WHERE id = ?", (new_path, hero_id))
                 conn.execute("DELETE FROM portrait_cache WHERE path = ?", (portrait_path,))
                 portrait_path = new_path
+                from services.portrait_cache import _prewarm_card
+                threading.Thread(target=_prewarm_card, args=(hero_id, new_path), daemon=True).start()
             except Exception as e:
                 print(f"Failed to rename cached portrait: {e}")
                 
