@@ -311,6 +311,8 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
   const [refreshing, setRefreshing] = useState(false)
   const [cardImgError, setCardImgError] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
+  const retryCountRef = React.useRef(0)
   const [showSynergyTip, setShowSynergyTip] = useState(false)
 
   const handleRegenerateProfile = async (e) => {
@@ -369,6 +371,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
         )}
         {hero.portrait_path && !imgError && !hero.portrait_path.includes('default_') ? (
           <img
+            key={retryKey}
             src={cardImgError
               ? `http://localhost:8000/${hero.portrait_path}?t=${new Date().getTime()}`
               : `http://localhost:8000/heroes/${hero.id}/card-image?t=${new Date().getTime()}`}
@@ -376,7 +379,20 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
             className="hero-portrait"
             draggable={false}
             style={showFull ? { height: 'auto', maxHeight: '700px', objectFit: 'contain' } : {}}
-            onError={() => cardImgError ? setImgError(true) : setCardImgError(true)}
+            onError={() => {
+              // A transient failure (composite still being prewarmed, brief
+              // backend hiccup) shouldn't permanently stick on the
+              // placeholder — retry the current URL a couple times before
+              // falling through to the next fallback stage.
+              if (retryCountRef.current < 2) {
+                retryCountRef.current += 1
+                setTimeout(() => setRetryKey(k => k + 1), 1500)
+                return
+              }
+              retryCountRef.current = 0
+              if (cardImgError) setImgError(true)
+              else setCardImgError(true)
+            }}
           />
         ) : (
           <div className="hero-portrait-placeholder" style={{ 
