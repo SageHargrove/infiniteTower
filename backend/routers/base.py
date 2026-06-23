@@ -156,6 +156,23 @@ def rest_heroes():
                   recovery["morale_state"], hero["id"]))
     return {"ok": True, "rested": len(heroes), "cost": supply_cost}
 
+@router.get("/market/catalog")
+def market_catalog():
+    from services.market_service import get_shop_catalog
+    return get_shop_catalog()
+
+class MarketPurchaseRequest(BaseModel):
+    item_id: str
+
+@router.post("/market/purchase")
+def market_purchase(req: MarketPurchaseRequest):
+    from services.market_service import purchase_item
+    with db() as conn:
+        try:
+            return purchase_item(conn, req.item_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
 class CraftBandagesRequest(BaseModel):
     crafter_id: int
     quantity: int = 1

@@ -114,6 +114,8 @@ export const promoteHero = (heroId) => request(`/heroes/${heroId}/promote`, { me
 export const regeneratePortraits = () => request('/heroes/regenerate-portraits', { method: 'POST' })
 export const craftMaterialEquipment = (material, targetClass) => request('/base/craft-equipment', { method: 'POST', body: JSON.stringify({ material, target_class: targetClass }) })
 export const craftBandages = (crafterId, quantity = 1) => request('/base/infirmary/craft-bandages', { method: 'POST', body: JSON.stringify({ crafter_id: crafterId, quantity }) })
+export const getMarketCatalog = () => request('/base/market/catalog')
+export const purchaseMarketItem = (itemId) => request('/base/market/purchase', { method: 'POST', body: JSON.stringify({ item_id: itemId }) })
 export const evolveHero = (heroId, targetClass) => request(`/heroes/${heroId}/evolve`, { method: 'POST', body: JSON.stringify({ target_class: targetClass }) })
 export const getClassEvolutions = () => request('/heroes/classes/evolutions')
 export const getLegacies = () => request('/heroes/legacies')

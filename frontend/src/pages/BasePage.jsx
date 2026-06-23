@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase } from '../api/client'
+import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase, getMarketCatalog, purchaseMarketItem } from '../api/client'
 
 const FACILITY_TOOLTIPS = {
   "Forge": "Crafts powerful weapons and armor. Assign Blacksmiths to increase crafting agility and quality.",
@@ -8,7 +8,7 @@ const FACILITY_TOOLTIPS = {
   "Restaurant": "Cooks advanced meals to increase morale. Assign Chefs to maximize food quality.",
   "Alchemist Lab": "Brews potions and elixirs. Alchemists and Mages excel in this facility.",
   "Workshop": "Builds base upgrades and gadgets. Magic Engineers are the best fit.",
-  "The Market": "Generates passive gold over time. Merchants and Quartermasters excel here.",
+  "The Market": "Generates passive gold over time and stocks a small shop for supplies, materials, and bandages. Merchants and Quartermasters excel here.",
   "The Farm": "Generates passive supplies over time. Merchants and Druids excel here.",
   "Training Grounds": "Allows heroes to spar for EXP. Warriors, Spearmen, and Tacticians thrive here.",
   "Mage Tower": "Conducts magical research. Magic Engineers are the most effective, with Mages and Spellswords close behind."
@@ -24,6 +24,8 @@ export default function BasePage({ onGoldChange }) {
   const [facilityLoading, setFacilityLoading] = useState(false)
   const [mageUpgrades, setMageUpgrades] = useState(null)
   const [crafting, setCrafting] = useState(false)
+  const [marketCatalog, setMarketCatalog] = useState({})
+  const [purchasing, setPurchasing] = useState(false)
   
   // Legacy & Floors
   const [legacies, setLegacies] = useState([])
@@ -66,13 +68,14 @@ export default function BasePage({ onGoldChange }) {
 
   async function loadAll() {
     try {
-      const [b, fac, heroes, leg, flrs, ch] = await Promise.all([
+      const [b, fac, heroes, leg, flrs, ch, catalog] = await Promise.all([
         getBase(),
         getFacilities(),
         listHeroes(true),
         getLegacies().catch(() => ({ legacies: [] })),
         getBaseFloors().catch(() => ({ floors: [], base_heroes: [] })),
-        getChatLogs(5).catch(() => [])
+        getChatLogs(5).catch(() => []),
+        getMarketCatalog().catch(() => ({}))
       ])
       setBase(b)
       setFacilitiesData(fac)
@@ -80,6 +83,7 @@ export default function BasePage({ onGoldChange }) {
       setLegacies(leg.legacies || [])
       setFloorsData(flrs)
       applyChats(ch)
+      setMarketCatalog(catalog)
       
       const hasMage = fac.built?.some(f => f.type === 'Mage Tower')
       if (hasMage) {
@@ -213,6 +217,21 @@ const handleRenameBase = async () => {
       alert(e.message)
     } finally {
       setCrafting(false)
+    }
+  }
+
+  async function handlePurchase(itemId) {
+    setPurchasing(true)
+    try {
+      const res = await purchaseMarketItem(itemId)
+      loadAll()
+      if (onGoldChange) onGoldChange()
+      const detail = res.material ? `${res.amount}x ${res.material}` : res.supplies ? `${res.supplies} supplies` : ''
+      alert(`Purchased ${res.item}! +${detail}`)
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setPurchasing(false)
     }
   }
 
@@ -447,6 +466,28 @@ const getGenRate = (fac) => {
                       const sel = document.getElementById(`assign-${fac.id}`)
                       if (sel && sel.value) handleAssignFacility(fac.id, parseInt(sel.value))
                     }} disabled={facilityLoading}>Assign</button>
+                  </div>
+                )}
+
+                {/* Market Shop */}
+                {fac.type === 'The Market' && Object.keys(marketCatalog).length > 0 && (
+                  <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.2)', padding: '0.75rem', borderRadius: 6 }}>
+                    <div className="text-dim" style={{ marginBottom: '0.5rem', fontSize: '0.85rem' }}>Shop</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.5rem' }}>
+                      {Object.entries(marketCatalog).map(([itemId, item]) => (
+                        <div key={itemId} className="card" style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{item.name}</div>
+                          <button
+                            className="btn btn-gold"
+                            onClick={() => handlePurchase(itemId)}
+                            disabled={purchasing || (item.currency === 'gold' ? base.gold : base.gems) < item.cost}
+                            style={{ fontSize: '0.75rem', padding: '0.3rem' }}
+                          >
+                            {item.cost} {item.currency === 'gold' ? 'Gold 💰' : 'Gems 💎'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
