@@ -128,7 +128,7 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
                 <CardFrame birthStar={h.hero_star} status={status === 'alive' ? null : status} style={isMvp ? { boxShadow: '0 0 12px var(--star5)', border: '2px solid var(--star5)' } : undefined}>
                   {h.portrait_path ? (
                     <img
-                      src={`http://localhost:8000/heroes/${h.id}/card-image`}
+                      src={`http://localhost:8000/heroes/${h.id}/card-image?mini=true`}
                       draggable={false}
                       style={{ width: '100%', height: 96, objectFit: 'cover', objectPosition: 'center 15%', borderRadius: 4 }}
                       onError={(e) => { e.target.onerror = null; e.target.src = `http://localhost:8000/${h.portrait_path}` }}

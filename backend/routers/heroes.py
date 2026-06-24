@@ -31,12 +31,15 @@ def row_to_hero(row, equipment_rows=[], is_ego_satisfied=None) -> dict:
     return h
 
 @router.get("/{hero_id}/card-image")
-def get_hero_card_image(hero_id: int):
+def get_hero_card_image(hero_id: int, mini: bool = False):
     """Tier-templated card art — the portrait's background is cut away and
     composited onto a decorative bronze/silver/gold/prismatic background by
     services/card_template_service.py. Built lazily on first request, then
     cached to disk (services/card_template_service.composite_card handles
-    cache invalidation when the portrait itself changes)."""
+    cache invalidation when the portrait itself changes).
+
+    mini=True returns a face-cropped variant sized for small grid thumbnails
+    instead of the full head-to-chest card — see composite_card's docstring."""
     with db() as conn:
         hero = conn.execute("SELECT portrait_path, birth_star, name FROM heroes WHERE id = ?", (hero_id,)).fetchone()
     if not hero or not hero["portrait_path"] or not os.path.exists(hero["portrait_path"]):
@@ -44,7 +47,7 @@ def get_hero_card_image(hero_id: int):
 
     from services.card_template_service import composite_card
     try:
-        card_path = composite_card(hero_id, hero["portrait_path"], hero["birth_star"], hero["name"])
+        card_path = composite_card(hero_id, hero["portrait_path"], hero["birth_star"], hero["name"], crop_face=mini)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Card compositing failed: {e}")
     return FileResponse(card_path, media_type="image/png")

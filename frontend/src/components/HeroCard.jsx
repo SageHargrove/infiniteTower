@@ -374,7 +374,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
             key={retryKey}
             src={cardImgError
               ? `http://localhost:8000/${hero.portrait_path}?t=${new Date().getTime()}`
-              : `http://localhost:8000/heroes/${hero.id}/card-image?t=${new Date().getTime()}`}
+              : `http://localhost:8000/heroes/${hero.id}/card-image?mini=${!showFull}&t=${new Date().getTime()}`}
             alt={hero.name}
             className="hero-portrait"
             draggable={false}

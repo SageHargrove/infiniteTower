@@ -472,17 +472,19 @@ def _generate_custom_portrait(hero_id: int, portrait_prompt: str, hero_name: str
         print(f"[Cache] Custom portrait failed for hero {hero_id}: {e}")
 
 def _prewarm_card(hero_id: int, portrait_path: str):
-    """Run the (slow, ~several-second) rembg cutout + card composite now,
-    in this background thread, instead of leaving it to happen on whichever
-    request first loads this hero's card — that first request used to be
-    the player's own page load, stalling every portrait on screen at once."""
+    """Run the card composite (both the full and grid-thumbnail variants)
+    now, in this background thread, instead of leaving it to happen on
+    whichever request first loads this hero's card — that first request
+    used to be the player's own page load, stalling every portrait on
+    screen at once."""
     try:
         with db() as conn:
             hero = conn.execute("SELECT birth_star, name FROM heroes WHERE id = ?", (hero_id,)).fetchone()
         if not hero:
             return
         from services.card_template_service import composite_card
-        composite_card(hero_id, portrait_path, hero["birth_star"], hero["name"])
+        composite_card(hero_id, portrait_path, hero["birth_star"], hero["name"], crop_face=False)
+        composite_card(hero_id, portrait_path, hero["birth_star"], hero["name"], crop_face=True)
     except Exception as e:
         print(f"[Cache] Card prewarm failed for hero {hero_id}: {e}")
 

@@ -173,21 +173,38 @@ def _fit_name_font(draw: ImageDraw.ImageDraw, name: str, max_width: int, max_siz
     return _name_font(min_size)
 
 
-def composite_card(hero_id: int, portrait_path: str, birth_star: int, hero_name: str = "") -> str:
+def composite_card(hero_id: int, portrait_path: str, birth_star: int, hero_name: str = "", crop_face: bool = False) -> str:
     """Builds (or returns the cached) composited card image path for a hero.
     Cache key includes the portrait file's mtime (so a regenerated/rerolled
     portrait invalidates the old composited card) and a hash of the name (so
-    a late-arriving LLM-enriched name also invalidates it)."""
+    a late-arriving LLM-enriched name also invalidates it).
+
+    crop_face=True builds a face-focused variant instead of the full
+    head-to-chest card — for small grid thumbnails, where fitting the whole
+    body into a tiny box means the face (the part anyone's actually looking
+    at) gets a much harder downscale than necessary. Cropping tighter first
+    means the face occupies more of the same pixel budget, which reads as
+    noticeably less blurry at thumbnail size. Cached separately (different
+    filename tag) alongside the full variant, not in place of it — the
+    expanded/full view still wants the complete card."""
     os.makedirs(CARD_CACHE_DIR, exist_ok=True)
     tier = tier_for_star(birth_star)
     mtime = int(os.path.getmtime(portrait_path))
     name_hash = abs(hash(hero_name)) % 100000
-    out_path = os.path.join(CARD_CACHE_DIR, f"{hero_id}_{tier}_{mtime}_{name_hash}.png")
+    variant = "mini" if crop_face else "full"
+    out_path = os.path.join(CARD_CACHE_DIR, f"{hero_id}_{variant}_{tier}_{mtime}_{name_hash}.png")
     if os.path.exists(out_path):
         return out_path
 
     template = get_template(tier).convert("RGBA")
     portrait = _fit_with_feathered_edges(portrait_path)
+
+    if crop_face:
+        # Keep the top ~58% (face/hair down to about collarbone) and zoom
+        # that into the same frame area the full card uses for the entire
+        # head-to-chest composition.
+        crop_h = int(portrait.height * 0.58)
+        portrait = portrait.crop((0, 0, portrait.width, crop_h))
 
     w, h = template.size
     # Character fills most of the frame, anchored a bit above center so the
@@ -228,9 +245,12 @@ def composite_card(hero_id: int, portrait_path: str, birth_star: int, hero_name:
 
     canvas.convert("RGB").save(out_path)
 
-    # Best-effort cleanup of this hero's older cached cards (different mtime/tier).
+    # Best-effort cleanup of this hero's older cached cards for THIS SAME
+    # variant (different mtime/tier) — must not touch the other variant's
+    # cache file, since both a full and mini card are cached side by side.
+    stale_prefix = f"{hero_id}_{variant}_"
     for f in os.listdir(CARD_CACHE_DIR):
-        if f.startswith(f"{hero_id}_") and f != os.path.basename(out_path):
+        if f.startswith(stale_prefix) and f != os.path.basename(out_path):
             try:
                 os.remove(os.path.join(CARD_CACHE_DIR, f))
             except OSError:
