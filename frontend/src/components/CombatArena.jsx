@@ -166,7 +166,7 @@ function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverrid
   )
 }
 
-export default function CombatArena({ combatData, onComplete }) {
+export default function CombatArena({ combatData, onComplete, turnNarrations }) {
   const [currentTurnIndex, setCurrentTurnIndex] = useState(-1)
   const [playing, setPlaying] = useState(false)
   
@@ -325,10 +325,12 @@ export default function CombatArena({ combatData, onComplete }) {
           color: '#fff',
           fontFamily: 'Cinzel, serif',
           animation: 'fadeIn 0.2s',
-          whiteSpace: 'nowrap',
+          whiteSpace: 'normal',
+          maxWidth: '90%',
+          textAlign: 'center',
           zIndex: 50
         }}>
-          {currentTurn.log}
+          {turnNarrations?.[currentTurnIndex] || currentTurn.log}
         </div>
       )}
 

@@ -300,6 +300,9 @@ export default function TowerPage({ onGoldChange }) {
   const [combatEntities, setCombatEntities] = useState(null)
   const [postCombatPhase, setPostCombatPhase] = useState(false)
   const [arenasFinished, setArenasFinished] = useState(0)
+  // Indexed by team/arena position — one AI-narrated line per turn, swapped
+  // in for the raw damage-number log line once it arrives (see pollTurnNarrative).
+  const [turnNarrations, setTurnNarrations] = useState({})
   const [floorPreview, setFloorPreview] = useState(null)
 
   useEffect(() => {
@@ -353,6 +356,26 @@ export default function TowerPage({ onGoldChange }) {
     }, 2000)
   }
 
+  // Polls more frequently/eagerly than pollNarrative — combat plays out at
+  // 800ms/turn, so the per-turn narration array needs to land mid-fight to
+  // be useful, not after the player's already watched the whole thing play
+  // out with raw damage-number lines.
+  function pollTurnNarrative(narrativeId, arenaIndex, attemptsLeft = 6) {
+    if (narrativeId == null || attemptsLeft <= 0) return
+    setTimeout(async () => {
+      try {
+        const res = await getNarrative(narrativeId)
+        if (res.ready && Array.isArray(res.narrative)) {
+          setTurnNarrations(prev => ({ ...prev, [arenaIndex]: res.narrative }))
+        } else if (!res.ready) {
+          pollTurnNarrative(narrativeId, arenaIndex, attemptsLeft - 1)
+        }
+      } catch {
+        // Flavor text only — silently give up on failure.
+      }
+    }, 1000)
+  }
+
   async function enterFloorFlow(floorNumber, { skipAnimation = false } = {}) {
     setAdvancing(true)
     setError(null)
@@ -365,6 +388,7 @@ export default function TowerPage({ onGoldChange }) {
     setCombatEntities(null)
     setPostCombatPhase(false)
     setArenasFinished(0)
+    setTurnNarrations({})
 
     try {
       const requiredTeams = (floorNumber - 1) === 0 ? 1 : Math.floor((floorNumber - 1) / 20) + 1
@@ -372,6 +396,8 @@ export default function TowerPage({ onGoldChange }) {
       setLastResult(result)
       setCombatEntities(mergedCombatEntities(result))
       if (result.narrative_id) pollNarrative(result.narrative_id)
+      const tnIds = result.turn_narrative_ids || (result.turn_narrative_id != null ? [result.turn_narrative_id] : [])
+      tnIds.forEach((id, i) => pollTurnNarrative(id, i))
 
       if (result.awaiting_choice && result.event) {
         setPendingEvent(result)
@@ -446,8 +472,11 @@ export default function TowerPage({ onGoldChange }) {
       setExploreResolution(result)
       setLastResult(result)
       setArenasFinished(0)
+      setTurnNarrations({})
       setCombatEntities(mergedCombatEntities(result))
       setPendingExplore(null)
+      const tnIds = result.turn_narrative_ids || (result.turn_narrative_id != null ? [result.turn_narrative_id] : [])
+      tnIds.forEach((id, i) => pollTurnNarrative(id, i))
 
       await refresh()
       if (onGoldChange) onGoldChange()
@@ -630,13 +659,13 @@ export default function TowerPage({ onGoldChange }) {
                           <div style={{ textAlign: 'center', color: 'var(--text-hi)', fontFamily: 'Cinzel, serif', marginBottom: '0.3rem' }}>
                             Team {i + 1}
                           </div>
-                          <CombatArena combatData={tr} onComplete={onArenaComplete} />
+                          <CombatArena combatData={tr} onComplete={onArenaComplete} turnNarrations={turnNarrations[i]} />
                         </div>
                       ))}
                     </div>
                   )
                 }
-                return <CombatArena combatData={lastResult?.combat || lastResult} onComplete={() => setPostCombatPhase(true)} />
+                return <CombatArena combatData={lastResult?.combat || lastResult} onComplete={() => setPostCombatPhase(true)} turnNarrations={turnNarrations[0]} />
               })()}
               <div style={{ textAlign: 'center', marginTop: '1rem' }}>
                 <button className="btn" onClick={handleExit} style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem' }}>

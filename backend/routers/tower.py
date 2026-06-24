@@ -83,6 +83,20 @@ def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, z
     narrative = "A fierce battle took place."
     result["narrative_id"] = _register_narrative_future(narrative_future)
 
+    # One narration future per team's leg of the fight — multi-team floors
+    # (21+) keep each team's turns in team_results, not the top-level
+    # "turns" (that's only forwarded for the single-team case below).
+    from services.llm_service import generate_turn_narrations
+    team_results = combat_result.get("team_results") or [combat_result]
+    turn_narrative_ids = []
+    for tr in team_results:
+        tr_turn_lines = [t["log"] for t in (tr or {}).get("turns", [])]
+        fut = submit_flavor_text(generate_turn_narrations, tr_turn_lines, flat_hero_names)
+        turn_narrative_ids.append(_register_narrative_future(fut))
+    result["turn_narrative_ids"] = turn_narrative_ids
+    if turn_narrative_ids:
+        result["turn_narrative_id"] = turn_narrative_ids[0]
+
     import datetime
     from services.bonds_service import get_bond
     

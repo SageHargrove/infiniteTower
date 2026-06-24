@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
+import threading
+import time
 
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
@@ -25,6 +27,20 @@ app.add_middleware(
 os.makedirs("static/portraits", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+def _reconcile_loop():
+    """reconcile_pending_profiles() only ran once, at startup — a hero whose
+    LLM enrichment thread dies mid-flight *after* that point (a transient
+    Gemini outage, rate limit, etc.) was stuck on a placeholder identity for
+    the rest of the session with nothing to retry it. Re-run the same scan
+    periodically instead so it self-heals without needing a backend restart."""
+    from routers.gacha import reconcile_pending_profiles
+    while True:
+        time.sleep(300)
+        try:
+            reconcile_pending_profiles()
+        except Exception as e:
+            print(f"[Reconcile] Periodic profile reconciliation failed: {e}")
+
 @app.on_event("startup")
 async def startup():
     init_db()
@@ -38,6 +54,7 @@ async def startup():
     start_chat_worker()
     from routers.gacha import reconcile_pending_profiles
     reconcile_pending_profiles()
+    threading.Thread(target=_reconcile_loop, daemon=True).start()
     print("Portrait and Chat workers started.")
 
 app.include_router(heroes.router, prefix="/heroes", tags=["heroes"])

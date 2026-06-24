@@ -206,6 +206,40 @@ Do not sugarcoat injuries or deaths. Respond with only the narration text, no pr
     return _generate_with_fallback(prompt, max_tokens=400, temperature=0.8)
 
 
+def generate_turn_narrations(log_lines: list[str], hero_names: list[str]) -> list[str] | None:
+    """Rewrites each raw per-turn combat log line (which always embeds exact
+    damage numbers and HP fractions, e.g. 'X takes 47 damage [120/200]') into
+    a short, numberless, action-focused line — same length, same order, so
+    the frontend can swap line N in for turn N's raw log text as combat plays
+    out. Returns None on any failure (mismatched length, bad JSON, etc.) so
+    the caller can just keep showing the raw line instead."""
+    if not log_lines:
+        return None
+    numbered = "\n".join([f"{i}: {line.strip()}" for i, line in enumerate(log_lines)])
+    prompt = f"""You are rewriting a turn-by-turn combat log for a dark fantasy roguelike game.
+Heroes involved: {', '.join(hero_names)}
+
+Raw log lines (each already tells you who acted, who was hit, and whether it landed, killed, crit, or was dodged):
+{numbered}
+
+Rewrite EACH line into ONE short, punchy, grim sentence (under 14 words) describing the action itself —
+the swing, the impact, the reaction — with NO exact numbers, NO damage figures, NO HP fractions.
+Keep it specific to who's acting and who's being hit. Preserve whether it was a crit, a kill, a dodge, or a miss if the original line says so.
+Return EXACTLY {len(log_lines)} lines, same order, one rewritten sentence per input line, nothing else.
+
+Respond ONLY with a valid JSON array of {len(log_lines)} strings, no markdown, no preamble."""
+
+    try:
+        raw = _generate_with_fallback(prompt, max_tokens=max(300, len(log_lines) * 30), temperature=0.85)
+        lines = json.loads(_clean_json(raw))
+        if isinstance(lines, list) and len(lines) == len(log_lines):
+            return [str(l) for l in lines]
+        return None
+    except Exception as e:
+        print(f"[LLM] Turn narration failed: {e}")
+        return None
+
+
 def generate_event_text(floor_number: int, event_type: str, context: str = "") -> dict:
     prompt = f"""You are generating a floor event for a dark fantasy roguelike.
 Floor: {floor_number}, Event type: {event_type}
