@@ -5,6 +5,7 @@ import TowerPage from './pages/TowerPage'
 import BasePage from './pages/BasePage'
 import LogPage from './pages/LogPage'
 import InventoryPage from './pages/InventoryPage'
+import ArenaPage from './pages/ArenaPage'
 import ProfileSelect from './components/ProfileSelect'
 import HeroChat from './components/HeroChat'
 import ToastContainer from './components/ToastContainer'
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'heroes', label: 'Heroes' },
   { id: 'inventory', label: 'Items' },
   { id: 'tower',  label: 'Tower' },
+  { id: 'arena',  label: 'Arena' },
   { id: 'base',   label: 'Base' },
 ]
 
@@ -139,6 +141,7 @@ export default function App() {
     heroes: <HeroesPage />,
     inventory: <InventoryPage />,
     tower:  <TowerPage onGoldChange={refreshResources} />,
+    arena:  <ArenaPage />,
     base:   <BasePage onGoldChange={refreshResources} />,
     log:    <LogPage />,
   }

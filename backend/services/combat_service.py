@@ -550,30 +550,16 @@ def _try_use_ability(attacker: CombatUnit, alive_heroes: list, log: list, morale
 
     return False
 
-def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None, skip_stat_pipeline: bool = False) -> dict:
-    log = []
-    turns = []
-    morale_changes = {h["id"]: 0 for h in heroes}
-    kill_counts = {h["id"]: 0 for h in heroes}
-    stress_changes = {h["id"]: 0 for h in heroes}
-
-    # skip_stat_pipeline lets a caller hand in hero dicts that are *already*
-    # fully resolved (level/class/equipment/relic/bond/base-floor bonuses all
-    # baked in) instead of raw DB rows — used by the Arena server, which has
-    # no access to either player's local save/equipment/relics to compute
-    # this pipeline itself. The caller (the player's own local backend) runs
-    # this exact pipeline normally for a Tower floor, then ships the
-    # resulting dict over the wire instead of re-deriving it remotely.
-    if skip_stat_pipeline:
-        processed = heroes
-        result = _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
-                                                 boss_data_override, enemy_count_override, difficulty_mult,
-                                                 preset_enemies, outer_conn, log, turns,
-                                                 morale_changes, kill_counts, stress_changes)
-        result.pop("_avg_luck", None)
-        return result
-
-    # Apply level scaling → class modifiers → synergy → equipment → legacy bonuses → skill passives
+def resolve_hero_stats(heroes: list[dict]) -> list[dict]:
+    """Applies level scaling → class modifiers → synergy → equipment →
+    legacy bonuses → relics → base-floor LP → bonds → passive skills/traits,
+    in that order. This is the one full pipeline that turns raw DB hero rows
+    into the fully-resolved stat dicts combat actually fights with. Also
+    used standalone (not followed by a fight) to build the snapshot a player
+    submits to the Arena server — see routers/arena.py's snapshot endpoint
+    and run_combat's skip_stat_pipeline param, which lets the Arena server
+    accept that snapshot back in without re-deriving it (it has no DB access
+    to do so anyway)."""
     processed = []
 
     # Calculate synergies on active team
@@ -610,12 +596,12 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
     for h in heroes:
         scaled = apply_level_to_stats(h)
         modified = apply_class_combat_modifiers(scaled)
-        
+
         # Apply team class buffs
         if team_atk_mult > 1.0: modified["strength"] = int(modified["strength"] * team_atk_mult)
         if team_end_mult > 1.0: modified["endurance"] = int(modified.get("endurance", modified.get("defense", 5)) * team_end_mult)
         if team_spd_mult > 1.0: modified["agility"] = int(modified["agility"] * team_spd_mult)
-        
+
         # Apply Depression Penalty (-75% stats)
         if modified.get("condition") == "Depressed":
             modified["strength"] = max(1, int(modified["strength"] * 0.25))
@@ -649,11 +635,11 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             modified = apply_legacy_bonuses(modified)
         except Exception:
             pass
-            
+
         # Apply relic stats
         if relics:
             modified = apply_relic_stats(modified, relics)
-            
+
         # Apply Base Floor LP stats
         try:
             from services.base_service import get_floor_lp
@@ -680,11 +666,13 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             modified["agility"] = int(modified["agility"] * bond_mult)
 
         # Apply passive skills and traits
+        hero_skills = []
+        hero_traits = []
         if "skills" in h and h["skills"]:
             from services.skills_service import apply_passive_skills
             hero_skills = json.loads(h.get("skills", "[]")) if isinstance(h.get("skills"), str) else h.get("skills", [])
             modified = apply_passive_skills(modified, hero_skills)
-            
+
         if "traits" in h and h["traits"]:
             from services.skills_service import apply_passive_skills
             hero_traits = json.loads(h.get("traits", "[]")) if isinstance(h.get("traits"), str) else h.get("traits", [])
@@ -701,12 +689,40 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
 
         # Remove raw string payload to avoid confusion later, but keep as python list for UI/Combat logic if needed
         if "skills" in modified:
-            modified["_skills"] = hero_skills if 'hero_skills' in locals() else []
+            modified["_skills"] = hero_skills
             del modified["skills"]
         if "traits" in modified:
-            modified["_traits"] = hero_traits if 'hero_traits' in locals() else []
+            modified["_traits"] = hero_traits
             del modified["traits"]
         processed.append(modified)
+
+    return processed
+
+
+def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None, skip_stat_pipeline: bool = False) -> dict:
+    log = []
+    turns = []
+    morale_changes = {h["id"]: 0 for h in heroes}
+    kill_counts = {h["id"]: 0 for h in heroes}
+    stress_changes = {h["id"]: 0 for h in heroes}
+
+    # skip_stat_pipeline lets a caller hand in hero dicts that are *already*
+    # fully resolved (level/class/equipment/relic/bond/base-floor bonuses all
+    # baked in) instead of raw DB rows — used by the Arena server, which has
+    # no access to either player's local save/equipment/relics to compute
+    # this pipeline itself. The caller (the player's own local backend) runs
+    # this exact pipeline normally for a Tower floor, then ships the
+    # resulting dict over the wire instead of re-deriving it remotely.
+    if skip_stat_pipeline:
+        processed = heroes
+        result = _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
+                                                 boss_data_override, enemy_count_override, difficulty_mult,
+                                                 preset_enemies, outer_conn, log, turns,
+                                                 morale_changes, kill_counts, stress_changes)
+        result.pop("_avg_luck", None)
+        return result
+
+    processed = resolve_hero_stats(heroes)
 
     result = _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
                                              boss_data_override, enemy_count_override, difficulty_mult,

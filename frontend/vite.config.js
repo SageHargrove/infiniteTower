@@ -9,7 +9,7 @@ import react from '@vitejs/plugin-react'
 // against the same client.js used by the packaged build.
 const BACKEND_PREFIXES = [
   'heroes', 'gacha', 'tower', 'base', 'runs', 'equipment',
-  'relics', 'profiles', 'chat', 'static', 'portrait-cache',
+  'relics', 'profiles', 'chat', 'static', 'portrait-cache', 'arena',
 ]
 
 export default defineConfig({

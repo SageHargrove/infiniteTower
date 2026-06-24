@@ -158,6 +158,11 @@ export const resolveExplore = (floorNumber, teamId, choiceId) => request('/tower
 export const listRuns = () => request('/runs/')
 export const getEventLog = (runId = null, limit = 50) => request(`/runs/log?${runId ? `run_id=${runId}&` : ''}limit=${limit}`)
 
+// Arena (local backend side only — resolves a team's full combat stats
+// exactly like a Tower floor would, for shipping to the separate Arena
+// server. See api/arenaServerClient.js for the remote-host calls.)
+export const getArenaSnapshot = (teamId) => request(`/arena/team/${teamId}/snapshot`)
+
 // Profiles
 export const listProfiles = () => request('/profiles/')
 export const switchProfile = (name) => request('/profiles/switch', { method: 'POST', body: JSON.stringify({ name }) })

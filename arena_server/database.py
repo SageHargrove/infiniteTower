@@ -39,7 +39,8 @@ def init_db():
             token TEXT,
             token_expiry REAL,
             wins INTEGER DEFAULT 0,
-            losses INTEGER DEFAULT 0
+            losses INTEGER DEFAULT 0,
+            team_json TEXT
         );
 
         CREATE TABLE IF NOT EXISTS arena_matches (
