@@ -549,16 +549,32 @@ def _try_use_ability(attacker: CombatUnit, alive_heroes: list, log: list, morale
 
     return False
 
-def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None) -> dict:
+def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None, skip_stat_pipeline: bool = False) -> dict:
     log = []
     turns = []
     morale_changes = {h["id"]: 0 for h in heroes}
     kill_counts = {h["id"]: 0 for h in heroes}
     stress_changes = {h["id"]: 0 for h in heroes}
 
+    # skip_stat_pipeline lets a caller hand in hero dicts that are *already*
+    # fully resolved (level/class/equipment/relic/bond/base-floor bonuses all
+    # baked in) instead of raw DB rows — used by the Arena server, which has
+    # no access to either player's local save/equipment/relics to compute
+    # this pipeline itself. The caller (the player's own local backend) runs
+    # this exact pipeline normally for a Tower floor, then ships the
+    # resulting dict over the wire instead of re-deriving it remotely.
+    if skip_stat_pipeline:
+        processed = heroes
+        result = _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
+                                                 boss_data_override, enemy_count_override, difficulty_mult,
+                                                 preset_enemies, outer_conn, log, turns,
+                                                 morale_changes, kill_counts, stress_changes)
+        result.pop("_avg_luck", None)
+        return result
+
     # Apply level scaling → class modifiers → synergy → equipment → legacy bonuses → skill passives
     processed = []
-    
+
     # Calculate synergies on active team
     synergy_counts = {}
     for h in heroes:
@@ -691,6 +707,26 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             del modified["traits"]
         processed.append(modified)
 
+    result = _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
+                                             boss_data_override, enemy_count_override, difficulty_mult,
+                                             preset_enemies, outer_conn, log, turns,
+                                             morale_changes, kill_counts, stress_changes)
+    _apply_combat_drops(result, floor_number, is_boss, is_miniboss, outer_conn)
+    return result
+
+
+def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
+                                    boss_data_override, enemy_count_override, difficulty_mult,
+                                    preset_enemies, outer_conn, log, turns,
+                                    morale_changes, kill_counts, stress_changes):
+    """The CombatUnit-construction-and-turn-loop core of run_combat, split out
+    of the stat-resolution pipeline above it so a caller that already has
+    fully-resolved hero dicts (no local DB to re-derive equipment/relic/bond/
+    base-floor bonuses from — see run_combat's skip_stat_pipeline) can run a
+    fight directly without re-deriving anything. Returns the same result dict
+    run_combat used to build inline; drop generation is applied by the caller
+    afterward (_apply_combat_drops), not here, since Arena fights skip drops
+    entirely."""
     combatants_heroes = []
     construct_id = -100
     for h in processed:
@@ -1090,61 +1126,71 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
         "log": log,
         "turns": turns,
         "rounds": round_num,
-        "combat_metrics": damage_dealt_stats
+        "combat_metrics": damage_dealt_stats,
+        # Internal bookkeeping for _apply_combat_drops below — not meant for
+        # API consumers, but combatants_heroes only exists in this function's
+        # scope, so the average has to be threaded through somehow.
+        "_avg_luck": sum(h.luck for h in combatants_heroes) / max(1, len(combatants_heroes)),
     }
+    return result
 
-    if heroes_won:
-        try:
-            # Reuse the caller's connection if it handed one in — opening a
-            # second connection here while the caller's own `with db()`
-            # transaction is still uncommitted causes "database is locked"
-            # on SQLite, which this block's except then silently swallowed,
-            # also skipping the gold/supplies/materials grant below it.
-            if outer_conn is not None:
-                base_info = outer_conn.execute("SELECT global_buffs FROM base WHERE id = 1").fetchone()
+
+def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_miniboss: bool, outer_conn):
+    """Tower-specific economy rewards (gold/materials/equipment/relic drops)
+    on a winning fight — split out of run_combat so Arena fights (which use
+    _resolve_combat_from_processed directly, skipping this entirely) don't
+    grant Tower currency for a PvP match. Mutates result in place."""
+    avg_luck = result.pop("_avg_luck", 5.0)
+    if result["winner"] != "heroes":
+        return
+    try:
+        # Reuse the caller's connection if it handed one in — opening a
+        # second connection here while the caller's own `with db()`
+        # transaction is still uncommitted causes "database is locked"
+        # on SQLite, which this block's except then silently swallowed,
+        # also skipping the gold/supplies/materials grant below it.
+        if outer_conn is not None:
+            base_info = outer_conn.execute("SELECT global_buffs FROM base WHERE id = 1").fetchone()
+            buffs = __import__('json').loads(base_info["global_buffs"] or "{}") if base_info else {}
+        else:
+            from database import db
+            with db() as _conn:
+                base_info = _conn.execute("SELECT global_buffs FROM base WHERE id = 1").fetchone()
                 buffs = __import__('json').loads(base_info["global_buffs"] or "{}") if base_info else {}
-            else:
-                from database import db
-                with db() as _conn:
-                    base_info = _conn.execute("SELECT global_buffs FROM base WHERE id = 1").fetchone()
-                    buffs = __import__('json').loads(base_info["global_buffs"] or "{}") if base_info else {}
-            from services.equipment_service import generate_equipment_drop
-            # Luck is averaged across the deployed team, not taken from a
-            # single hero — a team-comp consideration, not "stack one lucky
-            # hero and ignore the rest."
-            avg_luck = sum(h.luck for h in combatants_heroes) / max(1, len(combatants_heroes))
-            drop_bonus = buffs.get("drop_boost", 0) * 0.05 + avg_luck / 100
-            equip = generate_equipment_drop(floor_number, is_boss, drop_bonus)
-            if equip:
-                result["equipment_drop"] = equip
+        from services.equipment_service import generate_equipment_drop
+        # Luck is averaged across the deployed team, not taken from a
+        # single hero — a team-comp consideration, not "stack one lucky
+        # hero and ignore the rest."
+        drop_bonus = buffs.get("drop_boost", 0) * 0.05 + avg_luck / 100
+        equip = generate_equipment_drop(floor_number, is_boss, drop_bonus)
+        if equip:
+            result["equipment_drop"] = equip
 
-            from services.relics_service import roll_relic_drop
-            relic = roll_relic_drop(is_boss, is_miniboss, floor_number, conn=outer_conn)
-            if relic:
-                result["relic_drop"] = relic
+        from services.relics_service import roll_relic_drop
+        relic = roll_relic_drop(is_boss, is_miniboss, floor_number, conn=outer_conn)
+        if relic:
+            result["relic_drop"] = relic
 
-            # Guaranteed Drops
-            result["gold_gained"] = int(300 * (1 + (floor_number/10)))
-            result["supplies_gained"] = random.randint(2, 5)
-            
-            from services.materials_service import roll_material_name, tiered_material_name
-            drops = {}
-            for _ in range(random.randint(2, 4)):
+        # Guaranteed Drops
+        result["gold_gained"] = int(300 * (1 + (floor_number/10)))
+        result["supplies_gained"] = random.randint(2, 5)
+
+        from services.materials_service import roll_material_name, tiered_material_name
+        drops = {}
+        for _ in range(random.randint(2, 4)):
+            mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
+            drops[mat] = drops.get(mat, 0) + 1
+        result["materials_gained"] = drops
+
+        if is_boss:
+            result["gold_gained"] += int(1500 * (1 + (floor_number/10)))
+            result["supplies_gained"] += 10
+            for _ in range(5):
                 mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops
-
-            if is_boss:
-                result["gold_gained"] += int(1500 * (1 + (floor_number/10)))
-                result["supplies_gained"] += 10
-                for _ in range(5):
-                    mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
-                    drops[mat] = drops.get(mat, 0) + 1
-                result["materials_gained"] = drops
-        except Exception as e:
-            print(f"Error generating drop: {e}")
-
-    return result
+    except Exception as e:
+        print(f"Error generating drop: {e}")
 
 def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, difficulty_mult: float = 1.0, conn=None) -> dict:
     # Raid Boss (Every 20th floor is Raid Boss)
