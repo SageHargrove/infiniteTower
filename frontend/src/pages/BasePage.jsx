@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase, getMarketCatalog, purchaseMarketItem } from '../api/client'
 
 const FACILITY_TOOLTIPS = {
-  "Forge": "Crafts powerful weapons, armor, and accessories. Blacksmiths specialize in weapons, Tanners in armor, and Carpenters in accessories — each crafts their specialty at full quality alone. Assign more than one together for a smaller bonus on top.",
+  "Forge": "Crafts powerful weapons, armor, and accessories. Quality is capped by your single best Blacksmith — more Blacksmiths of that same tier assigned together adds a smaller bonus on top.",
   "Infirmary": "Heals trauma passively over time and crafts Bandages (auto-used to patch up your most injured heroes before the next floor). Assign Medics and Priests for better results.",
   "Vault": "Expands equipment storage capacity. Quartermasters manage the Vault effectively.",
   "Restaurant": "Cooks advanced meals to increase morale. Assign Chefs to maximize food quality.",

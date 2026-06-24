@@ -41,7 +41,7 @@ const TAB_TOUR_STEPS = [
   { tab: 'base', subTab: 'lobby', label: 'Base', title: 'Home Base',
     body: "Rest your heroes here between runs, watch your gold and supply income, and manage Legacies." },
   { tab: 'base', subTab: 'facilities', label: 'Facilities', title: 'Facilities',
-    body: "Build and staff facilities like the Forge, Restaurant, and Infirmary — assign support-class heroes (Blacksmith, Chef, Medic, Tanner, Carpenter, etc.) here for big bonuses. Most support classes can't fight, so this is where they actually pull their weight." },
+    body: "Build and staff facilities like the Forge, Restaurant, and Infirmary — assign support-class heroes (Blacksmith, Chef, Medic, etc.) here for big bonuses. Most support classes can't fight, so this is where they actually pull their weight." },
 ]
 
 export default function App() {

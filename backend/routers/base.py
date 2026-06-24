@@ -614,7 +614,7 @@ def forge_craft(req: CraftRequest):
         crafter_name = "Nobody"
 
         if assigned:
-            from services.class_service import forge_specialist_for_slot, forge_teamwork_bonus
+            from services.class_service import forge_smith_bonus
 
             # Average level and apt
             level = sum(h["level"] for h in assigned) // len(assigned)
@@ -622,22 +622,16 @@ def forge_craft(req: CraftRequest):
 
             assigned_classes = [h["hero_class"] for h in assigned]
 
-            # Blacksmith/Tanner/Carpenter are each the dedicated specialist
-            # for one slot (weapon/armor/accessory) — present alone, they
-            # craft at full specialist quality, no other class needed.
-            specialist_cls = forge_specialist_for_slot(assigned_classes, req.slot)
-            if specialist_cls:
-                apt += 30
-                level += 5
-                crafter_name = next(h["name"] for h in assigned if h["hero_class"] == specialist_cls)
+            # Quality is capped by your single best Blacksmith present —
+            # more of them at the same tier adds a smaller bonus on top,
+            # but a pile of weak smiths can't out-craft one great one.
+            smith_apt, smith_level, best_smith_cls = forge_smith_bonus(assigned_classes)
+            apt += smith_apt
+            level += smith_level
+            if best_smith_cls:
+                crafter_name = next(h["name"] for h in assigned if h["hero_class"] == best_smith_cls)
             else:
                 crafter_name = assigned[0]["name"] + " (Unskilled)"
-
-            # Having more than one of the three lines in the Forge together
-            # adds a smaller bonus on top — they share the same fire.
-            team_apt, team_level = forge_teamwork_bonus(assigned_classes)
-            apt += team_apt
-            level += team_level
 
         conn.execute("UPDATE base SET gold = gold - 100, materials = ? WHERE id = 1", (json.dumps(mats),))
 

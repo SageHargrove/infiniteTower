@@ -78,7 +78,6 @@ CLASS_STAT_LEAN = {
     "Tactician": -0.20, "Scout": 0.15, "Blacksmith": 0.20, "Medic": -0.25,
     "Quartermaster": -0.10, "Farmer": 0.10, "Merchant": -0.10,
     "Alchemist": -0.30, "Magic Engineer": -0.30,
-    "Tanner": 0.15, "Carpenter": 0.15,
 }
 
 def apply_class_stat_bias(stats: dict, hero_class: str) -> dict:

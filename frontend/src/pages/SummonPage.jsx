@@ -7,7 +7,7 @@ import FairyTip from '../components/FairyTip'
 // Mirrors backend services/class_service.py's is_combat_class() exclusion
 // list — these classes can't be deployed to fight, only assigned to base
 // facilities, which isn't obvious the first time you pull one.
-const NON_COMBAT_CLASSES = ["Chef", "Blacksmith", "Quartermaster", "Alchemist", "Priest", "Tanner", "Carpenter"]
+const NON_COMBAT_CLASSES = ["Chef", "Blacksmith", "Quartermaster", "Alchemist", "Priest"]
 
 export default function SummonPage({ onGoldChange }) {
   const [activeTab, setActiveTab] = useState('heroes')

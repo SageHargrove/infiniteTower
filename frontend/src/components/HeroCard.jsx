@@ -32,8 +32,6 @@ const CLASS_FAMILIES = {
   'Merchant': { icon: '💰', color: '#d4af37', members: ['Merchant', 'Trader', 'Guild Master', 'Trade Prince', 'Smuggler', 'Black Market Baron', 'Spy', 'Spymaster', 'Tycoon', 'Guildmaster'] },
   'Alchemist': { icon: '⚗', color: '#30c8a0', members: ['Alchemist', 'Master Alchemist', 'Transmuter', 'Philosopher', 'Apothecary', 'Grand Alchemist', 'Herbalist', 'Poisoner', 'Plague Doctor'] },
   'Magic Engineer': { icon: '⚙', color: '#30b8c8', members: ['Magic Engineer'] },
-  'Tanner': { icon: '🥾', color: '#a87850', members: ['Tanner', 'Leatherworker', 'Hideworker', 'Cobbler', 'Master Tanner', 'Hide Artisan', 'Bootmaker'] },
-  'Carpenter': { icon: '🪵', color: '#8a5a30', members: ['Carpenter', 'Woodwright', 'Joiner', 'Fletcher', 'Master Carpenter', 'Cabinetmaker', 'Bowyer'] },
   'Classless': { icon: '✦', color: '#888899', members: ['Classless', 'Adventurer', 'Veteran', 'Mercenary', 'Bounty Hunter', 'Hero', 'Champion'] },
 }
 
@@ -102,8 +100,6 @@ const CLASS_TOOLTIPS = {
   'Merchant': 'A savvy trader who boosts gold income and finds better deals.',
   'Alchemist': 'Brews potent potions and increases rare material drop rates.',
   'Magic Engineer': 'A master of magical contraptions, building turrets and traps.',
-  'Tanner': 'A leatherworker — the Forge\'s dedicated armor specialist, crafting fine armor solo, no Blacksmith required.',
-  'Carpenter': 'A woodworker — the Forge\'s dedicated accessory specialist, crafting fine trinkets solo, no Blacksmith required.',
   'Classless': 'A blank slate. Though weak now, it harbors the potential for unique, secret evolutions at higher levels.',
 };
 

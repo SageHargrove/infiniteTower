@@ -188,27 +188,11 @@ CLASS_EVOLUTIONS = {
             "Oracle": ["Prophet"],
             "Chaplain": ["Saint"]
         }
-    },
-    "Tanner": {
-        30: ["Leatherworker", "Hideworker", "Cobbler"],
-        60: {
-            "Leatherworker": ["Master Tanner"],
-            "Hideworker": ["Hide Artisan"],
-            "Cobbler": ["Bootmaker"]
-        }
-    },
-    "Carpenter": {
-        30: ["Woodwright", "Joiner", "Fletcher"],
-        60: {
-            "Woodwright": ["Master Carpenter"],
-            "Joiner": ["Cabinetmaker"],
-            "Fletcher": ["Bowyer"]
-        }
     }
 }
 
 COMBAT_BASE_CLASSES = ["Warrior", "Spearman", "Thief", "Archer", "Mage", "Acolyte", "Magic Engineer", "Spellsword"]
-SUPPORT_BASE_CLASSES = ["Chef", "Medic", "Scout", "Blacksmith", "Quartermaster", "Tactician", "Priest", "Alchemist", "Merchant", "Farmer", "Tanner", "Carpenter"]
+SUPPORT_BASE_CLASSES = ["Chef", "Medic", "Scout", "Blacksmith", "Quartermaster", "Tactician", "Priest", "Alchemist", "Merchant", "Farmer"]
 BASE_CLASSES = SUPPORT_BASE_CLASSES # Legacy naming convention
 
 # Weights within combat class pool (per star)
@@ -296,7 +280,7 @@ def is_combat_class(hero_class: str) -> bool:
     # A support class can still be deployed, but typically combat classes have stats
     # For now, anything that isn't explicitly a base support class is combat capable.
     # Scout and Tactician are deployed classes too now.
-    return hero_class not in ["Chef", "Blacksmith", "Quartermaster", "Alchemist", "Priest", "Tanner", "Carpenter"]
+    return hero_class not in ["Chef", "Blacksmith", "Quartermaster", "Alchemist", "Priest"]
 
 def is_base_class(hero_class: str) -> bool:
     return hero_class in SUPPORT_BASE_CLASSES
@@ -413,44 +397,49 @@ def get_base_class_rest_bonus(hero_class: str, hero_level: int) -> dict:
     return bonuses.get(hero_class, {})
 
 # ---------------------------------------------------------------------------
-# Forge crafting specialists
+# Forge crafting
 # ---------------------------------------------------------------------------
-# Blacksmith, Tanner, and Carpenter each have their own independent craft —
-# a Tanner alone still makes excellent armor, a Carpenter alone still makes
-# excellent accessories, with no Blacksmith required. Having more than one
-# line in the Forge at once adds a smaller bonus on top, since the three
-# working the same fire together still nets a better result than any one
-# of them alone — but none of them needs the others to be useful.
+# Blacksmith is the only Forge specialist. Crafting quality is capped by
+# your single BEST Blacksmith present (a pile of weak ones can't out-craft
+# one great one) — but multiple Blacksmiths of that same evolution tier
+# add a smaller bonus on top, since a crew of comparably-skilled smiths
+# really does work better together than just one.
 BLACKSMITH_LINE = ["Blacksmith", "Weaponsmith", "Armorer", "Artificer", "Master Smith", "Forge Lord", "Runesmith"]
-TANNER_LINE = ["Tanner", "Leatherworker", "Hideworker", "Cobbler", "Master Tanner", "Hide Artisan", "Bootmaker"]
-CARPENTER_LINE = ["Carpenter", "Woodwright", "Joiner", "Fletcher", "Master Carpenter", "Cabinetmaker", "Bowyer"]
 
-# Each line is the dedicated specialist for one Forge slot.
-FORGE_LINES_BY_SLOT = {
-    "weapon": BLACKSMITH_LINE,
-    "armor": TANNER_LINE,
-    "accessory": CARPENTER_LINE,
+# Evolution tier rank — higher tier smiths set a meaningfully higher
+# quality ceiling, not just a flat bonus regardless of how evolved they are.
+SMITH_TIER_RANK = {
+    "Blacksmith": 1, "Weaponsmith": 1, "Armorer": 1, "Artificer": 1,
+    "Master Smith": 2,
+    "Forge Lord": 3, "Runesmith": 3,
 }
+# tier -> (apt_bonus, level_bonus) for the best smith present.
+SMITH_TIER_BONUS = {1: (30, 5), 2: (60, 10), 3: (100, 18)}
+# tier -> (apt_bonus, level_bonus) added per *additional* smith sharing
+# that same tier — the peak is still set by the best smith's tier alone.
+SMITH_TIER_TEAMWORK_BONUS = {1: (15, 2), 2: (25, 4), 3: (40, 6)}
 
-def forge_specialist_for_slot(hero_classes: list[str], slot: str) -> str | None:
-    """Returns the matching specialist class name if any of hero_classes is
-    the dedicated line for that Forge slot, else None."""
-    line = FORGE_LINES_BY_SLOT.get(slot, [])
-    for c in hero_classes:
-        if c in line:
-            return c
-    return None
-
-def forge_teamwork_bonus(hero_classes: list[str]) -> tuple[int, int]:
-    """Extra (apt_bonus, level_bonus) for having more than one of the three
-    Forge crafting lines assigned together, on top of whatever specialist
-    bonus already applies."""
-    lines_present = sum(1 for line in (BLACKSMITH_LINE, TANNER_LINE, CARPENTER_LINE) if any(c in line for c in hero_classes))
-    if lines_present >= 3:
-        return (20, 3)
-    if lines_present >= 2:
-        return (8, 1)
-    return (0, 0)
+def forge_smith_bonus(hero_classes: list[str]) -> tuple[int, int, str | None]:
+    """Returns (apt_bonus, level_bonus, best_smith_class) for a Forge craft.
+    None present -> (0, 0, None). The bonus is anchored to the single best
+    (highest-tier) Blacksmith-line class present, plus a smaller bonus per
+    additional smith of that exact same tier."""
+    smith_classes = [c for c in hero_classes if c in BLACKSMITH_LINE]
+    if not smith_classes:
+        return (0, 0, None)
+    best = max(smith_classes, key=lambda c: SMITH_TIER_RANK.get(c, 1))
+    best_tier = SMITH_TIER_RANK.get(best, 1)
+    apt, level = SMITH_TIER_BONUS[best_tier]
+    # Remove exactly one occurrence of `best` (the best smith themself)
+    # before counting same-tier teammates — otherwise two heroes sharing
+    # the identical class name would wrongly cancel each other out.
+    remaining = smith_classes.copy()
+    remaining.remove(best)
+    same_tier_extra = sum(1 for c in remaining if SMITH_TIER_RANK.get(c, 1) == best_tier)
+    extra_apt, extra_level = SMITH_TIER_TEAMWORK_BONUS[best_tier]
+    apt += extra_apt * same_tier_extra
+    level += extra_level * same_tier_extra
+    return (apt, level, best)
 
 # ---------------------------------------------------------------------------
 # Class display helpers
@@ -467,7 +456,6 @@ CLASS_ICONS = {
     "Magic Engineer": "🤖",
     "Chef": "🍳", "Medic": "🩺", "Scout": "🔭", "Blacksmith": "⚒️",
     "Quartermaster": "💰", "Tactician": "📜", "Priest": "⛪", "Alchemist": "🧪",
-    "Tanner": "🥾", "Carpenter": "🪵",
     "Classless": "❓"
 }
 
