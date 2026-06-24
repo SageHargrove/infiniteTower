@@ -89,7 +89,7 @@ def _roll_equipment_stats(eq_type: str, mult: float) -> dict:
     itemization flavor, not the stat that defines the tier.
     """
     scale = int(10 * mult)
-    base_str = base_int = base_hlt = base_agi = base_def = 0
+    base_str = base_int = base_hlt = base_agi = base_def = base_end = base_wil = base_luck = 0
     crit = dodge = armor_pen = dmg_reduction_pct = 0.0
     str_pct = int_pct = hlt_pct = agi_pct = 0.0
 
@@ -99,15 +99,16 @@ def _roll_equipment_stats(eq_type: str, mult: float) -> dict:
         if random.random() < 0.3: crit = random.uniform(0.01, 0.05) * mult
         if random.random() < 0.2: armor_pen = random.uniform(0.01, 0.05) * mult
     elif eq_type == "Armor":
-        # Armor's primary stat is flat Defense (was base_int, a leftover from
-        # back when Intelligence secretly doubled as the defense stat — that
-        # hack was removed when Defense became its own real CombatUnit field).
-        base_def = int(scale * random.uniform(1.92, 2.08))
+        # Armor's primary stat is Endurance (was flat Defense, then base_int
+        # before that — Defense/Endurance has always been the real combat
+        # stat behind this slot, base_def kept in sync for legacy reads).
+        base_end = int(scale * random.uniform(1.92, 2.08))
+        base_def = base_end
         base_hlt = int(scale * random.uniform(5.28, 5.72))
         if random.random() < 0.4: dmg_reduction_pct = random.uniform(0.01, 0.04) * mult
     else:
         # Every stat below used to roll independently — rare bad luck across
-        # all eight chances could leave an accessory with nothing useful on
+        # all chances could leave an accessory with nothing useful on
         # it at all (confirmed: a real drop with only a 5% dmg_reduction_pct
         # and zero everything else). Force at least 2 of these to roll no
         # matter what, then let the rest stay probabilistic for variety on
@@ -121,6 +122,8 @@ def _roll_equipment_stats(eq_type: str, mult: float) -> dict:
             "hlt_pct": (0.5, lambda: random.uniform(0.02, 0.06) * mult),
             "agi_pct": (0.5, lambda: random.uniform(0.02, 0.06) * mult),
             "dmg_reduction_pct": (0.3, lambda: random.uniform(0.01, 0.03) * mult),
+            "base_wil": (0.5, lambda: max(1, int(scale * random.uniform(0.5, 1.0)))),
+            "base_luck": (0.5, lambda: max(1, int(scale * random.uniform(0.3, 0.7)))),
         }
         guaranteed = set(random.sample(list(rolls.keys()), 2))
         results = {}
@@ -135,9 +138,12 @@ def _roll_equipment_stats(eq_type: str, mult: float) -> dict:
         hlt_pct = results.get("hlt_pct", 0.0)
         agi_pct = results.get("agi_pct", 0.0)
         dmg_reduction_pct = results.get("dmg_reduction_pct", 0.0)
+        base_wil = results.get("base_wil", 0)
+        base_luck = results.get("base_luck", 0)
 
     return {
         "base_str": base_str, "base_int": base_int, "base_hlt": base_hlt, "base_agi": base_agi, "base_def": base_def,
+        "base_end": base_end, "base_wil": base_wil, "base_luck": base_luck,
         "str_pct": str_pct, "int_pct": int_pct, "hlt_pct": hlt_pct, "agi_pct": agi_pct,
         "crit_chance": crit, "dodge_chance": dodge, "armor_pen": armor_pen, "dmg_reduction_pct": dmg_reduction_pct,
     }
@@ -149,10 +155,11 @@ def save_equipment(equip: dict, conn=None) -> int:
     Pass `conn` if the caller is already inside a `with db() as conn:` block —
     opening a second connection while the first is still uncommitted raises
     'database is locked' on SQLite."""
-    sql = "INSERT INTO equipment (name, type, rarity, level, base_str, base_int, base_hlt, base_agi, base_def, str_pct, int_pct, hlt_pct, agi_pct, crit_chance, dodge_chance, armor_pen, dmg_reduction_pct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    sql = "INSERT INTO equipment (name, type, rarity, level, base_str, base_int, base_hlt, base_agi, base_def, base_end, base_wil, base_luck, str_pct, int_pct, hlt_pct, agi_pct, crit_chance, dodge_chance, armor_pen, dmg_reduction_pct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     params = (
         equip["name"], equip["type"], equip["rarity"], equip.get("level", 1),
         equip.get("base_str", 0), equip.get("base_int", 0), equip.get("base_hlt", 0), equip.get("base_agi", 0), equip.get("base_def", 0),
+        equip.get("base_end", 0), equip.get("base_wil", 0), equip.get("base_luck", 0),
         equip.get("str_pct", 0.0), equip.get("int_pct", 0.0), equip.get("hlt_pct", 0.0), equip.get("agi_pct", 0.0),
         equip.get("crit_chance", 0.0), equip.get("dodge_chance", 0.0), equip.get("armor_pen", 0.0), equip.get("dmg_reduction_pct", 0.0),
     )
@@ -250,6 +257,7 @@ def apply_equipment_stats(hero: dict, equipment_list: list = None) -> dict:
 
     str_pct = int_pct = hlt_pct = agi_pct = 0.0
     dmg_reduction_pct = hero.get("dmg_reduction_pct", 0.0)
+    end_bonus = 0
 
     for eq in hero_eq:
         hero["strength"] += eq["base_str"]
@@ -258,6 +266,13 @@ def apply_equipment_stats(hero: dict, equipment_list: list = None) -> dict:
         hero["health"] += eq["base_hlt"]
         hero["agility"] += eq["base_agi"]
         hero["defense"] = hero.get("defense", 5) + eq.get("base_def", 0)
+        # Endurance gear bonus adds to max_health too (HP_PER_ENDURANCE per
+        # point), same relationship as hero creation/leveling — accumulated
+        # and applied once below, alongside base_hlt/hlt_pct.
+        end_bonus += eq.get("base_end", 0)
+        hero["endurance"] = hero.get("endurance", hero.get("defense", 5)) + eq.get("base_end", 0)
+        hero["willpower"] = hero.get("willpower", 6) + eq.get("base_wil", 0)
+        hero["luck"] = hero.get("luck", 5) + eq.get("base_luck", 0)
         dmg_reduction_pct += eq.get("dmg_reduction_pct", 0.0)
 
         str_pct += eq.get("str_pct", 0.0)
@@ -271,6 +286,11 @@ def apply_equipment_stats(hero: dict, equipment_list: list = None) -> dict:
             hero["dodge_chance"] += eq.get("dodge_chance", 0)
         if "armor_pen" in hero:
             hero["armor_pen"] += eq.get("armor_pen", 0)
+
+    if end_bonus:
+        from services.gacha_service import HP_PER_ENDURANCE
+        hero["max_health"] += end_bonus * HP_PER_ENDURANCE
+        hero["health"] += end_bonus * HP_PER_ENDURANCE
 
     # Apply percentage buffs after flat buffs are added
     if str_pct > 0: hero["strength"] = int(hero["strength"] * (1 + str_pct))

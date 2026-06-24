@@ -7,9 +7,11 @@ function formatEquipmentStats(eq) {
   const parts = []
   if (eq.base_str > 0) parts.push(`STR +${eq.base_str}`)
   if (eq.base_int > 0) parts.push(`INT +${eq.base_int}`)
-  if (eq.base_def > 0) parts.push(`DEF +${eq.base_def}`)
+  if (eq.base_end > 0) parts.push(`END +${eq.base_end}`)
   if (eq.base_hlt > 0) parts.push(`Health +${eq.base_hlt}`)
   if (eq.base_agi > 0) parts.push(`AGI +${eq.base_agi}`)
+  if (eq.base_wil > 0) parts.push(`WIL +${eq.base_wil}`)
+  if (eq.base_luck > 0) parts.push(`Luck +${eq.base_luck}`)
   if (eq.str_pct > 0) parts.push(`STR +${(eq.str_pct * 100).toFixed(0)}%`)
   if (eq.int_pct > 0) parts.push(`INT +${(eq.int_pct * 100).toFixed(0)}%`)
   if (eq.hlt_pct > 0) parts.push(`Health +${(eq.hlt_pct * 100).toFixed(0)}%`)

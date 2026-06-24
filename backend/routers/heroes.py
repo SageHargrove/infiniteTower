@@ -20,7 +20,10 @@ def row_to_hero(row, equipment_rows=[], is_ego_satisfied=None) -> dict:
     h["base_strength"] = h["strength"]
     h["base_intelligence"] = h["intelligence"]
     h["base_defense"] = h.get("defense", 5)
+    h["base_endurance"] = h.get("endurance", h.get("defense", 5))
     h["base_agility"] = h["agility"]
+    h["base_willpower"] = h.get("willpower", 6)
+    h["base_luck"] = h.get("luck", 5)
     h["base_max_hp"] = h["max_health"]
     h = apply_level_to_stats(h)
     h["equipment"] = [dict(e) for e in equipment_rows if e["is_equipped_to"] == h["id"]]

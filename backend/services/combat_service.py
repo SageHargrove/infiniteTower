@@ -19,7 +19,10 @@ class CombatUnit:
     agility: int
     morale: int
     stress: int
-    defense: int = 5
+    defense: int = 5  # legacy mirror of endurance, kept for any stale readers
+    endurance: int = 5  # replaces defense as the real mitigation stat — also drove this unit's max_health upstream
+    willpower: int = 6  # fear/panic resistance, see _panic_check
+    luck: int = 5  # combat/exploration drop-rate bonus, applied at the team-average level, not per-unit
     power_stat: str = "strength"  # which stat drives this unit's attack damage
     dmg_reduction_pct: float = 0.0  # flat % mitigation from equipped gear, applied after Defense
     trauma: int = 0
@@ -155,6 +158,7 @@ def _build_enemy_group(etype, floor_number: int, difficulty_mult: float, id_star
             level=enemy_level,
             health=max(1, int(80 * scale * hp_m)), max_health=max(1, int(80 * scale * hp_m)),
             strength=max(1, int(8 * scale * atk_m)), intelligence=0, defense=int(5 * scale * def_m),
+            endurance=int(5 * scale * def_m),
             agility=int(10 * scale * spd_m),
             morale=100, stress=0, is_hero=False,
             portrait_path=enemy_portrait_path,
@@ -266,6 +270,7 @@ def make_boss(floor_number: int, zone_theme: str = "", is_miniboss: bool = False
         health=int(220 * scale * power * mod['health']), max_health=int(220 * scale * power * mod['health']),
         strength=int(16 * scale * (power * 0.28) * mod['atk']), intelligence=0,
         defense=int(12 * scale * (power * 0.35) * mod['def']),
+        endurance=int(12 * scale * (power * 0.35) * mod['def']),
         agility=int(8 * scale * mod['spd']),
         morale=100, stress=0, is_hero=False,
         portrait_path=get_random_boss_portrait(is_miniboss=is_miniboss),
@@ -405,7 +410,11 @@ def _panic_check(unit: CombatUnit, trigger: str, log: list, power_ratio: float =
     base = PANIC_BASE_CHANCE_BY_STAR.get(unit.hero_star, 0.02)
     base *= (1.0 - unit.talent * 0.4)  # talented heroes keep their cool better
     tendency_resist = TENDENCY_PANIC_RESIST.get(unit.battle_tendency, 1.0)
-    chance = base * tendency_resist * resist_mult * max(0.4, min(2.2, power_ratio))
+    # Willpower stat resistance — capped at 50% reduction so it's a strong,
+    # visible effect without making a high-Willpower hero flatly immune
+    # (consistent with this fight's "no hard immune switch" design).
+    willpower_resist = max(0.5, 1.0 - unit.willpower / 100)
+    chance = base * willpower_resist * tendency_resist * resist_mult * max(0.4, min(2.2, power_ratio))
     if trigger == "hp_critical":
         chance *= 1.5
     if random.random() >= chance:
@@ -431,7 +440,7 @@ def _panic_check(unit: CombatUnit, trigger: str, log: list, power_ratio: float =
 
 
 def calc_damage(attacker: CombatUnit, defender: CombatUnit) -> tuple[int, bool]:
-    effective_def = defender.defense * (1 - attacker.armor_pen)
+    effective_def = defender.endurance * (1 - attacker.armor_pen)
     if defender.bracing_rounds > 0:
         effective_def *= 1.6  # bracing defensively to survive — the whole point of not fleeing
     power = attacker.intelligence if attacker.power_stat == "intelligence" else attacker.strength
@@ -661,7 +670,9 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             health=h["health"], max_health=h["max_health"],
             strength=h["strength"], intelligence=h["intelligence"],
             agility=h["agility"], morale=h["morale"], stress=h["stress"],
-            defense=h.get("defense", 5), power_stat=h.get("power_stat", "strength"),
+            defense=h.get("defense", 5), endurance=h.get("endurance", h.get("defense", 5)),
+            willpower=h.get("willpower", 6), luck=h.get("luck", 5),
+            power_stat=h.get("power_stat", "strength"),
             dmg_reduction_pct=h.get("dmg_reduction_pct", 0.0),
             trauma=h.get("trauma", 0),
             hero_class=h.get("hero_class", "Classless"),
@@ -692,7 +703,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             construct_unit = CombatUnit(
                 id=construct_id, name=f"{h['name']}'s Construct",
                 level=h.get("level", 1),
-                health=c_hp, max_health=c_hp, strength=c_atk, intelligence=0, defense=c_def, agility=c_spd,
+                health=c_hp, max_health=c_hp, strength=c_atk, intelligence=0, defense=c_def, endurance=c_def, agility=c_spd,
                 morale=100, stress=0, hero_class="Construct", fear_immune=True
             )
             combatants_heroes.append(construct_unit)
@@ -765,7 +776,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
         if atk_mult != 1 or def_mult != 1 or crit_bonus:
             for h in combatants_heroes:
                 if atk_mult != 1: h.strength = int(h.strength * atk_mult)
-                if def_mult != 1: h.defense = int(h.defense * def_mult)
+                if def_mult != 1: h.endurance = int(h.endurance * def_mult)
                 if crit_bonus: h.crit_chance += crit_bonus
         if bonus.get("fear_resist"):
             fear_resist_mult = 1 - min(0.6, bonus["fear_resist"] * leader_star_mult)
@@ -774,8 +785,8 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
     # Encounter power ratio (enemy power / hero power) — gates universal
     # panic susceptibility below; a lopsided fight panics people regardless
     # of star, a clean win rarely does even for a 1-star.
-    hero_power = sum(h.strength + h.intelligence + h.defense + h.max_health * 0.05 for h in combatants_heroes) or 1
-    enemy_power = sum(e.strength + e.defense + e.max_health * 0.05 for e in enemies) or 1
+    hero_power = sum(h.strength + h.intelligence + h.endurance + h.max_health * 0.05 for h in combatants_heroes) or 1
+    enemy_power = sum(e.strength + e.endurance + e.max_health * 0.05 for e in enemies) or 1
     power_ratio = enemy_power / hero_power
 
     damage_dealt_stats = {h.id: 0 for h in combatants_heroes}
@@ -1068,7 +1079,11 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
                     base_info = _conn.execute("SELECT global_buffs FROM base WHERE id = 1").fetchone()
                     buffs = __import__('json').loads(base_info["global_buffs"] or "{}") if base_info else {}
             from services.equipment_service import generate_equipment_drop
-            drop_bonus = buffs.get("drop_boost", 0) * 0.05
+            # Luck is averaged across the deployed team, not taken from a
+            # single hero — a team-comp consideration, not "stack one lucky
+            # hero and ignore the rest."
+            avg_luck = sum(h.luck for h in combatants_heroes) / max(1, len(combatants_heroes))
+            drop_bonus = buffs.get("drop_boost", 0) * 0.05 + avg_luck / 100
             equip = generate_equipment_drop(floor_number, is_boss, drop_bonus)
             if equip:
                 result["equipment_drop"] = equip
@@ -1085,7 +1100,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             from services.materials_service import CRAFTING_MATERIALS, tiered_material_name
             drops = {}
             for _ in range(random.randint(2, 4)):
-                mat = tiered_material_name(random.choice(CRAFTING_MATERIALS))
+                mat = tiered_material_name(random.choice(CRAFTING_MATERIALS), avg_luck=avg_luck)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops
 
@@ -1093,7 +1108,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
                 result["gold_gained"] += int(1500 * (1 + (floor_number/10)))
                 result["supplies_gained"] += 10
                 for _ in range(5):
-                    mat = tiered_material_name(random.choice(CRAFTING_MATERIALS))
+                    mat = tiered_material_name(random.choice(CRAFTING_MATERIALS), avg_luck=avg_luck)
                     drops[mat] = drops.get(mat, 0) + 1
                 result["materials_gained"] = drops
         except Exception as e:

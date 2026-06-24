@@ -350,6 +350,7 @@ def apply_class_combat_modifiers(hero: dict) -> dict:
     h["strength"] = int(h["strength"] * mods.get("atk_mult", 1.0))
     h["intelligence"] = int(h["intelligence"] * mods.get("atk_mult", 1.0) if mods.get("power_stat") == "intelligence" else h["intelligence"])
     h["defense"] = int(h.get("defense", 5) * mods.get("def_mult", 1.0))
+    h["endurance"] = int(h.get("endurance", h.get("defense", 5)) * mods.get("def_mult", 1.0))
     h["agility"] = int(h["agility"] * mods.get("spd_mult", 1.0))
     h["max_health"] = int(h["max_health"] * mods.get("hp_mult", 1.0))
     h["health"] = int(h["health"] * mods.get("hp_mult", 1.0))

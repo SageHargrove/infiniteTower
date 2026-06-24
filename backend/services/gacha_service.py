@@ -31,26 +31,39 @@ def pull_rarity(min_star: int = 1, max_star: int = 7) -> int:
             return star
     return min_star
 
+# Health is no longer its own rolled stat — Endurance (the old Defense slot)
+# now drives it directly, so a hero's effective tankiness is one number, not
+# two independently-rolled ones. See HP_FLOOR/HP_PER_ENDURANCE below.
+HP_FLOOR = 20
+HP_PER_ENDURANCE = 12
+
+def health_from_endurance(endurance: int) -> int:
+    return HP_FLOOR + int(endurance) * HP_PER_ENDURANCE
+
 def generate_base_stats(birth_star: int) -> dict:
     """
     Base stats scale with birth star, but not linearly.
     High birth star = strong start, less room for surprise growth.
     """
     base = {
-        1: {"health": 80,  "strength": 8,  "intelligence": 4,  "defense": 5, "agility": 9},
-        2: {"health": 95,  "strength": 10, "intelligence": 5,  "defense": 6, "agility": 10},
-        3: {"health": 115, "strength": 13, "intelligence": 7,  "defense": 8, "agility": 11},
-        4: {"health": 140, "strength": 17, "intelligence": 9,  "defense": 10, "agility": 12},
-        5: {"health": 175, "strength": 22, "intelligence": 12, "defense": 14, "agility": 14},
-        6: {"health": 220, "strength": 30, "intelligence": 16, "defense": 18, "agility": 16},
-        7: {"health": 300, "strength": 42, "intelligence": 22, "defense": 26, "agility": 20},
+        1: {"strength": 8,  "intelligence": 4,  "endurance": 5,  "agility": 9,  "willpower": 6,  "luck": 5},
+        2: {"strength": 10, "intelligence": 5,  "endurance": 6,  "agility": 10, "willpower": 7,  "luck": 6},
+        3: {"strength": 13, "intelligence": 7,  "endurance": 8,  "agility": 11, "willpower": 9,  "luck": 7},
+        4: {"strength": 17, "intelligence": 9,  "endurance": 10, "agility": 12, "willpower": 12, "luck": 8},
+        5: {"strength": 22, "intelligence": 12, "endurance": 14, "agility": 14, "willpower": 16, "luck": 9},
+        6: {"strength": 30, "intelligence": 16, "endurance": 18, "agility": 16, "willpower": 21, "luck": 10},
+        7: {"strength": 42, "intelligence": 22, "endurance": 26, "agility": 20, "willpower": 28, "luck": 12},
     }
     stats = base[birth_star].copy()
     # Add some variance per hero (+/- 10%)
     for key in stats:
         variance = random.uniform(0.9, 1.1)
         stats[key] = max(1, int(stats[key] * variance))
-    stats["max_health"] = stats["health"]
+    # defense is the legacy column name still read by a few old call sites —
+    # kept in sync with endurance rather than removed, see database.py migration notes.
+    stats["defense"] = stats["endurance"]
+    stats["max_health"] = health_from_endurance(stats["endurance"])
+    stats["health"] = stats["max_health"]
     return stats
 
 # Generation gives every hero a class-neutral STR/INT split — a Mage would

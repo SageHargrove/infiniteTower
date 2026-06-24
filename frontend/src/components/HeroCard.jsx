@@ -606,13 +606,15 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
           <div className="stats-row">
             <div className="stat" title={`Base: ${hero.base_strength ?? hero.strength}`}>STR <span>{hero.strength}</span></div>
             <div className="stat" title={`Base: ${hero.base_intelligence ?? hero.intelligence}`}>INT <span>{hero.intelligence}</span></div>
-            <div className="stat" title={`Base: ${hero.base_defense ?? hero.defense ?? 5}`}>DEF <span>{hero.defense ?? 5}</span></div>
+            <div className="stat" title={`Base: ${hero.base_endurance ?? hero.endurance ?? 5}`}>END <span>{hero.endurance ?? 5}</span></div>
             <div className="stat" title={`Base: ${hero.base_agility ?? hero.agility}`}>AGI <span>{hero.agility}</span></div>
+            <div className="stat" title={`Base: ${hero.base_willpower ?? hero.willpower ?? 6}`}>WIL <span>{hero.willpower ?? 6}</span></div>
           </div>
 
           {showFull && (
             <div style={{ marginTop: '0.75em', borderTop: '1px solid var(--border)', paddingTop: '0.75em' }}>
               <div className="stats-row" style={{ marginTop: '0.5em' }}>
+                <div className="stat" title={`Base: ${hero.base_luck ?? hero.luck ?? 5}`}>Luck <span>{hero.luck ?? 5}</span></div>
                 <div className="stat">Kills <span>{hero.kills}</span></div>
                 <div className="stat">Floors <span>{hero.floors_survived}</span></div>
                 <div className="stat">Stress <span>{hero.stress}</span></div>

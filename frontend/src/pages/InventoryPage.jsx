@@ -409,9 +409,11 @@ export default function InventoryPage() {
                     {[
                       ['Strength', selectedItem.base_str, v => `+${v}`],
                       ['Intelligence', selectedItem.base_int, v => `+${v}`],
-                      ['Defense', selectedItem.base_def, v => `+${v}`],
+                      ['Endurance', selectedItem.base_end, v => `+${v}`],
                       ['Max Health', selectedItem.base_hlt, v => `+${v}`],
                       ['Agility', selectedItem.base_agi, v => `+${v}`],
+                      ['Willpower', selectedItem.base_wil, v => `+${v}`],
+                      ['Luck', selectedItem.base_luck, v => `+${v}`],
                       ['Strength %', selectedItem.str_pct, v => `+${(v * 100).toFixed(0)}%`],
                       ['Intelligence %', selectedItem.int_pct, v => `+${(v * 100).toFixed(0)}%`],
                       ['Max Health %', selectedItem.hlt_pct, v => `+${(v * 100).toFixed(0)}%`],
@@ -426,7 +428,8 @@ export default function InventoryPage() {
                         <span className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>{fmt(val)}</span>
                       </div>
                     ))}
-                    {[selectedItem.base_str, selectedItem.base_int, selectedItem.base_def, selectedItem.base_hlt, selectedItem.base_agi,
+                    {[selectedItem.base_str, selectedItem.base_int, selectedItem.base_end, selectedItem.base_hlt, selectedItem.base_agi,
+                      selectedItem.base_wil, selectedItem.base_luck,
                       selectedItem.str_pct, selectedItem.int_pct, selectedItem.hlt_pct, selectedItem.agi_pct,
                       selectedItem.crit_chance, selectedItem.dodge_chance, selectedItem.armor_pen, selectedItem.dmg_reduction_pct
                     ].every(v => !v) && (

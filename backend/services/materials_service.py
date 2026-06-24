@@ -12,11 +12,19 @@ CRAFTING_MATERIALS = [
 MATERIAL_TIERS = ["D", "C", "B", "A", "S"]
 MATERIAL_TIER_WEIGHTS = [0.45, 0.30, 0.16, 0.07, 0.02]
 
-def roll_material_tier() -> str:
-    return random.choices(MATERIAL_TIERS, weights=MATERIAL_TIER_WEIGHTS, k=1)[0]
+def roll_material_tier(avg_luck: float = 5.0) -> str:
+    """Each tier is an independent weighted pick — there's no single
+    multiplier point to scale by Luck without restructuring the weights
+    themselves. Light-touch compromise instead: a roll that lands on the
+    lowest tier ("D") gets a Luck-scaled chance to bump up one tier, rather
+    than rewriting the weighting system."""
+    tier = random.choices(MATERIAL_TIERS, weights=MATERIAL_TIER_WEIGHTS, k=1)[0]
+    if tier == "D" and random.random() < min(0.5, avg_luck / 50):
+        tier = MATERIAL_TIERS[1]
+    return tier
 
-def tiered_material_name(base_name: str, tier: str = None) -> str:
-    return f"{base_name} ({tier or roll_material_tier()})"
+def tiered_material_name(base_name: str, tier: str = None, avg_luck: float = 5.0) -> str:
+    return f"{base_name} ({tier or roll_material_tier(avg_luck)})"
 
 def base_material_name(tiered_name: str) -> str:
     """Strip the "(tier)" suffix, if present, back to the plain base name —

@@ -655,7 +655,8 @@ def resolve_explore_floor_choice(data: ResolveExploreRequest):
 
         # Loot is a bonus on top of the fight — only rolls if the fight was won.
         if not result.get("run_over"):
-            loot_result = resolve_explore_loot(template, choice)
+            avg_luck = sum(h.get("luck", 5) for h in hero_list) / max(1, len(hero_list))
+            loot_result = resolve_explore_loot(template, choice, avg_luck)
             result["explore_loot"] = loot_result
             loot = loot_result.get("loot", {})
             if loot.get("type") == "gold":

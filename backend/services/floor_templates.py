@@ -122,12 +122,15 @@ def get_explore_choice(template: dict, choice_id: str) -> dict:
     return next((c for c in template["choices"] if c["id"] == choice_id), template["choices"][1])
 
 
-def resolve_explore_loot(template: dict, choice: dict) -> dict:
+def resolve_explore_loot(template: dict, choice: dict, avg_luck: float = 5.0) -> dict:
     """Roll for bonus loot after a real fight has already been won — the
     fight itself (sized by enemy_count_mod) carries the actual danger now;
-    this just decides what extra the choice's thoroughness turned up."""
+    this just decides what extra the choice's thoroughness turned up.
+    avg_luck is the deployed team's average Luck stat (team-wide, not a
+    single hero) nudging the discovery roll, same pattern as combat's
+    equipment drop bonus."""
     log = []
-    discovery = template["discovery_chance"] + choice["discovery_bonus"]
+    discovery = template["discovery_chance"] + choice["discovery_bonus"] + (avg_luck / 200)
     found_something = random.random() < discovery
 
     loot = {}

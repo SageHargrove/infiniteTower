@@ -363,15 +363,15 @@ def pull_heroes(req: PullRequest):
                 INSERT INTO heroes (
                     name, title, backstory, personality, portrait_path, gender,
                     birth_star, hero_class, hidden_class, can_pilot, level, skills, traits,
-                    health, max_health, strength, intelligence, defense, agility,
+                    health, max_health, strength, intelligence, defense, endurance, agility, willpower, luck,
                     apt_combat, apt_tactical, apt_survival, apt_mental, apt_leadership, apt_diligence,
                     synergy_group, ego_type
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 profile.name, profile.title, profile.backstory,
                 profile.personality, portrait_path, getattr(profile, "gender", "unknown"),
                 birth_star, hero_class, hidden_class, pilot, 1, skills_json, traits_json,
-                stats["health"], stats["max_health"], stats["strength"], stats["intelligence"], stats["defense"], stats["agility"],
+                stats["health"], stats["max_health"], stats["strength"], stats["intelligence"], stats["defense"], stats["endurance"], stats["agility"], stats["willpower"], stats["luck"],
                 aptitudes["apt_combat"], aptitudes["apt_tactical"], aptitudes["apt_survival"],
                 aptitudes["apt_mental"], aptitudes["apt_leadership"], aptitudes["apt_diligence"],
                 current_synergy, getattr(profile, "ego_type", None)
@@ -604,14 +604,14 @@ def spark_redeem():
             INSERT INTO heroes (
                 name, title, backstory, personality, portrait_path, gender,
                 birth_star, hero_class, hidden_class, can_pilot, level, skills, traits,
-                health, max_health, strength, intelligence, defense, agility,
+                health, max_health, strength, intelligence, defense, endurance, agility, willpower, luck,
                 apt_combat, apt_tactical, apt_survival, apt_mental, apt_leadership, apt_diligence
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             profile.name, profile.title, profile.backstory,
             profile.personality, portrait_path, getattr(profile, "gender", "unknown"),
             birth_star, hero_class, hidden_class, pilot, 1, skills_json, traits_json,
-            stats["health"], stats["max_health"], stats["strength"], stats["intelligence"], stats["defense"], stats["agility"],
+            stats["health"], stats["max_health"], stats["strength"], stats["intelligence"], stats["defense"], stats["endurance"], stats["agility"], stats["willpower"], stats["luck"],
             aptitudes["apt_combat"], aptitudes["apt_tactical"],
             aptitudes["apt_survival"], aptitudes["apt_mental"],
             aptitudes["apt_leadership"], aptitudes["apt_diligence"]

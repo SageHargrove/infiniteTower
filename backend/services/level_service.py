@@ -90,6 +90,9 @@ def stat_multiplier(level: int, growth_mult: float = 1.0) -> float:
     return 1.0 + (level - 1) * 0.02 * growth_mult
 
 def hp_multiplier(level: int, growth_mult: float = 1.0) -> float:
+    """Endurance's own per-level rate — it inherited Health's growth weight
+    when Health stopped being independently rolled, so it grows at the
+    faster rate Health used to use (3%/level), not flat Defense's old 2%."""
     return 1.0 + (level - 1) * 0.03 * growth_mult
 
 def apply_level_to_stats(hero: dict) -> dict:
@@ -106,11 +109,19 @@ def apply_level_to_stats(hero: dict) -> dict:
     sm = stat_multiplier(level, gm)
     hm = hp_multiplier(level, gm)
 
+    from services.gacha_service import health_from_endurance
+
     h["strength"]  = int(h["strength"]  * sm)
     h["intelligence"] = int(h["intelligence"] * sm)
-    h["defense"] = int(h.get("defense", 5) * sm)
     h["agility"]   = int(h["agility"]   * sm)
-    h["max_health"]  = int(h["max_health"]  * hm)
+    h["willpower"] = int(h.get("willpower", 6) * sm)
+    # Luck deliberately does NOT scale with level — it already grows gently
+    # across star rank (see generate_base_stats), and a level-scaled Luck on
+    # top of that risks snowballing combat/exploration drop rates at high
+    # level. It stays at whatever was rolled at creation.
+    h["endurance"] = int(h.get("endurance", h.get("defense", 5)) * hm)
+    h["defense"] = h["endurance"]  # legacy mirror, see database.py migration notes
+    h["max_health"] = health_from_endurance(h["endurance"])
     # Current Health scales proportionally
     hp_ratio = h["health"] / max(1, hero["max_health"])
     h["health"] = int(h["max_health"] * hp_ratio)

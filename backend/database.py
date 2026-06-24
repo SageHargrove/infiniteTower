@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import os
+import random
 from contextlib import contextmanager
 
 SAVES_DIR = "saves"
@@ -107,6 +108,12 @@ CREATE TABLE IF NOT EXISTS heroes (
             intelligence INTEGER DEFAULT 5,
             defense INTEGER DEFAULT 5,
             agility INTEGER DEFAULT 10,
+            -- defense is legacy/inert — endurance replaces it (mitigation +
+            -- drives max_health) and is backfilled from defense on migration.
+            -- See the ALTER TABLE block below for willpower/luck backfill too.
+            endurance INTEGER DEFAULT 5,
+            willpower INTEGER DEFAULT 6,
+            luck INTEGER DEFAULT 5,
 
             -- Hidden aptitudes (0-100 each)
             apt_combat INTEGER DEFAULT 50,
@@ -249,6 +256,9 @@ CREATE TABLE IF NOT EXISTS equipment (
             base_hlt INTEGER DEFAULT 0,
             base_agi INTEGER DEFAULT 0,
             base_def INTEGER DEFAULT 0,
+            base_end INTEGER DEFAULT 0,
+            base_wil INTEGER DEFAULT 0,
+            base_luck INTEGER DEFAULT 0,
             str_pct REAL DEFAULT 0.0,
             int_pct REAL DEFAULT 0.0,
             hlt_pct REAL DEFAULT 0.0,
@@ -302,6 +312,10 @@ CREATE TABLE IF NOT EXISTS hero_bonds (
 );
 
 INSERT OR IGNORE INTO base (id) VALUES (1);
+INSERT INTO facilities (base_id, type, slots_unlocked) 
+SELECT 1, 'Training Center', 1 
+WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE type = 'Training Center');
+
 
 
 
@@ -386,6 +400,44 @@ INSERT OR IGNORE INTO base (id) VALUES (1);
                 "OR EXISTS (SELECT 1 FROM heroes)"
             )
             print("[DB] Migrated: added column 'tutorial_complete' to base")
+        except sqlite3.OperationalError:
+            pass
+
+        # Stat rework: Endurance replaces Defense (same mitigation role, but
+        # also drives max_health going forward) and Willpower/Luck are new.
+        # Old defense/base_def columns are left in place, inert, rather than
+        # risking a SQLite column rename/drop on live save files.
+        try:
+            conn.execute("ALTER TABLE heroes ADD COLUMN endurance INTEGER DEFAULT 5")
+            conn.execute("UPDATE heroes SET endurance = defense")
+            print("[DB] Migrated: added column 'endurance' to heroes (backfilled from defense)")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE heroes ADD COLUMN willpower INTEGER DEFAULT 6")
+            conn.execute("ALTER TABLE heroes ADD COLUMN luck INTEGER DEFAULT 5")
+            # Existing heroes have no prior willpower/luck to copy — roll them
+            # fresh, scaled to birth_star same as new hero generation, so
+            # already-pulled heroes aren't punished relative to future pulls.
+            wil_by_star = {1: 6, 2: 7, 3: 9, 4: 12, 5: 16, 6: 21, 7: 28}
+            luck_by_star = {1: 5, 2: 6, 3: 7, 4: 8, 5: 9, 6: 10, 7: 12}
+            rows = conn.execute("SELECT id, birth_star FROM heroes").fetchall()
+            for r in rows:
+                star = r["birth_star"] or 1
+                wil = max(1, int(wil_by_star.get(star, 6) * random.uniform(0.9, 1.1)))
+                luck = max(1, int(luck_by_star.get(star, 5) * random.uniform(0.9, 1.1)))
+                conn.execute("UPDATE heroes SET willpower = ?, luck = ? WHERE id = ?", (wil, luck, r["id"]))
+            print(f"[DB] Migrated: added columns 'willpower'/'luck' to heroes, backfilled {len(rows)} hero(es)")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE equipment ADD COLUMN base_end INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE equipment ADD COLUMN base_wil INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE equipment ADD COLUMN base_luck INTEGER DEFAULT 0")
+            conn.execute("UPDATE equipment SET base_end = base_def")
+            print("[DB] Migrated: added columns 'base_end'/'base_wil'/'base_luck' to equipment (base_end backfilled from base_def)")
         except sqlite3.OperationalError:
             pass
 
