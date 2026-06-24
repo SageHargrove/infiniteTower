@@ -333,7 +333,7 @@ CLASS_MODIFIERS = {
     "Scout": {"team_spd_mult": 1.10},
     
     # Tier 2 Support Deployed (Lv 30)
-    "Strategist": {"team_def_mult": 1.20},
+    "Strategist": {"team_end_mult": 1.20},
     "Commander": {"team_atk_mult": 1.25},
     "Advisor": {"team_xp_mult": 1.20},
     "Pathfinder": {"trap_immune": True},
@@ -366,9 +366,10 @@ def apply_class_combat_modifiers(hero: dict) -> dict:
     if "lifesteal" in mods: h["lifesteal"] = mods["lifesteal"]
     if "armor_pen" in mods: h["armor_pen"] = mods["armor_pen"]
     if "multi_hit" in mods: h["multi_hit"] = mods["multi_hit"]
-    if "team_atk_mult" in mods: h["team_atk_mult"] = mods["team_atk_mult"]
-    if "team_def_mult" in mods: h["team_def_mult"] = mods["team_def_mult"]
-    if "team_spd_mult" in mods: h["team_spd_mult"] = mods["team_spd_mult"]
+    leader_mult = 1.5 if h.get("is_team_leader") else 1.0
+    if "team_atk_mult" in mods: h["team_atk_mult"] = 1.0 + ((mods["team_atk_mult"] - 1.0) * leader_mult)
+    if "team_end_mult" in mods: h["team_end_mult"] = 1.0 + ((mods["team_end_mult"] - 1.0) * leader_mult)
+    if "team_spd_mult" in mods: h["team_spd_mult"] = 1.0 + ((mods["team_spd_mult"] - 1.0) * leader_mult)
     
     return h
 

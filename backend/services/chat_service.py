@@ -120,8 +120,17 @@ def generate_hero_chat() -> dict:
             tenure_note = " [Arrived recently - still getting their bearings, may ask questions others take for granted.]"
         chatter_profiles.append(f"- {h['name']}: Lvl {h['level']} {h['hero_class']}{ego}. Personality: {h['personality']}{tenure_note}")
 
+    has_restaurant = any(f["type"] == "Restaurant" for f in facilities)
+    has_chef = any(h["hero_class"] == "Chef" for h in heroes_dict_list)
+
+    food_activity = "complaining about eating bland potatoes/rations"
+    if has_restaurant and has_chef:
+        food_activity = "praising the food or discussing the Chef's cooking"
+    elif has_restaurant:
+        food_activity = "complaining about the food being bland, but admitting it's better than rations"
+
     activities = [
-        "playing a card game", "cleaning their weapons", "bickering over food", 
+        "playing a card game", "cleaning their weapons", food_activity, 
         "complaining about the smell", "bragging about a recent kill", 
         "nervously discussing the Tower", "enjoying a rare moment of peace",
         "arguing over a trivial matter", "sharing a rumor they heard"

@@ -11,11 +11,11 @@ env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
 
 from database import init_db, db
-from routers import heroes, gacha, tower, base, runs, equipment, profiles, chat, relics
+from routers import heroes, gacha, tower, base, runs, equipment, profiles, chat, relics, crafting
 
 init_db()
 
-app = FastAPI(title="Infinite Gacha Tower Backend")
+app = FastAPI(title="Tower of Eternity Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,6 +57,7 @@ async def startup():
     threading.Thread(target=_reconcile_loop, daemon=True).start()
     print("Portrait and Chat workers started.")
 
+
 app.include_router(heroes.router, prefix="/heroes", tags=["heroes"])
 app.include_router(gacha.router, prefix="/gacha", tags=["gacha"])
 app.include_router(tower.router, prefix="/tower", tags=["Tower"])
@@ -66,6 +67,7 @@ app.include_router(equipment.router, prefix="/equipment", tags=["Equipment"])
 app.include_router(relics.router, prefix="/relics", tags=["Relics"])
 app.include_router(profiles.router, prefix="/profiles", tags=["Profiles"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
+app.include_router(crafting.router, prefix="/forge", tags=["Forge"])
 
 
 @app.get("/portrait-cache/status")

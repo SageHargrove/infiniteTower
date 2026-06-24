@@ -89,7 +89,14 @@ def delete_profile(req: ProfileDeleteReq):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Profile not found")
         
-    os.remove(path)
+    try:
+        os.remove(path)
+        if os.path.exists(path + "-wal"):
+            os.remove(path + "-wal")
+        if os.path.exists(path + "-shm"):
+            os.remove(path + "-shm")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete profile: {e}")
     
     portraits_dir = f"static/portraits/{name}"
     if os.path.exists(portraits_dir):

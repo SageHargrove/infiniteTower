@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { pullHeroes, getOdds, getEquipmentOdds, getBase, getPityInfo, redeemSpark, redeemEquipSpark, pullEquipment } from '../api/client'
 import HeroCard from '../components/HeroCard'
 import SummoningOverlay from '../components/SummoningOverlay'
+import FairyTip from '../components/FairyTip'
+
+// Mirrors backend services/class_service.py's is_combat_class() exclusion
+// list — these classes can't be deployed to fight, only assigned to base
+// facilities, which isn't obvious the first time you pull one.
+const NON_COMBAT_CLASSES = ["Chef", "Blacksmith", "Quartermaster", "Alchemist", "Priest"]
 
 export default function SummonPage({ onGoldChange }) {
   const [activeTab, setActiveTab] = useState('heroes')
@@ -25,13 +31,15 @@ export default function SummonPage({ onGoldChange }) {
   const [usePortrait, setUsePortrait] = useState(true)
   const [expandedId, setExpandedId] = useState(null)
   const [showAnimation, setShowAnimation] = useState(false)
+  const [fairyGender, setFairyGender] = useState('female')
+  const [fairyTip, setFairyTip] = useState({ show: false, message: '' })
 
   useEffect(() => {
     refreshData()
   }, [])
 
   async function refreshData() {
-    getBase().then(b => { setGold(b.gold); setGems(b.gems || 0); })
+    getBase().then(b => { setGold(b.gold); setGems(b.gems || 0); setFairyGender(b.fairy_gender) })
     getOdds().then(setOdds)
     getOdds('gold').then(setGoldOdds)
     getEquipmentOdds('gold').then(setEquipGoldOdds)
@@ -50,6 +58,18 @@ export default function SummonPage({ onGoldChange }) {
       if (currency === 'gold') setGold(g => g - cost)
       else setGems(g => g - cost)
       setShowAnimation(true)
+
+      if (!localStorage.getItem('seen_noncombat_tip')) {
+        const noncombat = data.pulled.find(h => NON_COMBAT_CLASSES.includes(h.hero_class))
+        if (noncombat) {
+          localStorage.setItem('seen_noncombat_tip', 'true')
+          setFairyTip({
+            show: true,
+            message: `${noncombat.name} is a ${noncombat.hero_class} — not a combat class! Assign them to a Facility back at your Base instead of deploying them to the Tower.`
+          })
+          setTimeout(() => setFairyTip(t => ({ ...t, show: false })), 12000)
+        }
+      }
       await refreshData()
       if (onGoldChange) onGoldChange()
     } catch (e) {
@@ -112,6 +132,13 @@ export default function SummonPage({ onGoldChange }) {
 
   return (
     <div className="page">
+      <FairyTip
+        show={fairyTip.show}
+        message={fairyTip.message}
+        fairyGender={fairyGender}
+        onDismiss={() => setFairyTip(t => ({ ...t, show: false }))}
+      />
+
       {showAnimation && results.length > 0 && (
         <SummoningOverlay
           results={results}

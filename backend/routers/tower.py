@@ -223,6 +223,13 @@ def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, z
         equip["id"] = save_equipment(equip, conn=conn)
         result["equipment_drop"] = equip
 
+    if combat_result["winner"] == "heroes" and random.random() < 0.15:
+        undiscovered = conn.execute("SELECT id, name FROM recipes WHERE is_discovered = 0 ORDER BY RANDOM() LIMIT 1").fetchone()
+        if undiscovered:
+            conn.execute("UPDATE recipes SET is_discovered = 1 WHERE id = ?", (undiscovered["id"],))
+            result["blueprint_found"] = undiscovered["name"]
+            combat_result.setdefault("log", []).append(f"📜 Found a new Blueprint: {undiscovered['name']}!")
+
     if combat_result.get("relic_drop"):
         result["relic_drop"] = combat_result["relic_drop"]
 
@@ -422,18 +429,39 @@ def enter_floor(req: EnterFloorRequest):
         elif not result.get("run_over") and not result.get("awaiting_choice"):
             survivors = hero_list
 
+        is_first_clear = req.floor_number > base_row["highest_floor"]
+        combat_won = result.get("combat", {}).get("winner") == "heroes"
+        is_sole_survivor = combat_won and is_boss and len(survivors) == 1
+
         for s in survivors:
             hid = s["id"]
             surviving_ids.append(hid)
             kills_gained = s.get("kills_gained", 0)
             stress_delta = s.get("stress_delta", 0)
+            
+            hero_row = conn.execute("SELECT team_position FROM heroes WHERE id = ?", (hid,)).fetchone()
+            is_leader = hero_row and hero_row["team_position"] == 0
+            
+            u_sole = 1 if is_sole_survivor else 0
+            u_leader = 1 if (is_leader and combat_won) else 0
+            u_first = 1 if (is_first_clear and combat_won) else 0
+
             conn.execute("""
                 UPDATE heroes SET
                     floors_survived = floors_survived + 1,
                     kills = kills + ?,
+                    lifetime_kills = lifetime_kills + ?,
+                    sole_survivor_boss_clears = sole_survivor_boss_clears + ?,
+                    leader_clears = leader_clears + ?,
+                    unique_floor_clears = unique_floor_clears + ?,
                     stress = MIN(100, MAX(0, stress + ?))
                 WHERE id = ?
-            """, (kills_gained, stress_delta, hid))
+            """, (kills_gained, kills_gained, u_sole, u_leader, u_first, stress_delta, hid))
+
+            from services.title_service import check_and_assign_titles
+            new_titles = check_and_assign_titles(conn, hid)
+            if new_titles:
+                result.setdefault("log", []).extend(new_titles)
 
             # Recalculate level
             hero_row = conn.execute("SELECT * FROM heroes WHERE id = ?", (hid,)).fetchone()

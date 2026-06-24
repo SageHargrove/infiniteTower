@@ -7,7 +7,10 @@ def get_floor_lp(conn, base_floor: int) -> dict:
             count += 1
             
     total_lp = base_floor * 100
-    lp_per_hero = total_lp // max(1, count)
+    
+    import math
+    c = max(1, count)
+    lp_per_hero = int(total_lp * (1.0 / math.sqrt(c)))
     stat_bonus_pct = lp_per_hero // 10
     
     return {

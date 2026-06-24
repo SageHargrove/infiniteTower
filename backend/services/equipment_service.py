@@ -367,37 +367,15 @@ def generate_equipment_drop(floor_number: int, is_boss: bool = False, drop_bonus
     eq_type = random.choice(TYPES)
     mult = RARITY_MULTS[rarity]
     
-    base_str = base_int = base_hlt = base_agi = 0
-    crit = dodge = armor_pen = 0.0
-    str_pct = int_pct = hlt_pct = agi_pct = 0.0
-    scale = int(10 * mult)
-    
-    if eq_type == "Weapon":
-        base_str = scale * random.randint(1, 3)
-        base_agi = int(scale * random.uniform(0, 0.5))
-        if random.random() < 0.3: crit = random.uniform(0.01, 0.05) * mult
-        if random.random() < 0.2: armor_pen = random.uniform(0.01, 0.05) * mult
-    elif eq_type == "Armor":
-        base_int = scale * random.randint(1, 3)
-        base_hlt = scale * random.randint(3, 8)
-    else:
-        if random.random() < 0.7: dodge = random.uniform(0.02, 0.08) * mult
-        if random.random() < 0.7: crit = random.uniform(0.02, 0.08) * mult
-        if random.random() < 0.7: armor_pen = random.uniform(0.02, 0.08) * mult
-        if random.random() < 0.5: str_pct = random.uniform(0.02, 0.06) * mult
-        if random.random() < 0.5: int_pct = random.uniform(0.02, 0.06) * mult
-        if random.random() < 0.5: hlt_pct = random.uniform(0.02, 0.06) * mult
-        if random.random() < 0.5: agi_pct = random.uniform(0.02, 0.06) * mult
+    stats = _roll_equipment_stats(eq_type, mult)
         
     adjectives = {"F-": "Broken", "F": "Rusted", "F+": "Chipped", "E-": "Poor", "E": "Basic", "E+": "Sturdy", "D-": "Standard", "D": "Polished", "D+": "Heavy", "C-": "Fine", "C": "Refined", "C+": "Balanced", "B-": "Masterwork", "B": "Exceptional", "B+": "Flawless", "A-": "Epic", "A": "Legendary", "A+": "Mythic", "S-": "Divine", "S": "Godly", "S+": "Transcendent", "SS": "Omnipotent", "SSS": "Absolute", "Z": "Eldritch"}
     adj = adjectives.get(rarity, rarity)
     name = f"{adj} {eq_type}"
 
-    with db() as conn:
-        if get_equipment_count(conn) >= get_vault_capacity(conn):
-            return None
-        cursor = conn.execute(
-            "INSERT INTO equipment (name, type, rarity, level, base_str, base_int, base_hlt, base_agi, str_pct, int_pct, hlt_pct, agi_pct, crit_chance, dodge_chance, armor_pen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, eq_type, rarity, max(1, floor_number // 5), base_str, base_int, base_hlt, base_agi, str_pct, int_pct, hlt_pct, agi_pct, crit, dodge, armor_pen)
-        )
-        return {"id": cursor.lastrowid, "name": name, "type": eq_type, "rarity": rarity}
+    result = {
+        "name": name, "type": eq_type, "rarity": rarity,
+        "level": max(1, floor_number // 5)
+    }
+    result.update(stats)
+    return result

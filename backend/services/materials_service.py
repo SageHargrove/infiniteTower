@@ -2,12 +2,47 @@ import random
 
 # Base material types — combat/explore drops roll one of these plus a tier
 # letter (matching equipment's grade vocabulary) rather than a flat
-# untiered count. Steel/Copper/Leather are new variety alongside the
-# original five.
+# untiered count. Materials are also split into four progression tiers so a
+# "Dragon Scale" can't show up on floor 2 no matter what quality letter it
+# rolls — each tier unlocks at a floor threshold and stays a minority pick
+# even once unlocked, layered on top of (not replacing) the D-S quality roll.
 CRAFTING_MATERIALS = [
     "Slime Core", "Iron Ore", "Goblin Ear", "Monster Bone", "Mystic Dust",
     "Steel", "Copper", "Leather",
 ]
+
+INTERMEDIATE_CRAFTING_MATERIALS = [
+    "Wolf Pelt", "Ogre Hide", "Hardened Bone", "Refined Iron", "Spirit Dust",
+]
+INTERMEDIATE_MATERIAL_UNLOCK_FLOOR = 15
+INTERMEDIATE_MATERIAL_DROP_CHANCE = 0.25
+
+ADVANCED_CRAFTING_MATERIALS = [
+    "Wyvern Scale", "Enchanted Steel", "Demon Ichor", "Runed Crystal",
+]
+ADVANCED_MATERIAL_UNLOCK_FLOOR = 40
+ADVANCED_MATERIAL_DROP_CHANCE = 0.20
+
+# Legendary materials are named like end-game gear components — these are
+# the rarest tier, gated the furthest out and still a minority once unlocked.
+LEGENDARY_CRAFTING_MATERIALS = [
+    "Mithril", "Adamantine", "Dragon Scale", "Phoenix Feather", "Void Crystal",
+]
+LEGENDARY_MATERIAL_UNLOCK_FLOOR = 70
+LEGENDARY_MATERIAL_DROP_CHANCE = 0.15
+
+def roll_material_name(floor_number: int = 1) -> str:
+    """Picks which base material drops. Rolls from the highest unlocked tier
+    down, so a roster floor deep enough to see legendary materials can still
+    get any lower tier too — only the common pool is unconditionally
+    available, everything else is floor-gated AND a minority chance."""
+    if floor_number >= LEGENDARY_MATERIAL_UNLOCK_FLOOR and random.random() < LEGENDARY_MATERIAL_DROP_CHANCE:
+        return random.choice(LEGENDARY_CRAFTING_MATERIALS)
+    if floor_number >= ADVANCED_MATERIAL_UNLOCK_FLOOR and random.random() < ADVANCED_MATERIAL_DROP_CHANCE:
+        return random.choice(ADVANCED_CRAFTING_MATERIALS)
+    if floor_number >= INTERMEDIATE_MATERIAL_UNLOCK_FLOOR and random.random() < INTERMEDIATE_MATERIAL_DROP_CHANCE:
+        return random.choice(INTERMEDIATE_CRAFTING_MATERIALS)
+    return random.choice(CRAFTING_MATERIALS)
 
 MATERIAL_TIERS = ["D", "C", "B", "A", "S"]
 MATERIAL_TIER_WEIGHTS = [0.45, 0.30, 0.16, 0.07, 0.02]

@@ -147,7 +147,7 @@ export default function App() {
     <div className="app">
       <header className="app-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '1rem 2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <h1 style={{ fontSize: '2.5rem', margin: 0 }}>♾️ Infinite Gacha</h1>
+          <h1 style={{ fontSize: '2.5rem', margin: 0 }}>🗼 Tower of Eternity</h1>
           <div className="text-dim" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '2rem', fontSize: '1.6rem' }}>
             Profile: <span className="text-gold" style={{ fontSize: '2.2rem', fontWeight: 'bold' }}>{activeProfile}</span>
           </div>
@@ -281,7 +281,7 @@ export default function App() {
             </div>
             
             <div className="text-dim" style={{ fontSize: '0.65rem', marginTop: '1.5rem' }}>
-              Infinite Gacha Pre-Alpha
+              Tower of Eternity Pre-Alpha
             </div>
           </div>
         </div>

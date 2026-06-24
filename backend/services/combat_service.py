@@ -552,12 +552,12 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
 
     # Pre-pass for support class buffs (Tactician, Scout, etc)
     team_atk_mult = 1.0
-    team_def_mult = 1.0
+    team_end_mult = 1.0
     team_spd_mult = 1.0
     for h in heroes:
         mods = apply_class_combat_modifiers(h)
         if "team_atk_mult" in mods: team_atk_mult *= mods["team_atk_mult"]
-        if "team_def_mult" in mods: team_def_mult *= mods["team_def_mult"]
+        if "team_end_mult" in mods: team_end_mult *= mods["team_end_mult"]
         if "team_spd_mult" in mods: team_spd_mult *= mods["team_spd_mult"]
 
     for h in heroes:
@@ -566,7 +566,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
         
         # Apply team class buffs
         if team_atk_mult > 1.0: modified["strength"] = int(modified["strength"] * team_atk_mult)
-        if team_def_mult > 1.0: modified["defense"] = int(modified.get("defense", 5) * team_def_mult)
+        if team_end_mult > 1.0: modified["endurance"] = int(modified.get("endurance", modified.get("defense", 5)) * team_end_mult)
         if team_spd_mult > 1.0: modified["agility"] = int(modified["agility"] * team_spd_mult)
         
         # Apply Depression Penalty (-75% stats)
@@ -1097,10 +1097,10 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
             result["gold_gained"] = int(300 * (1 + (floor_number/10)))
             result["supplies_gained"] = random.randint(2, 5)
             
-            from services.materials_service import CRAFTING_MATERIALS, tiered_material_name
+            from services.materials_service import roll_material_name, tiered_material_name
             drops = {}
             for _ in range(random.randint(2, 4)):
-                mat = tiered_material_name(random.choice(CRAFTING_MATERIALS), avg_luck=avg_luck)
+                mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops
 
@@ -1108,7 +1108,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
                 result["gold_gained"] += int(1500 * (1 + (floor_number/10)))
                 result["supplies_gained"] += 10
                 for _ in range(5):
-                    mat = tiered_material_name(random.choice(CRAFTING_MATERIALS), avg_luck=avg_luck)
+                    mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
                     drops[mat] = drops.get(mat, 0) + 1
                 result["materials_gained"] = drops
         except Exception as e:

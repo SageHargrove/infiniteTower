@@ -381,3 +381,62 @@ Keep multipliers between 0.7 and 2.0. The modifier should reflect the theme.
             "modifier": "Enraged",
             "hp_multiplier": 1.2, "atk_multiplier": 1.2, "def_multiplier": 1.0, "spd_multiplier": 1.0
         }
+
+def generate_creative_craft(description: str, materials: dict, power_pool: int, crafter_level: int) -> tuple[dict, str, str]:
+    prompt = f"""You are the master Blacksmith in the Tower.
+    The crafter wants to build: {description}
+    They used these materials: {materials}
+    Their crafting power limit is: {power_pool}
+    
+    Determine the best item type (weapon, armor, accessory) and name it something cool. Also create a recipe description.
+    Allocate stats based on the power limit (distribute {power_pool} points across base_str, base_int, base_hlt, base_agi, base_def, base_end, base_wil, base_luck).
+    
+    Return JSON EXACTLY like this:
+    {{
+        "recipe_name": "Name of the Recipe",
+        "recipe_desc": "Flavor text for this recipe",
+        "item_name": "Name of the Item",
+        "type": "weapon",
+        "base_str": 0,
+        "base_int": 0,
+        "base_hlt": 0,
+        "base_agi": 0,
+        "base_def": 0,
+        "base_end": 0,
+        "base_wil": 0,
+        "base_luck": 0
+    }}
+    """
+    
+    resp = call_gemini(prompt)
+    try:
+        import json
+        data = json.loads(resp.strip().strip('`').replace('json', ''))
+        
+        equip = {
+            "name": data.get("item_name", "Mysterious Craft"),
+            "type": data.get("type", "accessory"),
+            "rarity": "B", # Creative crafts are inherently better quality
+            "level": crafter_level,
+            "base_str": data.get("base_str", 0),
+            "base_int": data.get("base_int", 0),
+            "base_hlt": data.get("base_hlt", 0),
+            "base_agi": data.get("base_agi", 0),
+            "base_def": data.get("base_def", 0),
+            "base_end": data.get("base_end", 0),
+            "base_wil": data.get("base_wil", 0),
+            "base_luck": data.get("base_luck", 0),
+            "str_pct": 0.0, "int_pct": 0.0, "hlt_pct": 0.0, "agi_pct": 0.0, "def_pct": 0.0, "end_pct": 0.0, "wil_pct": 0.0, "luck_pct": 0.0, "regen_pct": 0.0
+        }
+        return equip, data.get("recipe_name", "Unknown Recipe"), data.get("recipe_desc", "A secret technique.")
+    except Exception as e:
+        # Fallback
+        equip = {
+            "name": "Failed Experiment",
+            "type": "accessory",
+            "rarity": "D",
+            "level": crafter_level,
+            "base_str": 0, "base_int": 0, "base_hlt": 0, "base_agi": 0, "base_def": 0, "base_end": 0, "base_wil": 0, "base_luck": 0,
+            "str_pct": 0.0, "int_pct": 0.0, "hlt_pct": 0.0, "agi_pct": 0.0, "def_pct": 0.0, "end_pct": 0.0, "wil_pct": 0.0, "luck_pct": 0.0, "regen_pct": 0.0
+        }
+        return equip, "Failed Recipe", "The materials were ruined."

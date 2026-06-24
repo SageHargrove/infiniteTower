@@ -220,6 +220,13 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
               </div>
             )}
 
+            {lastResult.blueprint_found && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold)', borderRadius: 6 }}>
+                <span className="text-gold">📜 Blueprint Found</span>
+                <span>{lastResult.blueprint_found}</span>
+              </div>
+            )}
+
             {lastResult.combat?.skill_upgrades && Object.entries(lastResult.combat.skill_upgrades).map(([hid, ups]) => (
               ups.map((u, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(157,78,221,0.1)', border: '1px solid #9d4edd', borderRadius: 6 }}>
@@ -238,7 +245,7 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
               </div>
             )}
 
-            {(!lastResult.gold_gained && !lastResult.gems_gained && !lastResult.equipment_drop && !lastResult.combat?.skill_upgrades && !lastResult.supplies_gained && !(lastResult.level_ups && lastResult.level_ups.length > 0) && !(lastResult.materials_gained && Object.keys(lastResult.materials_gained).length > 0)) && (
+            {(!lastResult.gold_gained && !lastResult.gems_gained && !lastResult.equipment_drop && !lastResult.blueprint_found && !lastResult.combat?.skill_upgrades && !lastResult.supplies_gained && !(lastResult.level_ups && lastResult.level_ups.length > 0) && !(lastResult.materials_gained && Object.keys(lastResult.materials_gained).length > 0)) && (
                <div className="text-dim text-center" style={{ padding: '2rem' }}>No loot found.</div>
             )}
 

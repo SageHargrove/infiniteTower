@@ -85,7 +85,7 @@ if __name__ == "__main__":
         # size — the practical way to "see everything" without going
         # fullscreen, since the window is already resizable by default.
         print("Opening application window...")
-        webview.create_window('Infinite Gacha', 'http://localhost:8000', width=1280, height=800, zoomable=True)
+        webview.create_window('Tower of Eternity', 'http://localhost:8000', width=1280, height=800, zoomable=True)
         # private_mode defaults to True in pywebview, which runs an ephemeral
         # browser profile — localStorage (sound settings, etc.) silently
         # resets every launch. A persistent storage_path next to the exe

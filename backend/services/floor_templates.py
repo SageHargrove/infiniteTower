@@ -148,12 +148,12 @@ def resolve_explore_loot(template: dict, choice: dict, avg_luck: float = 5.0) ->
     }
 
 
-from services.materials_service import CRAFTING_MATERIALS, tiered_material_name
+from services.materials_service import roll_material_name, tiered_material_name
 
 def _exploration_loot_table(floor_number: int) -> list[dict]:
     """Generate possible loot for this floor level."""
     base_gold = (30 + floor_number * 3) * 3
-    mat_name = tiered_material_name(random.choice(CRAFTING_MATERIALS))
+    mat_name = tiered_material_name(roll_material_name(floor_number))
     return [
         {"type": "gold", "amount": random.randint(base_gold, base_gold * 2), "desc": f"{base_gold}-{base_gold*2} gold"},
         {"type": "materials", "name": mat_name, "amount": random.randint(2, 4), "desc": f"{mat_name} ×{random.randint(2, 4)}"},

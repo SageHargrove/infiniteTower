@@ -603,18 +603,22 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
           <HpBar health={hero.health} maxHp={hero.max_health} />
           <MoraleBar morale={hero.morale} state={hero.morale_state || 'steady'} />
 
-          <div className="stats-row">
-            <div className="stat" title={`Base: ${hero.base_strength ?? hero.strength}`}>STR <span>{hero.strength}</span></div>
-            <div className="stat" title={`Base: ${hero.base_intelligence ?? hero.intelligence}`}>INT <span>{hero.intelligence}</span></div>
-            <div className="stat" title={`Base: ${hero.base_endurance ?? hero.endurance ?? 5}`}>END <span>{hero.endurance ?? 5}</span></div>
-            <div className="stat" title={`Base: ${hero.base_agility ?? hero.agility}`}>AGI <span>{hero.agility}</span></div>
-            <div className="stat" title={`Base: ${hero.base_willpower ?? hero.willpower ?? 6}`}>WIL <span>{hero.willpower ?? 6}</span></div>
+          <div className="stats-grid" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div className="stats-row">
+              <div className="stat" title={`Base: ${hero.base_strength ?? hero.strength}`}>STR <span>{hero.strength}</span></div>
+              <div className="stat" title={`Base: ${hero.base_intelligence ?? hero.intelligence}`}>INT <span>{hero.intelligence}</span></div>
+              <div className="stat" title={`Base: ${hero.base_endurance ?? hero.endurance ?? 5}`}>END <span>{hero.endurance ?? 5}</span></div>
+            </div>
+            <div className="stats-row">
+              <div className="stat" title={`Base: ${hero.base_agility ?? hero.agility}`}>AGI <span>{hero.agility}</span></div>
+              <div className="stat" title={`Base: ${hero.base_willpower ?? hero.willpower ?? 6}`}>WIL <span>{hero.willpower ?? 6}</span></div>
+              <div className="stat" title={`Base: ${hero.base_luck ?? hero.luck ?? 5}`}>LUC <span>{hero.luck ?? 5}</span></div>
+            </div>
           </div>
 
           {showFull && (
             <div style={{ marginTop: '0.75em', borderTop: '1px solid var(--border)', paddingTop: '0.75em' }}>
               <div className="stats-row" style={{ marginTop: '0.5em' }}>
-                <div className="stat" title={`Base: ${hero.base_luck ?? hero.luck ?? 5}`}>Luck <span>{hero.luck ?? 5}</span></div>
                 <div className="stat">Kills <span>{hero.kills}</span></div>
                 <div className="stat">Floors <span>{hero.floors_survived}</span></div>
                 <div className="stat">Stress <span>{hero.stress}</span></div>

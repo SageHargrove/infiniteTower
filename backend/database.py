@@ -28,8 +28,11 @@ if os.path.exists("game.db") and not os.path.exists(os.path.join(SAVES_DIR, "mai
     os.rename("game.db", os.path.join(SAVES_DIR, "main.db"))
 
 def get_db_path():
-    prof = ACTIVE_PROFILE if ACTIVE_PROFILE else "main"
-    return os.path.join(SAVES_DIR, f"{prof}.db")
+    if not ACTIVE_PROFILE:
+        # Don't default to "main.db" because it causes zombie profiles to respawn
+        # when background polling hits the API after deleting the last profile.
+        raise ValueError("No active profile set")
+    return os.path.join(SAVES_DIR, f"{ACTIVE_PROFILE}.db")
 
 def set_profile(profile_name):
     global ACTIVE_PROFILE
@@ -148,6 +151,12 @@ CREATE TABLE IF NOT EXISTS heroes (
             gender TEXT,
             fatigue INTEGER DEFAULT 0,
             base_floor INTEGER DEFAULT 0,
+            
+            -- Titles Tracking
+            lifetime_kills INTEGER DEFAULT 0,
+            sole_survivor_boss_clears INTEGER DEFAULT 0,
+            leader_clears INTEGER DEFAULT 0,
+            unique_floor_clears INTEGER DEFAULT 0,
             traits TEXT DEFAULT '[]',
             xp INTEGER DEFAULT 0,
             runes TEXT DEFAULT '[]',
@@ -242,6 +251,17 @@ CREATE TABLE IF NOT EXISTS hero_chat_logs (
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS recipes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            description TEXT,
+            materials_json TEXT NOT NULL, -- e.g. {"Iron": 3, "Slime": 1}
+            gold_cost INTEGER DEFAULT 0,
+            base_stat_mult REAL DEFAULT 1.0, -- multiplier for stats based on crafter power
+            is_discovered INTEGER DEFAULT 1
+        );
+
 CREATE TABLE IF NOT EXISTS equipment (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -313,6 +333,46 @@ INSERT INTO facilities (base_id, type, slots_unlocked)
 SELECT 1, 'Training Center', 1 
 WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE type = 'Training Center');
 
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Basic Sword', 'weapon', 'A sturdy basic sword.', '{"Iron Ore": 3, "Monster Bone": 1}', 100, 1.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Basic Sword');
+
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Basic Armor', 'armor', 'Standard protective gear.', '{"Slime Core": 2, "Iron Ore": 2}', 100, 1.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Basic Armor');
+
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Basic Ring', 'accessory', 'A simple ring with minor enchantments.', '{"Mystic Dust": 3, "Goblin Ear": 1}', 100, 1.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Basic Ring');
+
+-- Blueprint-discoverable recipes — hidden until found via the 15% post-combat
+-- blueprint roll (see routers/tower.py). Mix of mid-tier (common materials,
+-- found on any floor) and high-tier (gated behind the rare material pool,
+-- which itself only drops floor 30+) so later discoveries feel like a real step up.
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Steel Broadsword', 'weapon', 'A broadsword forged from refined steel.', '{"Steel": 4, "Iron Ore": 2}', 300, 1.6, 0
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Steel Broadsword');
+
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Leather Vest', 'armor', 'Light, flexible protection favoring mobility over raw defense.', '{"Leather": 4, "Copper": 1}', 250, 1.4, 0
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Leather Vest');
+
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Hunters Charm', 'accessory', 'A trinket said to favor the wearer''s fortune in the field.', '{"Goblin Ear": 3, "Mystic Dust": 2}', 280, 1.5, 0
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Hunters Charm');
+
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Mithril Chainmail', 'armor', 'Chainmail woven from mithril thread — light as cloth, hard as steel.', '{"Mithril": 3, "Steel": 3}', 900, 2.4, 0
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Mithril Chainmail');
+
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Adamantine Greatblade', 'weapon', 'A blade of near-indestructible adamantine.', '{"Adamantine": 3, "Steel": 2}', 950, 2.5, 0
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Adamantine Greatblade');
+
+INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
+SELECT 'Void Ring', 'accessory', 'A ring carved from a shard of crystallized void.', '{"Void Crystal": 2, "Mystic Dust": 3}', 1000, 2.6, 0
+WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Void Ring');
+
 
 
 
@@ -345,6 +405,12 @@ WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE type = 'Training Center');
         except sqlite3.OperationalError:
             pass
             
+        for col in ["lifetime_kills", "sole_survivor_boss_clears", "leader_clears", "unique_floor_clears"]:
+            try:
+                conn.execute(f"ALTER TABLE heroes ADD COLUMN {col} INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+
         try:
             conn.execute("ALTER TABLE heroes ADD COLUMN xp INTEGER DEFAULT 0")
             print("[DB] Migrated: added column 'xp' to heroes")

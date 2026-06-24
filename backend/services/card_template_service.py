@@ -197,7 +197,7 @@ def composite_card(hero_id: int, portrait_path: str, birth_star: int, hero_name:
         return out_path
 
     template = get_template(tier).convert("RGBA")
-    portrait = _fit_with_feathered_edges(portrait_path)
+    portrait = Image.open(portrait_path).convert("RGBA")
 
     if crop_face:
         # Keep the top ~80% (full face through chin/neck, cropping out just
