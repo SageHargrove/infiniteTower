@@ -1,158 +1,135 @@
-# Implementation Plan (Draft — Nothing Below Is Built Yet)
+# Implementation Status — Survival Floor & Enemy Roster
 
-Covers the three things explicitly deferred for discussion: the survival
-floor mechanic, the Workshop/Forge "subset" question, and the full
-enemy-roster overhaul. Existing content (all 38 current enemies, the
-current Forge/Workshop facilities) stays untouched no matter which
-direction we pick — this is additive.
+Tracks the three things originally deferred for discussion. (1) and (2)
+are resolved/built. (3) is in progress — floor 1-10's batch is built and
+tested; the rest is staged for later, one floor-range block at a time.
 
 ---
 
-## 1. Survival Floor (Boss Swarm Mechanic)
+## 1. Survival Floor (Boss Swarm Mechanic) — BUILT
 
-**The ask:** a manga-style "overwhelming swarm" boss floor — can't kill
-them all, win by surviving instead.
+A %5 miniboss floor has a 35% chance (`SWARM_SURVIVAL_CHANCE` in
+`combat_service.py`) to roll a swarm-survival encounter instead of the
+floor's usual single named miniboss — a random *alternative*, not a
+replacement for every miniboss fight. Real combat, real death risk, same
+as any other fight.
 
-**What's already true in the code (researched, not guessed):**
-- Combat's win condition today is strictly "all enemies dead" or "all
-  heroes dead" — no other exit exists (`combat_service.py`'s turn loop).
-- There's already a hard `max_rounds = 30` safety cap on every fight, and
-  a `"survival"` floor *type* already exists in `floor_templates.py` —
-  but it currently just spawns 6-8 enemies and still plays by the normal
-  kill-everyone win condition. It's a survival floor in name only right now.
-- The floor-type system already does `floor % 10 == 0` → boss,
-  `floor % 5 == 0` (not %10) → miniboss. A new floor type slots in cleanly.
-- Enemy group sizing already has a "swarm" archetype (very weak
-  individually — 0.3-0.5x stats — but spawns in bulk, up to ~20 per fight
-  currently). Spawning even more (tested architecturally fine up to
-  ~100) is not a performance wall — Python/JSON overhead at that count is
-  trivial. 1.5k like the manga obviously isn't happening, but 30-60
-  visually-implied-as-"countless" is realistic.
+- 30-50 swarm units (`SURVIVAL_SWARM_COUNT_RANGE`) plus 1-2 genuine Elites
+  mixed in (`SURVIVAL_SWARM_ELITE_COUNT_RANGE`), via
+  `make_swarm_miniboss_encounter()`.
+- Win condition: survive `SURVIVAL_TURN_LIMIT` (10) rounds with at least
+  one hero alive — killing the whole swarm early still counts as a win,
+  it's just not required. Wired via `run_combat`'s new `is_survival_swarm`
+  / `turn_limit` params.
+- Reward: same as a regular miniboss floor (see below) — no separate
+  swarm-only bonus, since "it's a miniboss round" is already the bonus.
+- Frontend: `CombatArena.jsx` shows a "Survive! Round X / N" badge instead
+  of the normal enemy-count framing when `initial_state.is_survival_swarm`
+  is set.
+- Regular (non-%5/%10) floors are unaffected — their swarm archetype is
+  still capped at 20 units, plain kill-them-all, exactly as before.
 
-**Proposed shape:**
-- New `turn_limit` parameter on `run_combat`. Win condition becomes:
-  `(all enemies dead) OR (survived turn_limit rounds with ≥1 hero alive)`.
-- Reuse the swarm archetype almost as-is for the bulk of the spawn —
-  individually trivial, dangerous in volume. Maybe layer 1-2 "Elite"
-  units into the swarm as the actual threat that can drop a hero, while
-  the swarm itself is mostly chip damage / forces hard choices.
-- Frontend needs a round counter ("Survive 4 more rounds!") instead of
-  the normal "X enemies remaining" framing.
-
-**Decided:** miniboss floors (`%5==0`, not `%10`) only — not full boss
-floors. Confirmed good idea, just scoped smaller than a true boss
-encounter.
-
-**Still open:**
-- Reward shape — flat completion bonus, or scaled by rounds survived /
-  damage dealt before the timer runs out?
-- Should heroes face real death risk here like normal combat, or is this
-  meant to feel like a softer set-piece (e.g. trauma/death disabled,
-  pure spectacle)?
-
----
+Also fixed along the way: **miniboss floors never had their own reward
+bonus tier** — only Boss floors did. Added one (`_apply_combat_drops`,
+`elif is_miniboss:`), roughly 40% of the Boss bonus. This is what makes
+swarm-survival floors feel rewarded without a bespoke bonus path.
 
 ## 2. Workshop / Forge "Subset" Question — RESOLVED, scrapped
 
-We tried the Tanner/Carpenter-as-independent-Forge-specialists design
-(each owning a slot — weapon/armor/accessory — solo-capable, with a
-teamwork bonus for stacking lines) and built it end-to-end. You decided
-against it: it meant needing high-star/talented heroes in three separate
-classes just to craft well, versus the simpler "just invest in good
-Blacksmiths" model. **Reverted.** Forge crafting is Blacksmith-only
-again, but with the nuance you wanted: quality is capped by your single
-*best* (highest-evolution-tier) Blacksmith present, not an averaged-down
-group score, and stacking more Blacksmiths of that same tier adds a
-smaller bonus on top (`forge_smith_bonus` in `class_service.py`). A pile
-of low-tier smiths can't out-craft one well-evolved one.
+Tried Blacksmith/Tanner/Carpenter as three independent Forge specialists,
+built it, then decided against it (needing high-star heroes in three
+classes just to craft well). Reverted to Blacksmith-only — quality capped
+by your single best (highest-tier) Blacksmith present, stacking same-tier
+Blacksmiths adds a smaller bonus on top (`forge_smith_bonus` in
+`class_service.py`). Closed unless a new reason to nest facilities comes up.
 
-Given that, the nested "Workshop contains Forge as a sub-station"
-structural question doesn't have an active driver anymore either — it
-was motivated by wanting Tanner/Carpenter to feel like their own thing,
-and that whole direction is gone. Treat this section as closed unless a
-genuinely new reason to nest facilities comes up later (e.g. a real
-second crafting station with its own assignment slots).
-
-One open item from the original ask that's *not* covered yet: "more
-Blacksmiths = faster work." There's no time/cooldown component to
-crafting right now — every craft is a single instant action. The
-quality-ceiling model above covers "better," not "faster." If you want
-crafting to actually take time (a queue, a cooldown reduced by crew
-size), that's a separate, bigger mechanic — flag it if you want it
-scoped.
+Still not covered: "more Blacksmiths = faster work" — crafting has no
+time/cooldown component, so there's no "faster," only "better." Separate
+ask if you want it.
 
 ---
 
-## 3. Enemy Roster Overhaul
+## 3. Enemy Roster Overhaul — floor 1-10 built, rest staged
 
-**Current state (confirmed from the actual file):** 38 enemies total,
-spread across 4 unlock-floor tiers (beginner@1, intermediate@15,
-advanced@40, legendary@70). Not zone-grouped, not Normal/Elite/Miniboss/Boss
-tiered. The only existing "boss" framing is the every-20-floors Raid Boss
-(all teams merge into one fight) — unrelated to a per-family tier system.
-**Nothing here gets deleted** — every existing enemy folds into the new
-structure as that family's "Normal" tier for its floor range.
+**Confirmed decisions from your notes:**
+- Floor-range table (below) is likely final.
+- Want Elite variants for *every* mob family eventually, in their own
+  portrait subfolder, filtered by tier (normal/elite/miniboss/boss/raid_boss).
+- Reusable mechanic library (not bespoke per-boss scripting) — confirmed.
+- Floor 50 and 100 want something extra-special (halfway point / final
+  floor) beyond the normal %10 boss treatment.
+- **Art preserve-list — do not delete, ever, without asking first:**
+  - Bosses: Lich King, Nightwing Devourer, Masked Horror (Undead Monarch
+    is "okay but could be better"). Likely destined for a later, more
+    humanoid "evil take on the 7-star" boss design direction.
+  - Enemies: Bandit, Bone Warden, Shrouded Reaper, Rotting Ghoul.
+  - If any don't end up fitting a family's archetype: ask before scrapping,
+    or reuse their prompting as inspiration for a new entry. Confirmed
+    untouched as of this pass (`portraits/enemies/*.png` and
+    `portraits/bosses/boss_*.png` for all 8 names above, verified directly).
 
-**Your proposed roster, restated as floor ranges:**
+| Floors | Family | Status |
+|---|---|---|
+| 1-10 | Slimes, Goblins, Rats, Wolves | **Built** — 5 Elites, "Goblin King" miniboss, "The Warren Tyrant" boss |
+| 11-20 | Kobolds, Skeletons, Orcs, Giant Spiders | Not started |
+| 21-30 | Hobgoblins, Ghouls, Harpies, Lizardmen | Not started |
+| 31-40 | Ogres, Trolls, Gargoyles, Wraiths | Not started |
+| 41-50 | Minotaurs, Manticores, Wyverns, Elementals | Not started — floor 50 special boss lands here |
+| 51-70 | Vampire Spawn, Chimeras, Golems, Naga | Not started |
+| 71-90 | Hydras, Giants, Death Knights, Demon Lords | Not started |
+| 91-100 | Dragons, Liches, Archdemons, Ancient Guardians | Not started — floor 100 special boss lands here |
 
-| Floors | Family |
-|---|---|
-| 1-10 | Slimes, Goblins, Rats, Wolves |
-| 11-20 | Kobolds, Skeletons, Orcs, Giant Spiders |
-| 21-30 | Hobgoblins, Ghouls, Harpies, Lizardmen |
-| 31-40 | Ogres, Trolls, Gargoyles, Wraiths |
-| 41-50 | Minotaurs, Manticores, Wyverns, Elementals |
-| 51-70 | Vampire Spawn, Chimeras, Golems, Naga |
-| 71-90 | Hydras, Giants, Death Knights, Demon Lords |
-| 91-100 | Dragons, Liches, Archdemons, Ancient Guardians |
+**What's actually built for floor 1-10** (`services/enemy_families.py`,
+`services/combat_service.py`):
+- 5 new Elites: Acid Slime (self-regen), Goblin Warrior (cleave), Goblin
+  Shaman (team-buff aura), Giant Rat Alpha (summons more Giant Rats),
+  Wolf Alpha (enrages at low HP).
+- Reusable ability library used by the above and available to any future
+  family: `summon_add`, `team_buff_aura`, `self_regen` (joins the
+  pre-existing `enrage`/`crushing_blow`/`last_stand`).
+- Miniboss (floor 5): **Goblin King** — summons Goblins, cleaves.
+- Boss (floor 10): **The Warren Tyrant** — summons Giant Rats, crushing
+  blow, last stand.
+- `_resolve_real_combat` → `run_multi_combat` looks up
+  `enemy_families.get_miniboss_override`/`get_boss_override` by exact
+  floor number; floors without an entry fall back to the old generic
+  LLM-flavored boss naming — nothing breaks for ranges not built yet.
+- Tier-specific portrait subfolders created: `portraits/enemies/elite/`,
+  `miniboss/`, `boss/`, `raid_boss/` (empty, ready for art — falls back to
+  a random existing boss portrait or the flat enemy-name lookup until
+  dedicated art exists, same graceful fallback the game already had).
 
-Plus your elite-variant examples (Goblin Warrior, Goblin Shaman, Orc
-Berserker, Skeleton Knight, Skeleton Mage, Dire Wolf Alpha, Elite Kobold
-Scout, Ogre Chieftain, Troll Champion), and the 4-tier encounter model
-from the Discord notes:
+**Also fixed (pre-existing bug, not a new feature):** `run_multi_combat`
+always built its enemy roster via the regular mob generator
+(`make_enemies`), even on Boss/Miniboss floors — `make_boss()` was only
+ever reachable via the every-20th-floor Raid Boss merge path. In practice
+this meant every Boss floor that wasn't a multiple of 20 (10, 30, 50, 70,
+90) and every Miniboss floor (5, 15, 25...) fought a regular mob
+encounter instead of an actual named unique, and never got the Boss
+reward bonus or correct frontend sprite sizing. Fixed — confirmed via
+live test that floor 10 now fights "The Warren Tyrant" specifically and
+gets the full Boss-tier gold bonus (3600 vs. the 600 it was getting before).
 
-- **Normal** — standard enemy, what's already in `ENEMY_TYPES`.
-- **Elite** — same species, better stats, one extra ability. The
-  "elite" archetype already exists mechanically (1.5x stat multiplier) —
-  just needs the ability hook added per family.
-- **Mini-Boss** — named unique variant, every 5th floor (not %10).
-  Needs a real mechanic, not just stats: "Goblin King summons goblins,"
-  "Skeleton Champion revives the fallen," etc. This is new combat logic
-  per family, not just a bigger stat block.
-- **Boss** — every 10th floor. Multiple abilities, phases, unique art,
-  special rewards. Biggest lift per-entry.
+**Not done yet (next batches, by floor-range block):**
+- Floor 11-100 families (Elites/miniboss/boss for each range).
+- Floor 50 and 100's "extra special" treatment — no design yet, just
+  flagged in `enemy_families.SPECIAL_BOSS_FLOORS` as a marker.
+- Elite variants for the pre-existing 38 enemies outside floor 1-10 (Bone
+  Warden, Troll, Ogre, etc.) — only the *new* floor 1-10 family got Elites
+  this pass, per "ship floor 1-10 end-to-end first" sequencing.
 
-**Migration plan:**
-1. Re-tag the 38 existing enemies into the floor-range table above as
-   each family's Normal tier (mostly a relabeling — floor-range tiers
-   replace the current beginner/intermediate/advanced/legendary labels,
-   though the unlock-floor *mechanism* stays the same kind of gate).
-2. Layer Elite variants onto existing families first (cheap — stats +
-   one ability, reuses existing portraits with a recolor/hint tweak
-   rather than all-new art).
-3. Build Mini-Boss mechanics one family at a time, starting with floors
-   1-10 (Slime/Goblin/Rat/Wolf) since that's the range new players see
-   first.
-4. Bosses last — they're the most expensive per-entry (full kit + phases
-   + unique art) and the floor ranges where they'd land (10, 20, 30...)
-   are further out anyway.
+---
 
-**Sequencing recommendation:** given how much manual back-and-forth the
-last monster-art pass took (silhouette bias, sexualization fixes, style
-drift — see this session's history), don't try to batch all ~100+ new
-entries at once. Ship floor 1-10's full tier set (Normal already done,
-+Elite, +Goblin King miniboss, +floor-10 boss) end-to-end first, confirm
-the art pipeline and combat-mechanic hooks both feel right, then repeat
-per floor-range block.
+## 4. Inventory/Backpack Consumable System — separate ask, not yet started
 
-**Open questions for you:**
-- Is the floor-range table above final, or a starting point you expect
-  to tweak once you see it in-game?
-- Mini-boss/boss abilities — should there be a small reusable library of
-  mechanics (summon-add, team-buff-aura, self-regen, enrage-at-low-hp)
-  that different bosses mix and match, or fully bespoke scripting per
-  named boss? (Reusable library is much cheaper to build and balance.)
-- Swarm-style "100 goblins" framing — is this the same thing as the
-  Survival Floor in section 1, or a separate idea (e.g. a boss floor that
-  just has an unusually large *normal* enemy count, no survive-the-clock
-  mechanic)?
+Raised mid-conversation, not part of the original three items above:
+heroes have no item slot, and Bandages are the only consumable currently
+auto-applied (pre-fight, to the most-injured deployed heroes — see
+`tower.py`'s `/floor/enter`). Potions and Scrolls exist as inventory items
+but have no auto-use path at all. Needs its own design pass: shared
+"backpack" vs. per-hero slot, and what "use at own discretion when low"
+means precisely for a fight that resolves as one deterministic simulation
+rather than a real-time player-controlled loop (most likely: extend the
+turn loop itself to check HP each round and consume an available potion
+from the shared pool, similar to how `self_regen`/abilities already work).
+Scoped separately — not implemented in this pass.

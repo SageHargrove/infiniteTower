@@ -52,6 +52,8 @@ class CombatUnit:
     is_team_leader: bool = False
     isolated_rounds: int = 0   # Reckless panic response — exposed, takes bonus damage, preferred enemy target
     bracing_rounds: int = 0    # Calculating panic response — forgoes their strength to brace defensively
+    spawn_template: str = ""  # name of the weak add this unit's "summon_add" ability spawns, if any
+    summons_used: int = 0     # caps "summon_add" so a miniboss/boss can't stall a fight forever
 
     def __post_init__(self):
         self.log_name = self.name if self.is_hero else f"[{self.name}]"
@@ -74,6 +76,16 @@ ENEMY_TYPES = [
     ("Goblin", 0.8, 0.7, 1.1, "normal", "beginner"),
     ("Bandit", 0.9, 0.8, 1.2, "normal", "beginner"),
     ("Wolf", 0.9, 0.7, 1.5, "pack", "beginner"),
+    ("Slime", 0.6, 0.5, 0.7, "swarm", "beginner"),
+    # Elite variants of the floor 1-10 family (Slime/Goblin/Rat/Wolf) — same
+    # species, better stats, one extra ability via ENEMY_ABILITY_OVERRIDES
+    # below. See backend/services/enemy_families.py for the matching
+    # miniboss/boss tier for this floor range.
+    ("Acid Slime", 1.1, 0.9, 0.7, "elite", "beginner"),
+    ("Goblin Warrior", 1.2, 1.1, 1.0, "elite", "beginner"),
+    ("Goblin Shaman", 1.0, 0.8, 1.0, "elite", "beginner"),
+    ("Giant Rat Alpha", 1.1, 0.8, 1.7, "elite", "beginner"),
+    ("Wolf Alpha", 1.2, 0.9, 1.6, "elite", "beginner"),
     # --- intermediate (floor 15+) ---
     ("Dire Wolf", 1.1, 0.9, 1.6, "pack", "intermediate"),
     ("Orc", 1.1, 1.0, 0.9, "normal", "intermediate"),
@@ -104,13 +116,35 @@ ENEMY_TYPES = [
 
 ENEMY_TIER_UNLOCK_FLOOR = {"beginner": 1, "intermediate": 15, "advanced": 40, "legendary": 70}
 
+# Per-name ability overrides — lets a specific elite/miniboss/boss entry use
+# a different signature ability (or combo) than the blanket "elite archetype
+# always gets cleave" default in _build_enemy_group. This is the "reusable
+# mechanic library" the enemy-roster plan asked for: summon_add, team_buff_aura
+# and self_regen are all generic, family-agnostic mechanics any future named
+# enemy can be wired into just by adding an entry here (or to a family's
+# elites list in enemy_families.py) — no new per-monster code needed.
+ENEMY_ABILITY_OVERRIDES = {
+    "Acid Slime": ["self_regen"],
+    "Goblin Warrior": ["cleave"],
+    "Goblin Shaman": ["team_buff_aura"],
+    "Giant Rat Alpha": ["summon_add"],
+    "Wolf Alpha": ["enrage"],
+}
+
+# Which weak swarm-type a "summon_add" user calls in as reinforcements.
+ENEMY_SPAWN_TEMPLATE = {
+    "Giant Rat Alpha": "Giant Rat",
+}
+
+SELF_REGEN_PCT = 0.06  # per-round Health regen granted by the "self_regen" ability
+
 def _enemy_pool_for_floor(floor_number: int) -> list[tuple]:
     """Every tier unlocked at or below this floor stays available — a
     floor-80 fight can still roll a Goblin, it's just no longer ONLY
     Goblins. Mirrors services/materials_service.py's tiered drop gating."""
     return [e for e in ENEMY_TYPES if floor_number >= ENEMY_TIER_UNLOCK_FLOOR[e[5]]]
 
-def _build_enemy_group(etype, floor_number: int, difficulty_mult: float, id_start: int, count_override: int = None) -> list[CombatUnit]:
+def _build_enemy_group(etype, floor_number: int, difficulty_mult: float, id_start: int, count_override: int = None, max_count_override: int = None) -> list[CombatUnit]:
     """Build one monster type's portion of an encounter. Pulled out of
     make_enemies so a mixed encounter (two archetypes sharing one fight) can
     call this twice with a split difficulty_mult budget instead of duplicating
@@ -144,7 +178,10 @@ def _build_enemy_group(etype, floor_number: int, difficulty_mult: float, id_star
     else:  # normal
         base_count = (1 + min(3, 1 + floor_number // 10)) / 2
 
-    max_count = {"swarm": 20, "pack": 10, "elite": 3}.get(archetype, 8)
+    # Survival Floor swarms intentionally blow past the normal per-archetype
+    # cap below (max_count_override) — "countless" only reads as countless
+    # next to the regular swarm's 20-unit ceiling.
+    max_count = max_count_override or {"swarm": 20, "pack": 10, "elite": 3}.get(archetype, 8)
 
     if count_override is not None:
         count = max(1, min(max_count, count_override))
@@ -167,12 +204,11 @@ def _build_enemy_group(etype, floor_number: int, difficulty_mult: float, id_star
         atk_m *= half_correction
         def_m *= half_correction
 
-    import os
-    enemy_portrait_path = f"static/portraits/enemies/{name.lower().replace(' ', '_')}.png"
-    if not os.path.exists(enemy_portrait_path):
-        enemy_portrait_path = ""
+    enemy_portrait_path = _enemy_portrait_path(name, "elite" if archetype == "elite" else "")
 
-    abilities = ["cleave"] if archetype == "elite" else []
+    abilities = ENEMY_ABILITY_OVERRIDES.get(name) or (["cleave"] if archetype == "elite" else [])
+    spawn_template = ENEMY_SPAWN_TEMPLATE.get(name, "")
+    regen_pct = SELF_REGEN_PCT if "self_regen" in abilities else 0.0
     # Enemy "level" is purely a flavor readout matching floor depth (elites
     # read a little tougher than their floor) — it doesn't feed back into
     # their actual stats, which are already fully determined by hp_m/atk_m/
@@ -193,8 +229,28 @@ def _build_enemy_group(etype, floor_number: int, difficulty_mult: float, id_star
             morale=100, stress=0, is_hero=False,
             portrait_path=enemy_portrait_path,
             abilities=list(abilities),
+            spawn_template=spawn_template,
+            regen_pct=regen_pct,
         ))
     return enemies
+
+
+def _make_swarm_add(name: str, floor_number: int, unit_id: int) -> CombatUnit:
+    """Builds a single weak swarm-tier add for a 'summon_add' ability —
+    reuses the same swarm archetype math _build_enemy_group applies (0.5x
+    atk/hp, 0.3x def) but as a standalone unit rather than a whole group, and
+    based off floor depth rather than the summoner's own (much stronger)
+    stats, so reinforcements read as "more chip damage," not a second boss."""
+    scale = 1 + (floor_number * 0.12)
+    portrait_path = _enemy_portrait_path(name)
+    return CombatUnit(
+        id=-unit_id, name=name, level=max(1, floor_number),
+        health=max(1, int(80 * scale * 0.5)), max_health=max(1, int(80 * scale * 0.5)),
+        strength=max(1, int(8 * scale * 0.5)), intelligence=0,
+        defense=int(5 * scale * 0.3), endurance=int(5 * scale * 0.3),
+        agility=int(10 * scale * 1.2),
+        morale=100, stress=0, is_hero=False, portrait_path=portrait_path,
+    )
 
 
 def make_enemies(floor_number: int, count: int = None, difficulty_mult: float = 1.0) -> list[CombatUnit]:
@@ -231,11 +287,97 @@ def make_enemies(floor_number: int, count: int = None, difficulty_mult: float = 
     return _build_enemy_group(etype, floor_number, difficulty_mult, id_start=0, count_override=count)
 
 
+# Survival Floor (Boss Swarm) — an alternative to the typical single strong
+# miniboss on a %5 floor: instead of one tough unique, the floor throws an
+# "overwhelming swarm" the team can't realistically kill in time. Distinct
+# from make_enemies' regular swarm archetype (capped at 20, plain
+# kill-them-all win condition) — this is specifically the "countless, just
+# survive the clock" framing, so it spawns far more bodies than any normal
+# combat floor would, plus 1-2 genuinely dangerous Elites mixed in so the
+# fight isn't pure chip damage.
+SURVIVAL_SWARM_COUNT_RANGE = (30, 50)
+SURVIVAL_SWARM_ELITE_COUNT_RANGE = (1, 2)
+
+def make_swarm_miniboss_encounter(floor_number: int) -> list[CombatUnit]:
+    """Builds the enemy roster for a Survival Floor miniboss encounter."""
+    pool = _enemy_pool_for_floor(floor_number)
+    swarm_types = [e for e in pool if e[4] in ("swarm", "pack")] or pool
+    elite_types = [e for e in pool if e[4] == "elite"]
+
+    swarm_etype = random.choice(swarm_types)
+    swarm_count = random.randint(*SURVIVAL_SWARM_COUNT_RANGE)
+    enemies = _build_enemy_group(swarm_etype, floor_number, difficulty_mult=1.0, id_start=0,
+                                  count_override=swarm_count, max_count_override=swarm_count)
+
+    if elite_types:
+        elite_count = random.randint(*SURVIVAL_SWARM_ELITE_COUNT_RANGE)
+        elite_etype = random.choice(elite_types)
+        elites = _build_enemy_group(elite_etype, floor_number, difficulty_mult=1.0, id_start=len(enemies),
+                                     count_override=elite_count, max_count_override=elite_count)
+        enemies += elites
+
+    return enemies
+
+
+# Survival Floor pacing — "illusion of neverending" means the swarm doesn't
+# realistically die before the clock does. 10 rounds (vs. the normal 30-round
+# safety cap) keeps a fight long enough to feel like an onslaught without
+# dragging a single floor entry on forever. Confirmed scope: this is a random
+# *alternative* on miniboss floors only (floor % 5 == 0, not % 10) — it does
+# not replace every miniboss encounter, and never appears on regular combat
+# or boss floors.
+SURVIVAL_TURN_LIMIT = 10
+SWARM_SURVIVAL_CHANCE = 0.35
+
 _UNSET = object()
 
-def make_boss(floor_number: int, zone_theme: str = "", is_miniboss: bool = False, boss_data_override=_UNSET) -> list[CombatUnit]:
-    """Create a boss or miniboss enemy."""
+def _enemy_portrait_path(name: str, subfolder: str = "") -> str:
+    """Looks up a dedicated portrait for a named enemy — checked under
+    enemies/<subfolder>/<slug>.png first (the per-tier folders the enemy
+    roster overhaul plan asked for: elite/miniboss/boss/raid_boss), falling
+    back to the flat enemies/<slug>.png used by the original roster, then to
+    "" (frontend already renders a placeholder for that, same as any
+    as-yet-unportraited enemy like Goblin/Wolf today)."""
+    import os
+    slug = name.lower().replace(' ', '_')
+    if subfolder:
+        tiered = f"static/portraits/enemies/{subfolder}/{slug}.png"
+        if os.path.exists(tiered):
+            return tiered
+    flat = f"static/portraits/enemies/{slug}.png"
+    return flat if os.path.exists(flat) else ""
+
+
+def make_boss(floor_number: int, zone_theme: str = "", is_miniboss: bool = False, boss_data_override=_UNSET, family_override: dict = None) -> list[CombatUnit]:
+    """Create a boss or miniboss enemy. family_override (see
+    services/enemy_families.py) lets a defined floor-range family supply a
+    deterministic named encounter (e.g. floor 5's "Goblin King") instead of
+    the generic procedural LLM/fallback naming below — used for floor ranges
+    that have a built-out family, skipped entirely otherwise."""
     scale = 1 + (floor_number * 0.12)
+
+    if family_override:
+        boss_title = family_override["name"]
+        mod = family_override.get("stat_mod") or {"atk": 1.0, "def": 1.0, "spd": 1.0, "health": 1.0}
+        abilities = family_override.get("abilities") or (["cleave", "enrage"] if is_miniboss else ["crushing_blow", "last_stand"])
+        spawn_template = family_override.get("spawn_template", "")
+        portrait_path = _enemy_portrait_path(boss_title, "miniboss" if is_miniboss else "boss") or None
+        power = (1.5 + (floor_number / 40)) if is_miniboss else (2.5 + (floor_number / 30))
+        from services.portrait_cache import get_random_boss_portrait
+        boss = CombatUnit(
+            id=-99, name=boss_title,
+            level=max(1, floor_number + (10 if not is_miniboss else 5)),
+            health=int(220 * scale * power * mod['health']), max_health=int(220 * scale * power * mod['health']),
+            strength=int(16 * scale * (power * 0.28) * mod['atk']), intelligence=0,
+            defense=int(12 * scale * (power * 0.35) * mod['def']),
+            endurance=int(12 * scale * (power * 0.35) * mod['def']),
+            agility=int(8 * scale * mod['spd']),
+            morale=100, stress=0, is_hero=False,
+            portrait_path=portrait_path or get_random_boss_portrait(is_miniboss=is_miniboss),
+            abilities=abilities,
+            spawn_template=spawn_template,
+        )
+        return [boss]
 
     # Boss naming is pure flavor — never let it block combat resolution.
     # boss_data_override lets the caller pre-fetch this concurrently with the
@@ -501,10 +643,47 @@ def calc_damage(attacker: CombatUnit, defender: CombatUnit) -> tuple[int, bool]:
 # instead of just a plain basic strength every turn. "cleave" can recur each
 # turn (chance-gated); the rest are one-time triggers gated on the
 # attacker's own Health, tracked via used_abilities so they only fire once.
-def _try_use_ability(attacker: CombatUnit, alive_heroes: list, log: list, morale_changes: dict, stress_changes: dict) -> bool:
+MAX_SUMMONS_PER_BATTLE = 3
+SUMMON_ADD_CHANCE = 0.18
+TEAM_BUFF_AURA_ATK_MULT = 1.25
+
+def _try_use_ability(attacker: CombatUnit, alive_heroes: list, log: list, morale_changes: dict, stress_changes: dict,
+                      enemies: list = None, all_units: list = None, floor_number: int = 1) -> bool:
     """Returns True if an ability fired this turn (attacker's normal strength
     is skipped), False to fall through to a normal strength."""
     hlt_pct = attacker.health / attacker.max_health if attacker.max_health else 0
+
+    # "summon_add" — a recurring, capped reinforcement call (Goblin King
+    # summoning goblins, Giant Rat Alpha calling the swarm, etc). Needs
+    # access to the live enemies/all_units lists so the new add actually
+    # gets a turn this fight, not just a cosmetic log line.
+    if ("summon_add" in attacker.abilities and enemies is not None and all_units is not None
+            and attacker.summons_used < MAX_SUMMONS_PER_BATTLE and random.random() < SUMMON_ADD_CHANCE):
+        spawn_name = attacker.spawn_template or "Goblin"
+        spawn_count = random.randint(1, 2)
+        new_id = -(2000 + attacker.summons_used * 10 + len([u for u in enemies if not u.is_hero]))
+        new_adds = []
+        for i in range(spawn_count):
+            add = _make_swarm_add(spawn_name, floor_number, abs(new_id) + i)
+            new_adds.append(add)
+        enemies.extend(new_adds)
+        all_units.extend(new_adds)
+        attacker.summons_used += 1
+        log.append(f"  📯 {attacker.log_name} calls for reinforcements! {len(new_adds)}x {spawn_name} joins the fight!")
+        return True
+
+    # "team_buff_aura" — a one-time rallying cry that empowers every other
+    # enemy still standing (Goblin Shaman channeling power into the horde).
+    if ("team_buff_aura" in attacker.abilities and "team_buff_aura" not in attacker.used_abilities
+            and enemies and any(a.alive and a is not attacker for a in enemies)):
+        attacker.used_abilities.add("team_buff_aura")
+        buffed = 0
+        for ally in enemies:
+            if ally.alive and ally is not attacker:
+                ally.strength = int(ally.strength * TEAM_BUFF_AURA_ATK_MULT)
+                buffed += 1
+        log.append(f"  🔥 {attacker.log_name} channels power into the horde! {buffed} ally(s) hit harder now.")
+        return True
 
     if "cleave" in attacker.abilities and random.random() < 0.20:
         log.append(f"  ⚔ {attacker.log_name} cleaves at the whole party!")
@@ -699,7 +878,7 @@ def resolve_hero_stats(heroes: list[dict]) -> list[dict]:
     return processed
 
 
-def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None, skip_stat_pipeline: bool = False) -> dict:
+def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None, skip_stat_pipeline: bool = False, family_override: dict = None, is_survival_swarm: bool = False, turn_limit: int = None) -> dict:
     log = []
     turns = []
     morale_changes = {h["id"]: 0 for h in heroes}
@@ -718,7 +897,8 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
         result = _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
                                                  boss_data_override, enemy_count_override, difficulty_mult,
                                                  preset_enemies, outer_conn, log, turns,
-                                                 morale_changes, kill_counts, stress_changes)
+                                                 morale_changes, kill_counts, stress_changes,
+                                                 family_override, is_survival_swarm, turn_limit)
         result.pop("_avg_luck", None)
         return result
 
@@ -727,7 +907,8 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
     result = _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
                                              boss_data_override, enemy_count_override, difficulty_mult,
                                              preset_enemies, outer_conn, log, turns,
-                                             morale_changes, kill_counts, stress_changes)
+                                             morale_changes, kill_counts, stress_changes,
+                                             family_override, is_survival_swarm, turn_limit)
     _apply_combat_drops(result, floor_number, is_boss, is_miniboss, outer_conn)
     return result
 
@@ -735,7 +916,8 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
 def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss, zone_theme,
                                     boss_data_override, enemy_count_override, difficulty_mult,
                                     preset_enemies, outer_conn, log, turns,
-                                    morale_changes, kill_counts, stress_changes):
+                                    morale_changes, kill_counts, stress_changes,
+                                    family_override=None, is_survival_swarm=False, turn_limit=None):
     """The CombatUnit-construction-and-turn-loop core of run_combat, split out
     of the stat-resolution pipeline above it so a caller that already has
     fully-resolved hero dicts (no local DB to re-derive equipment/relic/bond/
@@ -794,11 +976,18 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
             log.append(f"  {hero_unit.name} deploys a massive Construct to the frontline!")
 
     # Generate enemies — difficulty is purely floor-based, not adaptive to team strength.
-    if is_boss or is_miniboss:
+    if is_survival_swarm:
         if preset_enemies:
             enemies = preset_enemies
         else:
-            enemies = make_boss(floor_number, zone_theme, is_miniboss, boss_data_override=boss_data_override)
+            enemies = make_swarm_miniboss_encounter(floor_number)
+        log.append(f"🌊💀🌊 SURVIVAL FLOOR {floor_number} 🌊💀🌊")
+        log.append(f"  An overwhelming swarm pours in. Survive {turn_limit or SURVIVAL_TURN_LIMIT} rounds!")
+    elif is_boss or is_miniboss:
+        if preset_enemies:
+            enemies = preset_enemies
+        else:
+            enemies = make_boss(floor_number, zone_theme, is_miniboss, boss_data_override=boss_data_override, family_override=family_override)
         log.append(f"🔥💀🔥 {'MINIBOSS' if is_miniboss else 'BOSS'} FLOOR {floor_number} 🔥💀🔥")
         log.append(f"  {enemies[0].name} emerges from the darkness.")
     else:
@@ -810,6 +999,8 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
     initial_state = {
         "is_boss": is_boss,
         "is_miniboss": is_miniboss,
+        "is_survival_swarm": is_survival_swarm,
+        "turn_limit": (turn_limit or SURVIVAL_TURN_LIMIT) if is_survival_swarm else None,
         "heroes": [
             {"id": h.id, "name": h.name, "hero_class": h.hero_class, "max_health": h.max_health, "health": h.health,
              "portrait_path": h.portrait_path, "hero_star": h.hero_star, "level": h.level,
@@ -833,7 +1024,7 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
     backline  = combatants_heroes[2:]
 
     all_units = combatants_heroes + enemies
-    max_rounds = 30
+    max_rounds = (turn_limit or SURVIVAL_TURN_LIMIT) if is_survival_swarm else 30
 
     # Squad tactical doctrine: if the team has a manually-assigned Leader, their
     # battle_tendency nudges everyone's default targeting choice (a "the whole
@@ -1003,7 +1194,8 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
             else:
                 if attacker.abilities:
                     alive_heroes_now = [h for h in combatants_heroes if h.alive]
-                    if alive_heroes_now and _try_use_ability(attacker, alive_heroes_now, log, morale_changes, stress_changes):
+                    if alive_heroes_now and _try_use_ability(attacker, alive_heroes_now, log, morale_changes, stress_changes,
+                                                              enemies=enemies, all_units=all_units, floor_number=floor_number):
                         continue  # ability replaced the normal strength this turn
 
                 alive_frontline = [h for h in frontline if h.alive]
@@ -1068,10 +1260,19 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
 
     alive_heroes  = [u for u in combatants_heroes if u.alive]
     dead_heroes   = [u for u in combatants_heroes if not u.alive]
-    heroes_won    = len(alive_heroes) > 0 and len([u for u in enemies if u.alive]) == 0
+    # Survival Floor wins by outlasting the clock with anyone still standing
+    # — wiping the swarm early still counts (just rare at these counts), but
+    # killing every enemy is not required, unlike every other floor type.
+    if is_survival_swarm:
+        heroes_won = len(alive_heroes) > 0
+    else:
+        heroes_won = len(alive_heroes) > 0 and len([u for u in enemies if u.alive]) == 0
 
     if heroes_won:
-        log.append(f"✓ Victory. {len(alive_heroes)} hero(es) survived.")
+        if is_survival_swarm:
+            log.append(f"✓ Survived! {len(alive_heroes)} hero(es) held the line for {round_num} round(s).")
+        else:
+            log.append(f"✓ Victory. {len(alive_heroes)} hero(es) survived.")
         if is_boss:
             log.append(f"  ═══ BOSS DEFEATED ═══")
         for h in alive_heroes:
@@ -1125,6 +1326,9 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
     result = {
         "winner": "heroes" if heroes_won else "enemies",
         "is_boss": is_boss,
+        "is_survival_swarm": is_survival_swarm,
+        "rounds_survived": round_num if is_survival_swarm else None,
+        "turn_limit": max_rounds if is_survival_swarm else None,
         "initial_state": initial_state,
         "surviving_heroes": [
             {
@@ -1206,17 +1410,28 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
                 mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops
+        elif is_miniboss:
+            # Miniboss floors didn't have a bonus tier before — every
+            # miniboss round (Survival Floor swarms included, since those
+            # only ever happen on a miniboss floor) gets a smaller version
+            # of the Boss bonus on top of the guaranteed drops above.
+            result["gold_gained"] += int(600 * (1 + (floor_number/10)))
+            result["supplies_gained"] += 4
+            for _ in range(2):
+                mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
+                drops[mat] = drops.get(mat, 0) + 1
+            result["materials_gained"] = drops
     except Exception as e:
         print(f"Error generating drop: {e}")
 
-def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, difficulty_mult: float = 1.0, conn=None) -> dict:
+def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, difficulty_mult: float = 1.0, conn=None, family_override: dict = None, is_survival_swarm: bool = False, turn_limit: int = None) -> dict:
     # Raid Boss (Every 20th floor is Raid Boss)
     if is_boss and floor_number % 20 == 0:
         combined_heroes = []
         for team in hero_teams:
             combined_heroes.extend(team)
         return run_combat(combined_heroes, floor_number, is_boss=True, is_miniboss=False, zone_theme=zone_theme, boss_data_override=boss_data_override, difficulty_mult=difficulty_mult * len(hero_teams), outer_conn=conn)
-    
+
     # Shared Encounter relay — one enemy roster scaled for the combined
     # threat of every deployed team (same scaling the boss-merge branch above
     # already uses), so teams relay into the SAME fight instead of each
@@ -1225,7 +1440,19 @@ def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: b
     # how the backend computes the HP handoff — the frontend renders every
     # team's own arena (see team_results) at the same time, so on screen it
     # reads as simultaneous parallel battles, not one-then-the-other.
-    shared_enemies = make_enemies(floor_number, difficulty_mult=difficulty_mult * len(hero_teams))
+    #
+    # NOTE: this used to always call make_enemies() here regardless of
+    # is_boss/is_miniboss — meaning every boss/miniboss floor that wasn't
+    # also a %20 Raid Boss (so: every floor 5/15/25/... and every floor
+    # 10/30/50/70/90) silently fought a regular mob encounter instead of an
+    # actual named boss/miniboss, since preset_enemies short-circuits
+    # make_boss() inside run_combat. Fixed below.
+    if is_survival_swarm:
+        shared_enemies = make_swarm_miniboss_encounter(floor_number)
+    elif is_boss or is_miniboss:
+        shared_enemies = make_boss(floor_number, zone_theme, is_miniboss, boss_data_override=boss_data_override, family_override=family_override)
+    else:
+        shared_enemies = make_enemies(floor_number, difficulty_mult=difficulty_mult * len(hero_teams))
 
     logs = []
     final_result = {
@@ -1259,7 +1486,13 @@ def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: b
             final_result["team_results"].append(None)
             continue
 
-        res = run_combat(team, floor_number, is_boss=False, is_miniboss=is_miniboss, zone_theme=zone_theme, difficulty_mult=difficulty_mult, preset_enemies=current_enemies, outer_conn=conn)
+        # is_boss used to be hardcoded False here regardless of the real
+        # flag — harmless for the %20 Raid Boss case (handled in its own
+        # branch above before reaching this loop), but for every other boss
+        # floor (10, 30, 50, 70, 90) it meant _apply_combat_drops below never
+        # applied the Boss reward bonus, and the frontend never got
+        # initial_state.is_boss=True to size the enemy sprite as a boss.
+        res = run_combat(team, floor_number, is_boss=is_boss, is_miniboss=is_miniboss, zone_theme=zone_theme, difficulty_mult=difficulty_mult, preset_enemies=current_enemies, outer_conn=conn, is_survival_swarm=is_survival_swarm, turn_limit=turn_limit)
         logs.extend(res.get("log", []))
         final_result["team_results"].append(res)
 
@@ -1283,10 +1516,18 @@ def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: b
 
         current_enemies = res.get("surviving_enemies", [])
 
-    # The shared encounter counts as cleared once the relay runs the enemy
-    # roster down to nothing — win/loss is for the encounter as a whole, not
-    # any single team's leg of it.
-    final_result["winner"] = "heroes" if not current_enemies else "enemies"
+    if is_survival_swarm:
+        # Survival Floors are single-team only (they only ever fire on a
+        # %5 miniboss floor, which never requires 2+ teams) — winning means
+        # outlasting the clock, not clearing the roster, so the "did the
+        # enemy count hit zero" inference below doesn't apply here.
+        only = final_result["team_results"][0] if final_result["team_results"] else None
+        final_result["winner"] = only["winner"] if only else "enemies"
+    else:
+        # The shared encounter counts as cleared once the relay runs the
+        # enemy roster down to nothing — win/loss is for the encounter as a
+        # whole, not any single team's leg of it.
+        final_result["winner"] = "heroes" if not current_enemies else "enemies"
 
     # Single-team floors are a relay of length one — also forward that one
     # team's initial_state/turns/rounds at the top level so the existing
@@ -1296,5 +1537,8 @@ def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: b
         final_result["initial_state"] = only.get("initial_state")
         final_result["turns"] = only.get("turns")
         final_result["rounds"] = only.get("rounds")
+        final_result["is_survival_swarm"] = only.get("is_survival_swarm", False)
+        final_result["rounds_survived"] = only.get("rounds_survived")
+        final_result["turn_limit"] = only.get("turn_limit")
 
     return final_result

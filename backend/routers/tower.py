@@ -9,6 +9,8 @@ from services.floor_templates import (
     generate_explore_floor, get_explore_choice, resolve_explore_loot,
     generate_rest_floor, resolve_rest_floor,
 )
+from services.combat_service import SWARM_SURVIVAL_CHANCE
+from services.enemy_families import get_miniboss_override, get_boss_override
 import json
 import random
 from pydantic import BaseModel
@@ -52,7 +54,8 @@ def get_narrative(narrative_id: int):
 
 def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, zone_theme,
                           boss_data_override, base_row, pending_legacies,
-                          enemy_count_override=None, flavor_intro=None, difficulty_mult=1.0):
+                          enemy_count_override=None, flavor_intro=None, difficulty_mult=1.0,
+                          family_override=None, is_survival_swarm=False):
     """Run a real fight and apply every resulting effect."""
     from services.llm_service import generate_combat_narration, submit_flavor_text
     from services.combat_service import run_multi_combat
@@ -62,6 +65,7 @@ def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, z
             hero_teams, floor_number, is_boss=is_boss, is_miniboss=is_miniboss,
             zone_theme=zone_theme, boss_data_override=boss_data_override,
             difficulty_mult=difficulty_mult, conn=conn,
+            family_override=family_override, is_survival_swarm=is_survival_swarm,
         )
     except Exception as e:
         print(f"Combat error: {e}")
@@ -325,12 +329,32 @@ def enter_floor(req: EnterFloorRequest):
         is_boss = floor_type == "boss"
         is_miniboss = floor_type == "miniboss"
 
+        # Survival Floor — a random *alternative* to the usual single named
+        # miniboss, never a replacement for all of them, and never on a Boss
+        # floor. Rolled before the family-override lookup below since a
+        # swarm fight doesn't use one (it's a horde, not a named unit).
+        is_survival_swarm = is_miniboss and random.random() < SWARM_SURVIVAL_CHANCE
+
+        # Built-out floor families (currently just floor 1-10's Slime/Goblin/
+        # Rat/Wolf range) supply a deterministic named miniboss/boss instead
+        # of the generic LLM-flavored naming below — see enemy_families.py.
+        # Floors without a built-out family fall back to the old behavior.
+        family_override = None
+        if is_survival_swarm:
+            pass
+        elif is_miniboss:
+            family_override = get_miniboss_override(req.floor_number)
+        elif is_boss:
+            family_override = get_boss_override(req.floor_number)
+
         # Zone theme and boss naming are independent enough to run concurrently
         # instead of sequentially — boss naming uses a generic placeholder theme
-        # rather than waiting on the real zone theme text first.
+        # rather than waiting on the real zone theme text first. Skipped
+        # entirely when a family_override already supplies a deterministic
+        # name — no point spending an LLM call on flavor that's discarded.
         zone_theme_future = submit_flavor_text(generate_zone_theme, req.floor_number)
         boss_future = None
-        if is_boss or is_miniboss:
+        if (is_boss or is_miniboss) and not family_override and not is_survival_swarm:
             placeholder_theme = f"a dark, dangerous zone around floor {req.floor_number} of a tower"
             boss_future = submit_flavor_text(generate_boss_enemy, placeholder_theme, req.floor_number, is_miniboss)
 
@@ -348,7 +372,9 @@ def enter_floor(req: EnterFloorRequest):
         if floor_type in ("combat", "miniboss", "boss", "survival", "defend", "escort"):
             enemy_count_override = None
             flavor_intro = FLOOR_FLAVOR_INTRO.get(floor_type)
-            if floor_type == "survival":
+            if is_survival_swarm:
+                flavor_intro = "Waves without end pour from the dark. There's no winning this one outright — only surviving it."
+            elif floor_type == "survival":
                 enemy_count_override = random.randint(6, 8)
             elif floor_type == "escort":
                 npc = random.choice(["a wounded traveler", "a lost child", "a captured merchant", "a dying scholar"])
@@ -358,6 +384,7 @@ def enter_floor(req: EnterFloorRequest):
                 conn, hero_teams, req.floor_number, is_boss, is_miniboss, zone_theme,
                 boss_data_override, base_row, pending_legacies,
                 enemy_count_override=enemy_count_override, flavor_intro=flavor_intro,
+                family_override=family_override, is_survival_swarm=is_survival_swarm,
             )
             result["floor_type"] = floor_type
 

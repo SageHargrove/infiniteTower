@@ -178,6 +178,8 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
   const turns = combatData?.turns || []
   const isBoss = combatData?.initial_state?.is_boss || false
   const isMiniboss = combatData?.initial_state?.is_miniboss || false
+  const isSurvivalSwarm = combatData?.initial_state?.is_survival_swarm || false
+  const turnLimit = combatData?.initial_state?.turn_limit || null
 
   // Solo enemies (elite mobs, minibosses, bosses) read as more threatening
   // rendered bigger than a regular swarm/pack unit. A true boss is sized to
@@ -282,6 +284,21 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
       
       {/* Divider */}
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', background: 'rgba(255,255,255,0.05)' }} />
+
+      {/* Survival Floor round counter — frames the fight as "outlast the
+          clock," not "kill count," since the normal enemies-remaining
+          framing would be misleading here (the swarm isn't meant to hit 0). */}
+      {isSurvivalSwarm && turnLimit && (
+        <div style={{
+          position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 50, background: 'rgba(10,10,14,0.85)', border: '1px solid rgba(201,168,76,0.4)',
+          borderRadius: '6px', padding: '0.4rem 1rem', fontFamily: 'Cinzel, serif',
+          color: 'var(--gold)', fontSize: '0.95rem', letterSpacing: 1, textTransform: 'uppercase',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
+        }}>
+          Survive! Round {Math.min(currentTurn?.round || 1, turnLimit)} / {turnLimit}
+        </div>
+      )}
 
       {/* Render Heroes */}
       {heroes.map((hero, idx) => {
