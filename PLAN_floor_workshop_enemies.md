@@ -39,9 +39,11 @@ them all, win by surviving instead.
 - Frontend needs a round counter ("Survive 4 more rounds!") instead of
   the normal "X enemies remaining" framing.
 
-**Open questions for you:**
-- Boss floors only (`%10==0`), or also a lighter version on miniboss
-  floors (`%5==0`)?
+**Decided:** miniboss floors (`%5==0`, not `%10`) only — not full boss
+floors. Confirmed good idea, just scoped smaller than a true boss
+encounter.
+
+**Still open:**
 - Reward shape — flat completion bonus, or scaled by rounds survived /
   damage dealt before the timer runs out?
 - Should heroes face real death risk here like normal combat, or is this
@@ -50,50 +52,34 @@ them all, win by surviving instead.
 
 ---
 
-## 2. Workshop / Forge "Subset" Question
+## 2. Workshop / Forge "Subset" Question — RESOLVED, scrapped
 
-**Important finding:** the actual *need* you described — "Tanner and
-Carpenter shouldn't be pure Blacksmith support, they should have their
-own independent impact, but the three working together should still be
-best" — is **already fully built** as of this session's Tanner/Carpenter
-work. Blacksmith/Tanner/Carpenter are each the standalone specialist for
-one Forge slot (weapon/armor/accessory) — any one of them alone crafts at
-full quality — and having 2-3 of the lines in the Forge together adds a
-teamwork bonus on top. No nested facility structure was required to get
-that.
+We tried the Tanner/Carpenter-as-independent-Forge-specialists design
+(each owning a slot — weapon/armor/accessory — solo-capable, with a
+teamwork bonus for stacking lines) and built it end-to-end. You decided
+against it: it meant needing high-star/talented heroes in three separate
+classes just to craft well, versus the simpler "just invest in good
+Blacksmiths" model. **Reverted.** Forge crafting is Blacksmith-only
+again, but with the nuance you wanted: quality is capped by your single
+*best* (highest-evolution-tier) Blacksmith present, not an averaged-down
+group score, and stacking more Blacksmiths of that same tier adds a
+smaller bonus on top (`forge_smith_bonus` in `class_service.py`). A pile
+of low-tier smiths can't out-craft one well-evolved one.
 
-So the open question is narrower than it first looked: is there still a
-reason to want a literal nested "Workshop containing Forge as a subset"
-**structurally**, or was that mental model mostly describing the
-specialist-bonus behavior we already shipped?
+Given that, the nested "Workshop contains Forge as a sub-station"
+structural question doesn't have an active driver anymore either — it
+was motivated by wanting Tanner/Carpenter to feel like their own thing,
+and that whole direction is gone. Treat this section as closed unless a
+genuinely new reason to nest facilities comes up later (e.g. a real
+second crafting station with its own assignment slots).
 
-**What's actually in the code today:** `Forge` and `Workshop` are two
-separate, unrelated facilities. `Workshop` (floor 15+, 10,000g) is
-currently only loosely tied to Magic Engineer base-upgrade flavor text —
-there's no real mechanical depth there yet, and no facility in the game
-has ever had "sub-facilities" — `facilities` is a flat table, one type
-per row.
-
-**Three directions, increasing cost:**
-- **(A) Leave it.** Forge and Workshop stay separate facilities exactly
-  as now. Zero engineering. Right call if the underlying need really was
-  just "give Tanner/Carpenter their own identity," which is done.
-- **(B) Cosmetic-only grouping.** Frontend visually clusters Forge +
-  Workshop (+ maybe future crafting facilities) under a "Crafting
-  Quarter" section header. Zero backend/schema changes, just a UI
-  reorganization. Cheap, reversible.
-- **(C) Real nested structure.** Add a `parent_facility_id` (or similar)
-  to the `facilities` table so Workshop can literally contain Forge (and
-  future stations) as sub-slots with their own assignment lists. Real
-  schema migration + rewritten assignment UI. Only worth it if there's a
-  concrete second/third "station" planned beyond Forge (e.g. a fletching
-  station, a runesmithing station) — otherwise it's structure for its
-  own sake.
-
-**Recommendation:** (A) for now, or (B) if you want it to *feel* more
-unified without paying for a migration. Revisit (C) only if you come up
-with more sub-stations that actually need independent slots/assignment
-lists rather than just being another specialist class on the existing Forge.
+One open item from the original ask that's *not* covered yet: "more
+Blacksmiths = faster work." There's no time/cooldown component to
+crafting right now — every craft is a single instant action. The
+quality-ceiling model above covers "better," not "faster." If you want
+crafting to actually take time (a queue, a cooldown reduced by crew
+size), that's a separate, bigger mechanic — flag it if you want it
+scoped.
 
 ---
 
