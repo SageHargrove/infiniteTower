@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { playHitSound } from '../audio'
 
 const TEAM_POSITIONS = {
@@ -244,14 +244,31 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
     return () => clearTimeout(timer)
   }, [currentTurnIndex, playing, turns, onComplete])
 
+  const logEndRef = useRef(null)
+
+  // Damage numbers stay on the sprites in the arena itself — this is a
+  // separate running feed of the flavor text, building up turn by turn so
+  // players can scroll back through what's happened instead of only ever
+  // seeing the current turn's line before it's replaced by the next one.
+  const revealedLines = []
+  for (let i = 0; i <= currentTurnIndex && i < turns.length; i++) {
+    revealedLines.push({ key: i, text: turnNarrations?.[i] || turns[i].log })
+  }
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [revealedLines.length])
+
   if (!combatData || combatData.awaiting_choice) return null
 
   const currentTurn = currentTurnIndex >= 0 && currentTurnIndex < turns.length ? turns[currentTurnIndex] : null
 
   return (
+    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'stretch' }}>
     <div style={{
       position: 'relative',
-      width: '100%',
+      flex: '1 1 auto',
+      minWidth: 0,
       height: '880px',
       background: 'linear-gradient(to bottom, #1a1a24, #0a0a10)',
       border: '1px solid #333',
@@ -311,40 +328,51 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
         )
       })}
 
-      {/* Turn Action Log Overlay */}
-      {currentTurn && (
-        <div style={{
-          position: 'absolute',
-          bottom: '10%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.8)',
-          border: '1px solid var(--gold)',
-          padding: '0.5rem 1rem',
-          borderRadius: '4px',
-          color: '#fff',
-          fontFamily: 'Cinzel, serif',
-          animation: 'fadeIn 0.2s',
-          whiteSpace: 'normal',
-          maxWidth: '90%',
-          textAlign: 'center',
-          zIndex: 50
-        }}>
-          {turnNarrations?.[currentTurnIndex] || currentTurn.log}
-        </div>
-      )}
-
       <style>{`
         @keyframes floatUpAndFade {
           0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
           20% { transform: translate(-50%, -20px) scale(1.2); opacity: 1; }
           100% { transform: translate(-50%, -40px) scale(1); opacity: 0; }
         }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translate(-50%, 10px); }
-          to { opacity: 1; transform: translate(-50%, 0); }
+        @keyframes logLineIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+    </div>
+
+    {/* Battle Log — damage numbers stay on the sprites above; this is just
+        the flavor text, building up as a scrollable history. */}
+    <div style={{
+      flex: '0 0 220px',
+      height: '880px',
+      background: 'rgba(10,10,14,0.9)',
+      border: '1px solid #333',
+      borderRadius: '8px',
+      marginBottom: '1rem',
+      padding: '0.75rem',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.5rem',
+      overflowY: 'auto',
+    }}>
+      <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', fontSize: '0.8rem', letterSpacing: 1, textTransform: 'uppercase', marginBottom: '0.25rem', flexShrink: 0 }}>
+        Battle Log
+      </div>
+      {revealedLines.map(line => (
+        <div key={line.key} style={{
+          fontSize: '0.8rem',
+          lineHeight: 1.4,
+          color: '#ddd',
+          borderLeft: '2px solid rgba(201,168,76,0.4)',
+          paddingLeft: '0.5rem',
+          animation: 'logLineIn 0.2s ease-out',
+        }}>
+          {line.text}
+        </div>
+      ))}
+      <div ref={logEndRef} />
+    </div>
     </div>
   )
 }
