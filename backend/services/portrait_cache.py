@@ -567,12 +567,13 @@ ENEMY_PORTRAIT_HINTS = {
     "Shrouded Reaper": "(a tall hooded reaper-like figure shrouded entirely in flowing black robes and a deep hood concealing the face:1.3), bone-pale skeletal clawed hands visible at the sleeves, ornate dark engraved bracers, gripping a curved ornate ceremonial dagger low at the waist, standing motionless and imposing, faint cold blue ambient light, deep atmospheric fog, an aura of dread and supernatural menace, towering and elite",
 }
 
-def _generate_enemy_portrait(enemy_name: str, hint: str):
+def _generate_enemy_portrait(enemy_name: str, hint: str, tier_dir: str = "normal"):
     try:
         from services.comfy_service import generate_portrait_comfy
-        os.makedirs(ENEMY_DIR, exist_ok=True)
+        out_dir = f"{ENEMY_DIR}/{tier_dir}"
+        os.makedirs(out_dir, exist_ok=True)
         slug = re.sub(r'[^a-z0-9]', '_', enemy_name.lower())
-        path = f"{ENEMY_DIR}/{slug}.png"
+        path = f"{out_dir}/{slug}.png"
         prompt = (
             f"{hint}, monster design, dark fantasy creature, centered composition, "
             f"menacing pose, dramatic lighting, {MONSTER_STYLE}"
@@ -587,17 +588,20 @@ def _generate_enemy_portrait(enemy_name: str, hint: str):
 
 def queue_missing_enemy_portraits():
     """Call once on startup. Each enemy type only ever needs generating once —
-    unlike hero/cache jobs this never needs to re-run on a timer."""
+    unlike hero/cache jobs this never needs to re-run on a timer. Saves into
+    enemies/<tier>/ (normal/elite) to match _enemy_portrait_path's lookup and
+    keep the art library filterable by tier in the file browser."""
     try:
         from services.combat_service import ENEMY_TYPES
         os.makedirs(ENEMY_DIR, exist_ok=True)
         queued = 0
-        for name, *_rest in ENEMY_TYPES:
+        for name, *_rest, archetype, _tier in ENEMY_TYPES:
+            tier_dir = "elite" if archetype == "elite" else "normal"
             slug = re.sub(r'[^a-z0-9]', '_', name.lower())
-            path = f"{ENEMY_DIR}/{slug}.png"
-            if not os.path.exists(path):
+            path = f"{ENEMY_DIR}/{tier_dir}/{slug}.png"
+            if not os.path.exists(path) and not os.path.exists(f"{ENEMY_DIR}/{slug}.png"):
                 hint = ENEMY_PORTRAIT_HINTS.get(name, f"{name}, dark fantasy monster")
-                _enqueue(PRIORITY_ENEMY, _generate_enemy_portrait, name, hint)
+                _enqueue(PRIORITY_ENEMY, _generate_enemy_portrait, name, hint, tier_dir)
                 queued += 1
         if queued:
             print(f"[Cache] Queued {queued} missing enemy portrait(s) (lowest priority).")

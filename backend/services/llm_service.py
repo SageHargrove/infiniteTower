@@ -120,7 +120,7 @@ def generate_hero_profile(birth_star: int, aptitudes: dict, extra_prompt: str = 
     ego_instruction = (
         "For ego_type: this hero may have an Ego (an awakened trait) only because birth_star >= 4. Grant one ONLY if "
         "their personality strongly warrants it. If so, set ego_type to exactly one of: \"Aggressive\", \"Cautious\", "
-        "\"Tactical\", \"Leader\", \"Lone Wolf\". Otherwise set ego_type to the JSON literal null (NOT the string \"null\")."
+        "\"Tactical\", \"Leader\". Otherwise set ego_type to the JSON literal null (NOT the string \"null\")."
     ) if birth_star >= 4 else (
         "This hero's birth_star is below 4, so ego_type MUST be the JSON literal null — NOT the string \"null\", "
         "not an empty string, the actual JSON null value with no quotes."

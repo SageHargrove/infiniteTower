@@ -214,7 +214,10 @@ export default function App() {
     <div className="app">
       <header className="app-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '1rem 2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <h1 style={{ fontSize: '2.5rem', margin: 0 }}>🗼 Tower of Eternity</h1>
+          <h1 style={{ fontSize: '2.5rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <img src="/tower_logo.png" alt="" style={{ height: '3.4rem', width: 'auto', filter: 'drop-shadow(0 0 6px rgba(201,168,76,0.5))' }} />
+            Tower of Eternity
+          </h1>
           <div className="text-dim" style={{ borderLeft: '2px solid var(--border)', paddingLeft: '2rem', fontSize: '1.6rem' }}>
             Profile: <span className="text-gold" style={{ fontSize: '2.2rem', fontWeight: 'bold' }}>{activeProfile}</span>
           </div>

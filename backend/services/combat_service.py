@@ -334,14 +334,16 @@ _UNSET = object()
 def _enemy_portrait_path(name: str, subfolder: str = "") -> str:
     """Looks up a dedicated portrait for a named enemy — checked under
     enemies/<subfolder>/<slug>.png first (the per-tier folders the enemy
-    roster overhaul plan asked for: elite/miniboss/boss/raid_boss), falling
-    back to the flat enemies/<slug>.png used by the original roster, then to
-    "" (frontend already renders a placeholder for that, same as any
-    as-yet-unportraited enemy like Goblin/Wolf today)."""
+    roster overhaul plan asked for: elite/miniboss/boss/raid_boss), then
+    enemies/normal/<slug>.png (where every plain-tier enemy's art now
+    lives), then the flat enemies/<slug>.png used by the pre-reorg roster
+    for anything not yet moved, then "" (frontend already renders a
+    placeholder for that, same as any as-yet-unportraited enemy like
+    Goblin/Wolf today)."""
     import os
     slug = name.lower().replace(' ', '_')
-    if subfolder:
-        tiered = f"static/portraits/enemies/{subfolder}/{slug}.png"
+    for sf in filter(None, [subfolder, "normal"]):
+        tiered = f"static/portraits/enemies/{sf}/{slug}.png"
         if os.path.exists(tiered):
             return tiered
     flat = f"static/portraits/enemies/{slug}.png"
@@ -361,7 +363,11 @@ def make_boss(floor_number: int, zone_theme: str = "", is_miniboss: bool = False
         mod = family_override.get("stat_mod") or {"atk": 1.0, "def": 1.0, "spd": 1.0, "health": 1.0}
         abilities = family_override.get("abilities") or (["cleave", "enrage"] if is_miniboss else ["crushing_blow", "last_stand"])
         spawn_template = family_override.get("spawn_template", "")
-        portrait_path = _enemy_portrait_path(boss_title, "miniboss" if is_miniboss else "boss") or None
+        # A family can pin an exact existing portrait (e.g. a hand-picked
+        # piece of preserved art) instead of relying on the name-based
+        # lookup, which only checks the new tiered enemies/<tier>/ folders —
+        # it wouldn't find art that already lives under static/portraits/bosses/.
+        portrait_path = family_override.get("portrait_path") or _enemy_portrait_path(boss_title, "miniboss" if is_miniboss else "boss") or None
         power = (1.5 + (floor_number / 40)) if is_miniboss else (2.5 + (floor_number / 30))
         from services.portrait_cache import get_random_boss_portrait
         boss = CombatUnit(
@@ -831,6 +837,9 @@ def resolve_hero_stats(heroes: list[dict]) -> list[dict]:
                 modified["strength"] = int(modified["strength"] * lp_mult)
                 modified["intelligence"] = int(modified["intelligence"] * lp_mult)
                 modified["agility"] = int(modified["agility"] * lp_mult)
+                modified["endurance"] = int(modified["endurance"] * lp_mult)
+                modified["willpower"] = int(modified["willpower"] * lp_mult)
+                modified["luck"] = int(modified["luck"] * lp_mult)
         except Exception:
             pass
 

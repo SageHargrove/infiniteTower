@@ -110,13 +110,40 @@ reward bonus or correct frontend sprite sizing. Fixed — confirmed via
 live test that floor 10 now fights "The Warren Tyrant" specifically and
 gets the full Boss-tier gold bonus (3600 vs. the 600 it was getting before).
 
+**Bosses built from the preserved art** (no Normal/Elite tier behind them
+yet, just the boss slot itself):
+- Floor 70 boss: **The Undead Monarch** (51-70 "Vampire Spawn" range).
+- Floor 90 boss: **The Masked Horror** (71-90 "Death Knights" range).
+- Floor 100 boss: randomly **The Lich King** or **The Nightwing Devourer**
+  (91-100 "Liches"/"Dragons" range) — floor 100 already triggers the
+  every-20th-floor Raid Boss merge and wanted something extra-special, so
+  rather than picking one, it alternates between both.
+- `make_boss`'s `family_override` now accepts an explicit `portrait_path`
+  so a family can pin an exact existing piece of art (these 4 files,
+  living under `static/portraits/bosses/`) instead of relying on the
+  name-based tiered-folder lookup, which only checks the new
+  `enemies/<tier>/` convention and wouldn't have found them there.
+
 **Not done yet (next batches, by floor-range block):**
-- Floor 11-100 families (Elites/miniboss/boss for each range).
-- Floor 50 and 100's "extra special" treatment — no design yet, just
-  flagged in `enemy_families.SPECIAL_BOSS_FLOORS` as a marker.
-- Elite variants for the pre-existing 38 enemies outside floor 1-10 (Bone
-  Warden, Troll, Ogre, etc.) — only the *new* floor 1-10 family got Elites
-  this pass, per "ship floor 1-10 end-to-end first" sequencing.
+- Floor 11-69, 71-89, 91-99 Normal/Elite/Miniboss rosters — the 3 bosses
+  above are placeholders sitting on top of ranges that otherwise still use
+  the old generic enemy pool.
+- Floor 50's "extra special" treatment — no preserved art fit that range,
+  still no design, flagged in `enemy_families.SPECIAL_BOSS_FLOORS` as a marker.
+- Elite variants for the pre-existing enemies outside floor 1-10 (Troll,
+  Ogre, etc.) — only the *new* floor 1-10 family got Elites this pass, per
+  "ship floor 1-10 end-to-end first" sequencing.
+
+**Enemy/boss portrait library cleanup (this pass):** per your direct
+confirmation, every enemy/boss portrait NOT on the preserve list was
+deleted (backed up to a scratchpad temp folder first, not gone forever if
+you change your mind on any of them — ask and I can restore). The 4
+preserved enemy-tier portraits (Bandit, Bone Warden, Shrouded Reaper,
+Rotting Ghoul) turned out to already be exact-name matches for existing
+`ENEMY_TYPES` entries — they were never orphaned, just kept doing what
+they were already doing. A new `enemies/normal/` folder now holds them
+(and anything the background portrait-regeneration worker fills back in)
+so the art library stays filterable by tier the way you wanted.
 
 ---
 

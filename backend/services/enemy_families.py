@@ -30,17 +30,65 @@ WARREN_TYRANT = {
     "stat_mod": {"atk": 1.1, "def": 1.0, "spd": 0.9, "health": 1.2},
 }
 
+# ─── Floors 51-100: bosses built from preserved hand-picked art ───────────
+#
+# These 4 portraits predate the floor-range family system — they were kept
+# specifically because they were liked, not generated for any one range —
+# so they're slotted into the family they best match by design rather than
+# being tied to a built-out Normal/Elite roster for their range yet:
+#   - Undead Monarch (vampire king) -> 51-70's "Vampire Spawn" range, floor 70 boss.
+#   - Masked Horror (masked armored knight) -> 71-90's "Death Knights" range, floor 90 boss.
+#   - Lich King / Nightwing Devourer -> 91-100's "Liches"/"Dragons" range. Floor
+#     100 is the tower's final floor (also already triggers the every-20th-floor
+#     Raid Boss merge) and asked for something extra-special, so rather than
+#     picking just one of these two, floor 100 randomly fights either —
+#     see get_boss_override below.
+
+UNDEAD_MONARCH = {
+    "name": "The Undead Monarch",
+    "abilities": ["self_regen", "crushing_blow", "last_stand"],
+    "portrait_path": "static/portraits/bosses/boss_undead_monarch.png",
+    "stat_mod": {"atk": 1.1, "def": 1.1, "spd": 0.9, "health": 1.3},
+}
+
+MASKED_HORROR_BOSS = {
+    "name": "The Masked Horror",
+    "abilities": ["cleave", "crushing_blow", "enrage"],
+    "portrait_path": "static/portraits/bosses/boss_masked_horror.png",
+    "stat_mod": {"atk": 1.2, "def": 1.15, "spd": 1.0, "health": 1.2},
+}
+
+LICH_KING = {
+    "name": "The Lich King",
+    "abilities": ["summon_add", "team_buff_aura", "last_stand"],
+    "spawn_template": "Corpse Rat",
+    "portrait_path": "static/portraits/bosses/boss_lich_king.png",
+    "stat_mod": {"atk": 1.1, "def": 1.0, "spd": 0.9, "health": 1.4},
+}
+
+NIGHTWING_DEVOURER = {
+    "name": "The Nightwing Devourer",
+    "abilities": ["cleave", "enrage", "crushing_blow", "last_stand"],
+    "portrait_path": "static/portraits/bosses/boss_nightwing_devourer.png",
+    "stat_mod": {"atk": 1.3, "def": 1.0, "spd": 1.2, "health": 1.3},
+}
+
 # floor_number -> family_override dict (see make_boss's family_override
-# param in combat_service.py). Keyed by exact floor since each range only
-# has one mini-boss floor and one boss floor right now.
+# param in combat_service.py), or a list of dicts for a floor that should
+# randomly pick between more than one (floor 100). Keyed by exact floor
+# since each range only has one mini-boss floor and one boss floor right now.
 MINIBOSS_OVERRIDES = {
     5: GOBLIN_KING,
 }
 BOSS_OVERRIDES = {
     10: WARREN_TYRANT,
+    70: UNDEAD_MONARCH,
+    90: MASKED_HORROR_BOSS,
+    100: [LICH_KING, NIGHTWING_DEVOURER],
 }
 
-# Marker only — not yet content-complete. See module docstring.
+# Marker only — not yet content-complete for the ranges that don't have a
+# BOSS_OVERRIDES entry above. See module docstring.
 SPECIAL_BOSS_FLOORS = {50, 100}
 
 
@@ -49,4 +97,8 @@ def get_miniboss_override(floor_number: int) -> dict | None:
 
 
 def get_boss_override(floor_number: int) -> dict | None:
-    return BOSS_OVERRIDES.get(floor_number)
+    entry = BOSS_OVERRIDES.get(floor_number)
+    if isinstance(entry, list):
+        import random
+        return random.choice(entry)
+    return entry

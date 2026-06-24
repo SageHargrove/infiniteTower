@@ -90,6 +90,19 @@ def build_instant_profile(birth_star: int, gender_hint: str = None, synergy_them
 _names_in_flight = set()
 _names_in_flight_lock = threading.Lock()
 
+# Knowing about an in-flight name only helps if it's already claimed by the
+# time the NEXT thread builds its ban list — but every thread's first LLM
+# call started from the same empty in_flight set, since nothing serialized
+# *when* each thread was allowed to call the LLM. Three threads could all
+# read "nothing in flight yet", all ask Gemini for a name, and all get back
+# the same one before any of them had a chance to claim it — which is
+# exactly how three heroes ended up "Ramiro Cruz" / "Ramiro Cruz 2" / "Ramiro
+# Cruz 3" in one pull. Serializing the generate-check-claim cycle behind one
+# lock means each subsequent thread's ban list always reflects every name
+# already decided by threads that started before it, closing the race
+# instead of just papering over it with a numeric suffix after the fact.
+_name_gen_lock = threading.Lock()
+
 def finalize_hero_async(hero_id: int, birth_star: int, aptitudes: dict, extra_prompt: str,
                          needs_custom_portrait: bool, fallback_gender: str, fallback_portrait_prompt: str):
     """
@@ -102,23 +115,24 @@ def finalize_hero_async(hero_id: int, birth_star: int, aptitudes: dict, extra_pr
         try:
             for attempt in range(2):
                 extra = prompt_addendum
-                with _names_in_flight_lock:
-                    in_flight = [n for n in _names_in_flight]
-                if in_flight:
-                    extra = (extra or "") + (
-                        f"\nAnother hero in this same batch was just given one of these names — "
-                        f"do NOT reuse them or close variants: {', '.join(in_flight)}."
-                    )
-                profile = generate_hero_profile(birth_star, aptitudes, extra)
+                with _name_gen_lock:
+                    with _names_in_flight_lock:
+                        in_flight = [n for n in _names_in_flight]
+                    if in_flight:
+                        extra = (extra or "") + (
+                            f"\nAnother hero in this same batch was just given one of these names — "
+                            f"do NOT reuse them or close variants: {', '.join(in_flight)}."
+                        )
+                    profile = generate_hero_profile(birth_star, aptitudes, extra)
 
-                with db() as conn:
-                    exists = conn.execute("SELECT 1 FROM heroes WHERE name = ? AND id != ?", (profile.name, hero_id)).fetchone()
+                    with db() as conn:
+                        exists = conn.execute("SELECT 1 FROM heroes WHERE name = ? AND id != ?", (profile.name, hero_id)).fetchone()
 
-                with _names_in_flight_lock:
-                    collides_in_flight = profile.name in _names_in_flight
-                    if not exists and not collides_in_flight:
-                        _names_in_flight.add(profile.name)
-                        claimed_name = profile.name
+                    with _names_in_flight_lock:
+                        collides_in_flight = profile.name in _names_in_flight
+                        if not exists and not collides_in_flight:
+                            _names_in_flight.add(profile.name)
+                            claimed_name = profile.name
 
                 if claimed_name:
                     break

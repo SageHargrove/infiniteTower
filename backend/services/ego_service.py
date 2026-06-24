@@ -7,6 +7,14 @@ EGO_SATISFACTION_OVERLAP = 0.6  # fraction of the ideal picks that must be prese
 EGO_CONFLICT_DECAY_MULT = 1.5  # extra patience-decay multiplier for ego heroes who clash with the team Leader
 EGO_CONFLICT_OVERLAP_THRESHOLD = 0.5
 
+# A hero this much weaker (by _power_score) than the team's strongest member
+# defers to them entirely — their own ego never asserts itself while a
+# clearly superior teammate is around, the way a weaker fighter falls in
+# line with whoever's obviously stronger in practice. Independent of the
+# manually-assigned Leader tag — raw power earns this regardless of who's
+# flagged as Leader.
+EGO_DOMINANCE_MARGIN = 1.25
+
 BATTLE_TENDENCIES = ["Reckless", "Calculating", "Protective", "Glory-Seeking", "Stoic", "Vengeful"]
 
 
@@ -58,12 +66,28 @@ def _ideal_team(ego_hero_id: int, ego_type: str, alive_heroes: list[dict]) -> li
         return [ego_hero_id] + team_picks
     elif ego_type == "Leader":
         candidates.sort(key=lambda h: (h["level"], -h["apt_leadership"]))
-    elif ego_type == "Lone Wolf":
-        candidates.sort(key=lambda h: (h["health"] + h["strength"]))
     else:
         candidates.sort(key=lambda h: h["level"], reverse=True)
 
     return [ego_hero_id] + [h["id"] for h in candidates[:4]]
+
+
+def _power_score(h: dict) -> float:
+    """Rough current combat-power read, used only to decide ego dominance —
+    not the same as talent_score (which is growth rate, not current power)."""
+    return h.get("level", 1) * 20 + h.get("strength", 0) + h.get("intelligence", 0) + h.get("agility", 0) + h.get("endurance", 0)
+
+
+def is_ego_dominated(ego_hero: dict, team_members: list[dict]) -> bool:
+    """True if some other hero on the team is clearly the strongest — that
+    alone is enough for ego_hero to defer, regardless of whether the lineup
+    matches their own preferences."""
+    others = [h for h in team_members if h["id"] != ego_hero["id"]]
+    if not others:
+        return False
+    my_power = _power_score(ego_hero)
+    best_other = max(_power_score(h) for h in others)
+    return best_other >= my_power * EGO_DOMINANCE_MARGIN
 
 
 def get_team_leader(team_members: list[dict]) -> dict | None:
@@ -85,6 +109,8 @@ def get_ego_conflicts(leader: dict | None, team_members: list[dict], alive_heroe
     conflicts = []
     for h in team_members:
         if h["id"] == leader["id"] or not h.get("ego_type"):
+            continue
+        if is_ego_dominated(h, team_members):
             continue
         their_ideal = set(_ideal_team(h["id"], h["ego_type"], alive_heroes))
         overlap = len(leader_ideal & their_ideal) / max(1, len(leader_ideal))
@@ -147,8 +173,11 @@ def get_ego_recommendation(ego_hero_id: int) -> dict:
 
 
 def check_ego_satisfaction(ego_hero: dict, team_members: list[dict], alive_heroes: list[dict]) -> bool:
+    if is_ego_dominated(ego_hero, team_members):
+        return True
+
     ego_type = ego_hero.get("ego_type")
-    
+
     if ego_type == "Tactical":
         if len(team_members) < 5:
             return False

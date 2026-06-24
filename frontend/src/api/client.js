@@ -95,6 +95,9 @@ export const configTraining = (facilityId, heroId, role, targetSkillId, targetHe
 export const getMageTowerUpgrades = () => request('/base/facilities/mage-tower/upgrades')
 export const buyResearchUpgrade = (upgradeId) => request('/base/facilities/mage-tower/buy', { method: 'POST', body: JSON.stringify({ upgrade_id: upgradeId }) })
 
+export const getBaseUpgrades = () => request('/base/upgrades')
+export const buyBaseUpgrade = (upgradeId) => request('/base/upgrades/purchase', { method: 'POST', body: JSON.stringify({ upgrade_id: upgradeId }) })
+
 export const grantResources = (gold = 0, gems = 0, supplies = 0) => request('/base/dev/grant', { method: 'POST', body: JSON.stringify({ gold, gems, supplies }) })
 export const clearDevInventory = () => request('/base/dev/clear-inventory', { method: 'POST' })
 export const setDevLevel = (heroId, level) => request('/base/dev/set-level', { method: 'POST', body: JSON.stringify({ hero_id: heroId, level }) })

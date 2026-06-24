@@ -1,5 +1,25 @@
 import React, { useState, useEffect } from 'react'
-import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase, getMarketCatalog, purchaseMarketItem } from '../api/client'
+import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase, getMarketCatalog, purchaseMarketItem, getBaseUpgrades, buyBaseUpgrade } from '../api/client'
+
+// Hand-painted banner art for the base-wide upgrade tree — keyed by the
+// upgrade's id (see DEFAULT_UPGRADES in routers/base.py) so a rename there
+// doesn't silently lose its art.
+const UPGRADE_BANNERS = {
+  barracks: '/facilities/Barracks.png',
+  infirmary: '/facilities/Infirmary.png',
+  forge: '/facilities/Forge.png',
+  watchtower: '/facilities/Watchtower.png',
+  archive: '/facilities/Archive.png',
+  chapel: '/facilities/Chapel.png',
+}
+
+// Same art, reused for the assignable Facilities tab where the names happen
+// to overlap (Forge/Infirmary exist as both a base-wide upgrade tier and a
+// separate assignable building) — everything else in that tab has no art yet.
+const FACILITY_BANNERS = {
+  Forge: '/facilities/Forge.png',
+  Infirmary: '/facilities/Infirmary.png',
+}
 
 const FACILITY_TOOLTIPS = {
   "Forge": "Crafts powerful weapons, armor, and accessories. Quality is capped by your single best Blacksmith — more Blacksmiths of that same tier assigned together adds a smaller bonus on top.",
@@ -26,6 +46,8 @@ export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTa
   const [crafting, setCrafting] = useState(false)
   const [marketCatalog, setMarketCatalog] = useState({})
   const [purchasing, setPurchasing] = useState(false)
+  const [baseUpgrades, setBaseUpgrades] = useState([])
+  const [upgradingId, setUpgradingId] = useState(null)
   
   // Legacy & Floors
   const [legacies, setLegacies] = useState([])
@@ -70,14 +92,15 @@ export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTa
 
   async function loadAll() {
     try {
-      const [b, fac, heroes, leg, flrs, ch, catalog] = await Promise.all([
+      const [b, fac, heroes, leg, flrs, ch, catalog, upgrades] = await Promise.all([
         getBase(),
         getFacilities(),
         listHeroes(true),
         getLegacies().catch(() => ({ legacies: [] })),
         getBaseFloors().catch(() => ({ floors: [], base_heroes: [] })),
         getChatLogs(5).catch(() => []),
-        getMarketCatalog().catch(() => ({}))
+        getMarketCatalog().catch(() => ({})),
+        getBaseUpgrades().catch(() => [])
       ])
       setBase(b)
       setFacilitiesData(fac)
@@ -86,6 +109,7 @@ export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTa
       setFloorsData(flrs)
       applyChats(ch)
       setMarketCatalog(catalog)
+      setBaseUpgrades(upgrades)
       
       const hasMage = fac.built?.some(f => f.type === 'Mage Tower')
       if (hasMage) {
@@ -131,6 +155,19 @@ const handleRenameBase = async () => {
   }
 
 
+
+  async function handleBuyBaseUpgrade(upgradeId) {
+    setUpgradingId(upgradeId)
+    try {
+      await buyBaseUpgrade(upgradeId)
+      loadAll()
+      if (onGoldChange) onGoldChange()
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setUpgradingId(null)
+    }
+  }
 
   async function handleBuildFacility(type) {
     setFacilityLoading(true)
@@ -412,11 +449,19 @@ const getGenRate = (fac) => {
       )}
 
       {activeTab === 'facilities' && (
+        <>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           {/* Left Column: Built Facilities */}
           <div style={{ flex: '2 1 500px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {facilitiesData.built.sort((a,b) => a.cost - b.cost).map(fac => (
-              <div key={fac.id} className="card">
+              <div key={fac.id} className="card" style={{ overflow: 'hidden', padding: 0 }}>
+                {FACILITY_BANNERS[fac.type] && (
+                  <div style={{ width: '100%', height: '140px', overflow: 'hidden', position: 'relative' }}>
+                    <img src={FACILITY_BANNERS[fac.type]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,14,0.95) 100%)' }} />
+                  </div>
+                )}
+                <div style={{ padding: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -515,6 +560,7 @@ const getGenRate = (fac) => {
                     </div>
                   </div>
                 )}
+                </div>
               </div>
             ))}
           </div>
@@ -542,6 +588,39 @@ const getGenRate = (fac) => {
             </div>
           </div>
         </div>
+
+        {/* Base Upgrades — base-wide tiers (not tied to any one hero
+            assignment), separate from the assignable Facilities above. */}
+        {baseUpgrades.length > 0 && (
+          <div style={{ marginTop: '1.5rem' }}>
+            <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '1rem' }}>Base Upgrades</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+              {baseUpgrades.map(u => (
+                <div key={u.id} className="card" style={{ overflow: 'hidden', padding: 0 }}>
+                  {UPGRADE_BANNERS[u.id] && (
+                    <div style={{ width: '100%', height: '110px', overflow: 'hidden', position: 'relative' }}>
+                      <img src={UPGRADE_BANNERS[u.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,14,0.95) 100%)' }} />
+                    </div>
+                  )}
+                  <div style={{ padding: '0.75rem' }}>
+                    <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)' }}>{u.name} (Lv.{u.level || 0}/{u.max_level})</div>
+                    <div className="text-dim" style={{ fontSize: '0.8rem', margin: '0.3rem 0 0.6rem' }}>{u.description}</div>
+                    <button
+                      className="btn btn-gold"
+                      onClick={() => handleBuyBaseUpgrade(u.id)}
+                      disabled={u.is_maxed || upgradingId === u.id || base.gold < u.next_cost}
+                      style={{ width: '100%', fontSize: '0.8rem', padding: '0.4rem' }}
+                    >
+                      {u.is_maxed ? 'MAX' : `Upgrade (${u.next_cost}g)`}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {activeTab === 'legacy' && (
@@ -602,7 +681,7 @@ const getGenRate = (fac) => {
               Assign idle heroes to protect base floors. Drag an unassigned hero onto an empty slot on a floor to assign them. Drag an assigned hero back to unassign them.
             </div>
             <div className="text-dim text-sm" style={{ lineHeight: 1.5, marginTop: '0.5rem' }}>
-              <span className="text-hi">Benefit:</span> a stationed hero gets a stat bonus (Health/STR/INT/AGI) while climbing the Tower, and recovers from fatigue faster at the base. Each floor has a fixed bonus pool that's split evenly among whoever's stationed there — higher floors have a bigger pool, but spreading more heroes across one floor shrinks everyone's individual share. Check each floor's current bonus % below before assigning.
+              <span className="text-hi">Benefit:</span> a stationed hero gets an all-stats bonus while climbing the Tower, and recovers from fatigue faster at the base. Each floor has a fixed bonus pool that's split evenly among whoever's stationed there — higher floors have a bigger pool, but spreading more heroes across one floor shrinks everyone's individual share. Check each floor's current bonus % below before assigning.
             </div>
           </div>
           

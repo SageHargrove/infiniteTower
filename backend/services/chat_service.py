@@ -160,6 +160,7 @@ Base State Context:
 - Current Base Gold: {gold}
 - Highest Tower Floor Cleared: {highest_floor}
 - CRITICAL LORE: The heroes are climbing UP a massive Tower. Their goal is the TOP, not the "center" or "end of a labyrinth".
+- CRITICAL LORE: The heroes are physically standing together in {location}, face to face. NEVER write lines implying radio, comms, static, signals, transmissions, or any kind of remote/long-distance communication — they are not separated and never hear from each other indirectly.
 
 {recent_topics_prompt}
 
