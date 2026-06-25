@@ -139,9 +139,13 @@ def recalculate_hero_level(hero: dict) -> int:
         hero.get("xp", 0)
     )
 
-def get_aptitude_reveals(level: int) -> int:
-    """How many aptitudes should be revealed at this level."""
-    return min(5, level // 5)  # one reveal per 5 levels, max 5
+def get_aptitude_reveals(level: int, archive_level: int = 0) -> int:
+    """How many aptitudes should be revealed at this level. Base rate is one
+    per 5 levels; the Archive base-upgrade ("Reveal hero aptitudes faster")
+    shortens that interval by one level per Archive level, down to a floor
+    of revealing one per level at Archive's max (3)."""
+    interval = max(1, 5 - archive_level)
+    return min(5, level // interval)
 
 def level_up_summary(old_level: int, new_level: int, hero_name: str) -> list[str]:
     """Generate log messages for level ups."""
@@ -154,9 +158,9 @@ def level_up_summary(old_level: int, new_level: int, hero_name: str) -> list[str
 
 APTITUDE_REVEAL_ORDER = ["apt_combat", "apt_survival", "apt_tactical", "apt_mental", "apt_leadership"]
 
-def get_revealed_aptitudes(hero: dict) -> dict:
+def get_revealed_aptitudes(hero: dict, archive_level: int = 0) -> dict:
     level = hero.get("level", 1)
-    reveals = get_aptitude_reveals(level)
+    reveals = get_aptitude_reveals(level, archive_level)
     result = {}
     for i, apt_key in enumerate(APTITUDE_REVEAL_ORDER):
         if i < reveals:

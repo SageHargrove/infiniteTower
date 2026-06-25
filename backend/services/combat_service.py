@@ -54,6 +54,7 @@ class CombatUnit:
     bracing_rounds: int = 0    # Calculating panic response — forgoes their strength to brace defensively
     spawn_template: str = ""  # name of the weak add this unit's "summon_add" ability spawns, if any
     summons_used: int = 0     # caps "summon_add" so a miniboss/boss can't stall a fight forever
+    used_consumable: bool = False  # caps the shared Potion/Scroll backpack to one sip per hero per fight
 
     def __post_init__(self):
         self.log_name = self.name if self.is_hero else f"[{self.name}]"
@@ -137,6 +138,12 @@ ENEMY_SPAWN_TEMPLATE = {
 }
 
 SELF_REGEN_PCT = 0.06  # per-round Health regen granted by the "self_regen" ability
+
+# Potions/Scrolls are a shared base-wide "backpack," not a per-hero item
+# slot — a hero who drops below this much Health drinks the best available
+# healing-capable one at their own discretion, once per hero per fight, so
+# one bad floor doesn't drain the whole shared stock on a single hero.
+CONSUMABLE_LOW_HP_THRESHOLD = 0.35
 
 def _enemy_pool_for_floor(floor_number: int) -> list[tuple]:
     """Every tier unlocked at or below this floor stays available — a
@@ -888,7 +895,7 @@ def resolve_hero_stats(heroes: list[dict]) -> list[dict]:
     return processed
 
 
-def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None, skip_stat_pipeline: bool = False, family_override: dict = None, is_survival_swarm: bool = False, turn_limit: int = None) -> dict:
+def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, enemy_count_override: int = None, difficulty_mult: float = 1.0, preset_enemies: list = None, outer_conn=None, skip_stat_pipeline: bool = False, family_override: dict = None, is_survival_swarm: bool = False, turn_limit: int = None, available_consumables: list = None) -> dict:
     log = []
     turns = []
     morale_changes = {h["id"]: 0 for h in heroes}
@@ -908,7 +915,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
                                                  boss_data_override, enemy_count_override, difficulty_mult,
                                                  preset_enemies, outer_conn, log, turns,
                                                  morale_changes, kill_counts, stress_changes,
-                                                 family_override, is_survival_swarm, turn_limit)
+                                                 family_override, is_survival_swarm, turn_limit, available_consumables)
         result.pop("_avg_luck", None)
         return result
 
@@ -918,7 +925,7 @@ def run_combat(heroes: list[dict], floor_number: int, is_boss: bool = False, is_
                                              boss_data_override, enemy_count_override, difficulty_mult,
                                              preset_enemies, outer_conn, log, turns,
                                              morale_changes, kill_counts, stress_changes,
-                                             family_override, is_survival_swarm, turn_limit)
+                                             family_override, is_survival_swarm, turn_limit, available_consumables)
     _apply_combat_drops(result, floor_number, is_boss, is_miniboss, outer_conn)
     return result
 
@@ -927,7 +934,8 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
                                     boss_data_override, enemy_count_override, difficulty_mult,
                                     preset_enemies, outer_conn, log, turns,
                                     morale_changes, kill_counts, stress_changes,
-                                    family_override=None, is_survival_swarm=False, turn_limit=None):
+                                    family_override=None, is_survival_swarm=False, turn_limit=None,
+                                    available_consumables=None):
     """The CombatUnit-construction-and-turn-loop core of run_combat, split out
     of the stat-resolution pipeline above it so a caller that already has
     fully-resolved hero dicts (no local DB to re-derive equipment/relic/bond/
@@ -1074,6 +1082,7 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
     power_ratio = enemy_power / hero_power
 
     damage_dealt_stats = {h.id: 0 for h in combatants_heroes}
+    consumables_used = {}
 
     for round_num in range(1, max_rounds + 1):
         all_units.sort(key=lambda u: u.agility + random.uniform(0, 2), reverse=True)
@@ -1113,6 +1122,22 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
                 heal = int(unit.max_health * unit.regen_pct)
                 unit.health = min(unit.max_health, unit.health + heal)
                 log.append(f"  ✚ {unit.log_name} regenerates {heal} Health [{unit.health}/{unit.max_health}]")
+
+        # ─── Shared-backpack Potion/Scroll auto-use ───
+        if available_consumables:
+            for hero in alive_heroes:
+                if hero.used_consumable or hero.health >= hero.max_health * CONSUMABLE_LOW_HP_THRESHOLD:
+                    continue
+                usable = [c for c in available_consumables if c["quantity"] > 0]
+                if not usable:
+                    continue
+                best = max(usable, key=lambda c: c["heal_pct"])
+                heal = int(hero.max_health * best["heal_pct"])
+                hero.health = min(hero.max_health, hero.health + heal)
+                best["quantity"] -= 1
+                hero.used_consumable = True
+                consumables_used[best["item_name"]] = consumables_used.get(best["item_name"], 0) + 1
+                log.append(f"  ✚ {hero.log_name} drinks a {best['item_name']}, healing {heal} Health [{hero.health}/{hero.max_health}]")
 
         alive_frontline = [h for h in frontline if h.alive]
 
@@ -1339,6 +1364,7 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
         "is_survival_swarm": is_survival_swarm,
         "rounds_survived": round_num if is_survival_swarm else None,
         "turn_limit": max_rounds if is_survival_swarm else None,
+        "consumables_used": consumables_used,
         "initial_state": initial_state,
         "surviving_heroes": [
             {
@@ -1434,13 +1460,13 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
     except Exception as e:
         print(f"Error generating drop: {e}")
 
-def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, difficulty_mult: float = 1.0, conn=None, family_override: dict = None, is_survival_swarm: bool = False, turn_limit: int = None) -> dict:
+def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, difficulty_mult: float = 1.0, conn=None, family_override: dict = None, is_survival_swarm: bool = False, turn_limit: int = None, available_consumables: list = None) -> dict:
     # Raid Boss (Every 20th floor is Raid Boss)
     if is_boss and floor_number % 20 == 0:
         combined_heroes = []
         for team in hero_teams:
             combined_heroes.extend(team)
-        return run_combat(combined_heroes, floor_number, is_boss=True, is_miniboss=False, zone_theme=zone_theme, boss_data_override=boss_data_override, difficulty_mult=difficulty_mult * len(hero_teams), outer_conn=conn)
+        return run_combat(combined_heroes, floor_number, is_boss=True, is_miniboss=False, zone_theme=zone_theme, boss_data_override=boss_data_override, difficulty_mult=difficulty_mult * len(hero_teams), outer_conn=conn, available_consumables=available_consumables)
 
     # Shared Encounter relay — one enemy roster scaled for the combined
     # threat of every deployed team (same scaling the boss-merge branch above
@@ -1477,6 +1503,7 @@ def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: b
         "gold_gained": 0,
         "supplies_gained": 0,
         "materials_gained": {},
+        "consumables_used": {},
         # One entry per deployed team (None if that team was empty or had
         # nothing left to fight) — the frontend renders one CombatArena per
         # entry, each with its own initial_state/turns/log for that team's leg
@@ -1502,7 +1529,11 @@ def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: b
         # floor (10, 30, 50, 70, 90) it meant _apply_combat_drops below never
         # applied the Boss reward bonus, and the frontend never got
         # initial_state.is_boss=True to size the enemy sprite as a boss.
-        res = run_combat(team, floor_number, is_boss=is_boss, is_miniboss=is_miniboss, zone_theme=zone_theme, difficulty_mult=difficulty_mult, preset_enemies=current_enemies, outer_conn=conn, is_survival_swarm=is_survival_swarm, turn_limit=turn_limit)
+        # Potions/Scrolls are a shared base-wide backpack, not per-team — the
+        # same list object is passed (and mutated in place) into every team's
+        # fight in this loop, so a multi-team floor can't double-dip the same
+        # finite stock once one team's fight already spent it.
+        res = run_combat(team, floor_number, is_boss=is_boss, is_miniboss=is_miniboss, zone_theme=zone_theme, difficulty_mult=difficulty_mult, preset_enemies=current_enemies, outer_conn=conn, is_survival_swarm=is_survival_swarm, turn_limit=turn_limit, available_consumables=available_consumables)
         logs.extend(res.get("log", []))
         final_result["team_results"].append(res)
 
@@ -1519,6 +1550,8 @@ def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: b
         final_result["supplies_gained"] += res.get("supplies_gained", 0)
         for k, v in res.get("materials_gained", {}).items():
             final_result["materials_gained"][k] = final_result["materials_gained"].get(k, 0) + v
+        for k, v in res.get("consumables_used", {}).items():
+            final_result["consumables_used"][k] = final_result["consumables_used"].get(k, 0) + v
         if "equipment_drop" in res and "equipment_drop" not in final_result:
             final_result["equipment_drop"] = res["equipment_drop"]
         if "relic_drop" in res and "relic_drop" not in final_result:

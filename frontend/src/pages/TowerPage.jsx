@@ -878,6 +878,19 @@ export default function TowerPage({ onGoldChange }) {
               </div>
             )}
 
+            {/* Watchtower base-upgrade reveal — floors beyond the very next
+                one, scouted in advance. Empty array (no upgrade) renders nothing. */}
+            {floorPreview?.ahead?.length > 0 && (
+              <div style={{
+                marginBottom: '1rem', padding: '0.5rem 0.8rem',
+                background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.25)',
+                borderRadius: 6, fontSize: '0.8rem', color: 'var(--text-dim)',
+              }}>
+                <span style={{ color: 'var(--gold)' }}>Watchtower sights ahead:</span>{' '}
+                {floorPreview.ahead.map(a => `Floor ${a.floor_number} (${a.floor_type})`).join(', ')}
+              </div>
+            )}
+
             {error && <div className="text-red text-sm" style={{ marginBottom: '1rem' }}>{error}</div>}
 
             <div style={{ display: 'flex', gap: '0.6rem' }}>

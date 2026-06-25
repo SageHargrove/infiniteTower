@@ -320,6 +320,15 @@ CREATE TABLE IF NOT EXISTS inventory (
             description TEXT
         );
 
+CREATE TABLE IF NOT EXISTS base_upgrades (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            level INTEGER DEFAULT 0,
+            max_level INTEGER DEFAULT 5,
+            unlocked INTEGER DEFAULT 0
+        );
+
 CREATE TABLE IF NOT EXISTS hero_bonds (
     hero_a_id INTEGER,
     hero_b_id INTEGER,

@@ -177,10 +177,13 @@ def rest_heroes():
             
         conn.execute("UPDATE base SET supplies = supplies - ?, last_rest_time = ? WHERE id = 1", (supply_cost, now))
         
+        from services.base_service import get_base_upgrade_level
+        infirmary_level = get_base_upgrade_level(conn, "infirmary")
+
         # Button says "Rest All Heroes" — rest the whole living roster, not just deployed ones
         heroes = conn.execute("SELECT * FROM heroes WHERE is_alive = 1").fetchall()
         for hero in heroes:
-            recovery = rest_at_base_recovery(dict(hero))
+            recovery = rest_at_base_recovery(dict(hero), upgrade_level=infirmary_level)
             # Psych-only — HP is handled by lobby-return full heal, not Rest.
             conn.execute("""
                 UPDATE heroes SET morale = ?, stress = ?, trauma = ?, morale_state = ?, fatigue = 0
@@ -444,7 +447,7 @@ def use_item(req: UseItemRequest):
 DEFAULT_UPGRADES = [
     {"id": "barracks", "name": "Barracks", "description": "Increase max team size.", "max_level": 5},
     {"id": "infirmary", "name": "Infirmary", "description": "Improve rest recovery rates.", "max_level": 5},
-    {"id": "forge", "name": "Forge", "description": "Unlock equipment crafting.", "max_level": 5},
+    {"id": "forge", "name": "Forge", "description": "Improves the quality of crafted equipment.", "max_level": 5},
     {"id": "watchtower", "name": "Watchtower", "description": "Reveal floor types in advance.", "max_level": 3},
     {"id": "archive", "name": "Archive", "description": "Reveal hero aptitudes faster.", "max_level": 3},
     {"id": "chapel", "name": "Chapel", "description": "Reduce trauma buildup.", "max_level": 5},
@@ -462,11 +465,18 @@ UPGRADE_GOLD_COST = {
 def get_upgrades():
     """Return all base upgrades and their current levels."""
     with db() as conn:
-        # Ensure defaults exist
+        # Ensure defaults exist, and keep name/description/max_level in sync
+        # for rows created before a wording change (e.g. Forge's "unlock
+        # crafting" claim, which never matched reality since crafting
+        # already worked without it — see forge_craft's real effect now).
         for u in DEFAULT_UPGRADES:
             conn.execute(
                 "INSERT OR IGNORE INTO base_upgrades (id, name, description, max_level) VALUES (?,?,?,?)",
                 (u["id"], u["name"], u["description"], u["max_level"])
+            )
+            conn.execute(
+                "UPDATE base_upgrades SET name = ?, description = ?, max_level = ? WHERE id = ?",
+                (u["name"], u["description"], u["max_level"], u["id"])
             )
         rows = conn.execute("SELECT * FROM base_upgrades ORDER BY name").fetchall()
         
@@ -632,6 +642,14 @@ def forge_craft(req: CraftRequest):
                 crafter_name = next(h["name"] for h in assigned if h["hero_class"] == best_smith_cls)
             else:
                 crafter_name = assigned[0]["name"] + " (Unskilled)"
+
+        # Forge base-upgrade (DEFAULT_UPGRADES "forge") used to claim it
+        # "unlocks equipment crafting" — but crafting already works without
+        # it, so that description never matched reality. Repurposed: a flat
+        # quality nudge on top of whichever Blacksmith crafted it, same
+        # scale as one smith-tier step (see SMITH_TIER_BONUS).
+        from services.base_service import get_base_upgrade_level
+        apt += get_base_upgrade_level(conn, "forge") * 10
 
         conn.execute("UPDATE base SET gold = gold - 100, materials = ? WHERE id = 1", (json.dumps(mats),))
 
