@@ -124,33 +124,28 @@ yet, just the boss slot itself):
   name-based tiered-folder lookup, which only checks the new
   `enemies/<tier>/` convention and wouldn't have found them there.
 
-**Floor 11-20 family built** (Kobold/Skeleton/Orc/Giant Spider — Orc was
-already in the old generic pool, the rest are new):
-- 4 new Elites: Elite Kobold Scout (summons more Kobolds), Skeleton Knight
-  (cleave), Skeleton Mage (team-buff aura), Orc Berserker (enrage).
-- Miniboss (floor 15): **Skeleton Champion** — your original idea was
-  "revives the fallen," which needed a brand-new reusable ability
-  (`revive_ally`, added to the same shared library as summon_add/cleave/etc.
-  in combat_service.py) since nothing like it existed yet. It also carries
-  summon_add (calls in Skeletons) since revive_ally needs an actual dead
-  ally to bring back — a solo boss has none by default otherwise.
-- Boss (floor 20): **Gorrath the Bonebreaker** — an Orc warlord who calls
-  in Kobolds. Floor 20 is also a Raid Boss floor (every-20th-floor merge);
-  fixed a second instance of the same bug as floor 10's fix above — the
-  raid-merge branch in `run_multi_combat` wasn't forwarding
-  `family_override` at all, so a floor-20/40/60/80/100 family boss could
-  never have appeared even once it was defined. Floor 100's Lich
-  King/Nightwing Devourer pick now actually reaches that branch too.
+**Floor 11-20 family ("wave 2") was built, then pulled back out** — Kobold/
+Skeleton/Orc Berserker/Giant Spider, Elites, miniboss Skeleton Champion
+(needed a new `revive_ally` ability, still in combat_service.py's shared
+ability library even though nothing uses it right now), boss Gorrath the
+Bonebreaker. Built and tested working, but you hadn't finished reviewing/
+clearing wave 1 (floor 1-10) yet, so per your call this got removed again —
+going one wave at a time. The `revive_ally` ability and the floor-20
+raid-merge `family_override`-forwarding fix (a real pre-existing bug, not
+specific to wave 2) were left in place since they're harmless engine
+infrastructure with no current callers, not wave-2 content themselves.
+Floor 11-20 is back to the old generic enemy pool until wave 1 is signed
+off and this gets revisited.
 
 **Not done yet (next batches, by floor-range block):**
-- Floor 21-69, 71-89, 91-99 Normal/Elite/Miniboss rosters — the 3 standalone
-  bosses (70/90/100) are placeholders sitting on top of ranges that
-  otherwise still use the old generic enemy pool.
+- Floor 11-99 Normal/Elite/Miniboss rosters — the 3 standalone bosses
+  (70/90/100) are placeholders sitting on top of ranges that otherwise
+  still use the old generic enemy pool.
 - Floor 50's "extra special" treatment — no preserved art fit that range,
   still no design, flagged in `enemy_families.SPECIAL_BOSS_FLOORS` as a marker.
-- Elite variants for the pre-existing enemies outside floor 1-10/11-20
-  (Troll, Ogre, Harpy, Dire Wolf, etc.) — only the two *new* families got
-  Elites so far, per "ship one block at a time" sequencing.
+- Elite variants for the pre-existing enemies outside floor 1-10 (Troll,
+  Ogre, Harpy, Dire Wolf, etc.) — only floor 1-10 got Elites so far, per
+  "ship one block at a time, get it signed off" sequencing.
 
 **Enemy/boss portrait library cleanup (this pass):** per your direct
 confirmation, every enemy/boss portrait NOT on the preserve list was

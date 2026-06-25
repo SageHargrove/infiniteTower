@@ -93,16 +93,6 @@ ENEMY_TYPES = [
     ("Harpy", 0.8, 0.6, 1.8, "pack", "intermediate"),
     ("Ogre", 1.6, 1.3, 0.6, "elite", "intermediate"),
     ("Troll", 1.7, 1.0, 0.6, "elite", "intermediate"),
-    # Floor 11-20 family (Kobolds/Skeletons/Orcs/Giant Spiders) — Orc above
-    # already covers that leg of the family; these fill in the rest. See
-    # enemy_families.py for the matching miniboss/boss for this floor range.
-    ("Kobold", 0.6, 0.5, 1.2, "swarm", "intermediate"),
-    ("Skeleton", 0.9, 0.9, 0.8, "normal", "intermediate"),
-    ("Giant Spider", 0.9, 0.7, 1.5, "pack", "intermediate"),
-    ("Elite Kobold Scout", 1.0, 0.8, 1.8, "elite", "intermediate"),
-    ("Skeleton Knight", 1.3, 1.3, 0.8, "elite", "intermediate"),
-    ("Skeleton Mage", 1.0, 0.7, 0.9, "elite", "intermediate"),
-    ("Orc Berserker", 1.4, 0.9, 1.1, "elite", "intermediate"),
     # --- advanced (floor 40+) ---
     ("Corpse Rat", 1.0, 1.0, 1.5, "swarm", "advanced"),
     ("Grave Scarab", 1.0, 1.0, 1.6, "swarm", "advanced"),
@@ -140,16 +130,11 @@ ENEMY_ABILITY_OVERRIDES = {
     "Goblin Shaman": ["team_buff_aura"],
     "Giant Rat Alpha": ["summon_add"],
     "Wolf Alpha": ["enrage"],
-    "Elite Kobold Scout": ["summon_add"],
-    "Skeleton Knight": ["cleave"],
-    "Skeleton Mage": ["team_buff_aura"],
-    "Orc Berserker": ["enrage"],
 }
 
 # Which weak swarm-type a "summon_add" user calls in as reinforcements.
 ENEMY_SPAWN_TEMPLATE = {
     "Giant Rat Alpha": "Giant Rat",
-    "Elite Kobold Scout": "Kobold",
 }
 
 SELF_REGEN_PCT = 0.06  # per-round Health regen granted by the "self_regen" ability
