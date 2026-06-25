@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { listHeroes, setTeam, removeHeroFromTeam, reorderTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, getAscensionInfo, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation, assignTeamLeader, getBonds } from '../api/client'
+import { listHeroes, setTeam, removeHeroFromTeam, reorderTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, getAscensionInfo, promoteHero, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation, assignTeamLeader, getBonds, equipConsumable, getInventory, getBase } from '../api/client'
 import HeroCard from '../components/HeroCard'
 import ClassEvolutionModal from '../components/ClassEvolutionModal'
 
@@ -41,6 +41,8 @@ export default function HeroesPage() {
   const [eqModal, setEqModal] = useState(null)
   const [allEq, setAllEq] = useState([])
   const [evoModal, setEvoModal] = useState(null)
+  const [consModal, setConsModal] = useState(null)
+  const [consOptions, setConsOptions] = useState([])
 
   // Synthesis state
   const [synthMode, setSynthMode] = useState(false)
@@ -73,6 +75,14 @@ export default function HeroesPage() {
       const eqData = await listEquipment()
       setAllEq(eqData.unequipped || [])
     } catch(e) {}
+    try {
+      const [inv, base] = await Promise.all([getInventory(), getBase()])
+      const opts = inv.filter(i => i.item_type === 'potion' || i.item_type === 'scroll')
+        .map(i => ({ item_name: i.item_name, item_type: i.item_type, quantity: i.quantity }))
+      const materials = base.materials ? JSON.parse(base.materials) : {}
+      if (materials.Bandage > 0) opts.unshift({ item_name: 'Bandage', item_type: 'bandage', quantity: materials.Bandage })
+      setConsOptions(opts)
+    } catch (e) {}
   }
 
   function toggleSelect(id) {
@@ -494,6 +504,7 @@ export default function HeroesPage() {
           showFull={false}
           onRegenerateProfile={() => load()}
           onManageEquipment={(h, s, e) => setEqModal({ hero: h, slot: s, currentEq: e })}
+          onManageConsumable={(h) => setConsModal({ hero: h })}
           actions={!synthMode && hero.is_alive && (
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
               {activeTab !== 'all' && (
@@ -584,6 +595,7 @@ export default function HeroesPage() {
               showFull={true}
               onRegenerateProfile={() => load()}
               onManageEquipment={(h, s, e) => setEqModal({ hero: h, slot: s, currentEq: e })}
+          onManageConsumable={(h) => setConsModal({ hero: h })}
               actions={heroes.find(h => h.id === expandedId)?.is_alive && (
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                   {typeof activeTab === 'number' && heroes.find(h => h.id === expandedId)?.ego_type && (
@@ -880,6 +892,61 @@ export default function HeroesPage() {
                       await equipItem(eq.id, eqModal.hero.id);
                       setEqModal(null);
                       load();
+                    }}>Equip</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Consumable Modal */}
+      {consModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.85)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(5px)'
+        }} onClick={() => setConsModal(null)}>
+          <div className="card" style={{ width: '500px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '1rem' }}>
+              Consumable for {consModal.hero.name}
+            </h3>
+            <div className="text-dim text-sm" style={{ marginBottom: '1rem' }}>
+              What this hero carries into the tower and drinks/uses when hurt. Bandages heal pre-fight; Potions/Scrolls heal mid-fight. The item still comes from the same shared stock — this just decides who's allowed to reach for it.
+            </div>
+
+            {consModal.hero.equipped_consumable && (
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: 4, border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--gold)', fontFamily: 'Cinzel, serif' }}>{consModal.hero.equipped_consumable}</div>
+                <button className="btn btn-danger" onClick={async () => {
+                  await equipConsumable(consModal.hero.id, null)
+                  setConsModal(null)
+                  load()
+                }}>Unequip</button>
+              </div>
+            )}
+
+            <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Available in Storage:</div>
+            {consOptions.length === 0 ? (
+              <div className="text-dim text-sm" style={{ fontStyle: 'italic' }}>No Bandages, Potions, or Scrolls in storage.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                {consOptions.map(opt => (
+                  <div key={opt.item_name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border)', borderRadius: 4 }}>
+                    <div>
+                      <div style={{ color: 'var(--text-hi)', fontFamily: 'Cinzel, serif' }}>{opt.item_name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Owned: {opt.quantity}</div>
+                    </div>
+                    <button className="btn btn-primary" onClick={async () => {
+                      try {
+                        await equipConsumable(consModal.hero.id, opt.item_name)
+                        setConsModal(null)
+                        load()
+                      } catch (e) {
+                        setMsg(e.message)
+                      }
                     }}>Equip</button>
                   </div>
                 ))}

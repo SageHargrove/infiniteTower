@@ -143,6 +143,8 @@ export const equipItem = (equipmentId, heroId) => request('/equipment/equip', { 
 export const unequipItem = (equipmentId) => request('/equipment/unequip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
 export const scrapEquipment = (equipmentId) => request('/equipment/scrap', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
 
+export const equipConsumable = (heroId, itemName) => request('/base/heroes/equip-consumable', { method: 'POST', body: JSON.stringify({ hero_id: heroId, item_name: itemName }) })
+
 // Gacha
 export const pullHeroes = (count = 1, usePortrait = false, currency = 'gem') => request('/gacha/pull', { method: 'POST', body: JSON.stringify({ count, use_portrait: usePortrait, currency }) })
 export const pullEquipment = (count = 1, currency = 'gold') => request('/gacha/equipment-pull', { method: 'POST', body: JSON.stringify({ count, currency }) })

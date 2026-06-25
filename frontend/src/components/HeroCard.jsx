@@ -305,7 +305,7 @@ function AptitudeDisplay({ hero }) {
   )
 }
 
-export default function HeroCard({ hero, onAssign, onManageEquipment, selected, onClick, onToggleSelect, showFull = false, onRegenerateProfile, actions }) {
+export default function HeroCard({ hero, onAssign, onManageEquipment, onManageConsumable, selected, onClick, onToggleSelect, showFull = false, onRegenerateProfile, actions }) {
   if (!hero) return null
   const dead = !hero.is_alive
   const [refreshing, setRefreshing] = useState(false)
@@ -695,6 +695,40 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, selected, 
                       </div>
                     )
                   })}
+                  <div style={{
+                    padding: '0.3rem 0.5em',
+                    background: 'rgba(255,255,255,0.02)',
+                    borderLeft: `2px solid ${hero.equipped_consumable ? '#4a9a6a' : '#444'}`,
+                    borderRadius: '0 3px 3px 0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{ flex: 1, marginRight: '0.5em' }}>
+                      <div style={{ fontSize: '0.65em', color: 'var(--text-dim)', textTransform: 'capitalize', marginBottom: '0.1em' }}>consumable</div>
+                      {hero.equipped_consumable ? (
+                        <div style={{ fontSize: '0.75em', color: 'var(--text-hi)' }}>{hero.equipped_consumable}</div>
+                      ) : (
+                        <div style={{ fontSize: '0.75em', color: 'var(--text-dim)', fontStyle: 'italic' }}>Empty</div>
+                      )}
+                    </div>
+                    {onManageConsumable && (
+                      <button
+                        onClick={() => onManageConsumable(hero)}
+                        style={{
+                          background: hero.equipped_consumable ? 'transparent' : 'rgba(201,168,76,0.1)',
+                          border: hero.equipped_consumable ? '1px solid var(--border)' : '1px solid var(--gold)',
+                          color: hero.equipped_consumable ? 'var(--text-dim)' : 'var(--gold)',
+                          padding: '0.2rem 0.4em',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          fontSize: '0.7em'
+                        }}
+                      >
+                        {hero.equipped_consumable ? 'Change' : 'Equip'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
