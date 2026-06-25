@@ -5,20 +5,20 @@ import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility,
 // upgrade's id (see DEFAULT_UPGRADES in routers/base.py) so a rename there
 // doesn't silently lose its art.
 const UPGRADE_BANNERS = {
-  barracks: '/facilities/Barracks.png',
-  infirmary: '/facilities/Infirmary.png',
-  forge: '/facilities/Forge.png',
-  watchtower: '/facilities/Watchtower.png',
-  archive: '/facilities/Archive.png',
-  chapel: '/facilities/Chapel.png',
+  barracks: 'http://localhost:8000/static/facilities/Barracks.png',
+  infirmary: 'http://localhost:8000/static/facilities/Infirmary.png',
+  forge: 'http://localhost:8000/static/facilities/Forge.png',
+  watchtower: 'http://localhost:8000/static/facilities/Watchtower.png',
+  archive: 'http://localhost:8000/static/facilities/Archive.png',
+  chapel: 'http://localhost:8000/static/facilities/Chapel.png',
 }
 
 // Same art, reused for the assignable Facilities tab where the names happen
 // to overlap (Forge/Infirmary exist as both a base-wide upgrade tier and a
 // separate assignable building) — everything else in that tab has no art yet.
 const FACILITY_BANNERS = {
-  Forge: '/facilities/Forge.png',
-  Infirmary: '/facilities/Infirmary.png',
+  Forge: 'http://localhost:8000/static/facilities/Forge.png',
+  Infirmary: 'http://localhost:8000/static/facilities/Infirmary.png',
 }
 
 const FACILITY_TOOLTIPS = {
