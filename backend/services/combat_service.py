@@ -54,7 +54,8 @@ class CombatUnit:
     bracing_rounds: int = 0    # Calculating panic response — forgoes their strength to brace defensively
     spawn_template: str = ""  # name of the weak add this unit's "summon_add" ability spawns, if any
     summons_used: int = 0     # caps "summon_add" so a miniboss/boss can't stall a fight forever
-    used_consumable: bool = False  # caps the shared Potion/Scroll backpack to one sip per hero per fight
+    used_consumable: bool = False  # caps a hero to one sip per fight
+    equipped_consumable: str = None  # item_name of the Potion/Scroll/Bandage this hero specifically carries, if any
 
     def __post_init__(self):
         self.log_name = self.name if self.is_hero else f"[{self.name}]"
@@ -1006,6 +1007,7 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
             hero_star=get_hero_star(h),
             battle_tendency=h.get("battle_tendency") or "Stoic",
             is_team_leader=bool(h.get("is_team_leader")),
+            equipped_consumable=h.get("equipped_consumable"),
         )
         combatants_heroes.append(hero_unit)
         
@@ -1155,21 +1157,28 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
                 unit.health = min(unit.max_health, unit.health + heal)
                 log.append(f"  ✚ {unit.log_name} regenerates {heal} Health [{unit.health}/{unit.max_health}]")
 
-        # ─── Shared-backpack Potion/Scroll auto-use ───
+        # ─── Equipped Potion/Scroll auto-use ───
+        # Each hero only drinks what THEY specifically have equipped (see
+        # heroes.equipped_consumable) — not whatever's "best" in a shared
+        # warehouse pool. The actual stock (available_consumables, built
+        # from real inventory counts) is still shared and finite, so two
+        # heroes equipped with the same item draw down the same stack.
         if available_consumables:
+            stock = {c["item_name"]: c for c in available_consumables}
             for hero in alive_heroes:
-                if hero.used_consumable or hero.health >= hero.max_health * CONSUMABLE_LOW_HP_THRESHOLD:
+                if hero.used_consumable or not hero.equipped_consumable:
                     continue
-                usable = [c for c in available_consumables if c["quantity"] > 0]
-                if not usable:
+                if hero.health >= hero.max_health * CONSUMABLE_LOW_HP_THRESHOLD:
                     continue
-                best = max(usable, key=lambda c: c["heal_pct"])
-                heal = int(hero.max_health * best["heal_pct"])
+                item = stock.get(hero.equipped_consumable)
+                if not item or item["quantity"] <= 0:
+                    continue
+                heal = int(hero.max_health * item["heal_pct"])
                 hero.health = min(hero.max_health, hero.health + heal)
-                best["quantity"] -= 1
+                item["quantity"] -= 1
                 hero.used_consumable = True
-                consumables_used[best["item_name"]] = consumables_used.get(best["item_name"], 0) + 1
-                log.append(f"  ✚ {hero.log_name} drinks a {best['item_name']}, healing {heal} Health [{hero.health}/{hero.max_health}]")
+                consumables_used[item["item_name"]] = consumables_used.get(item["item_name"], 0) + 1
+                log.append(f"  ✚ {hero.log_name} drinks a {item['item_name']}, healing {heal} Health [{hero.health}/{hero.max_health}]")
 
         alive_frontline = [h for h in frontline if h.alive]
 

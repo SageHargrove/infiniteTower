@@ -41,7 +41,8 @@ def get_facilities():
                 # Calculate upgrade cost
                 info = FACILITY_TYPES.get(f["type"], {"cost": 5000, "max_level": 50})
                 f["max_level"] = info.get("max_level", 50)
-                f["upgrade_cost"] = info["cost"] * (2 ** (f["level"] - 1))
+                base_cost = info["cost"] * (2 ** (f["level"] - 1))
+                f["upgrade_cost"] = int(base_cost * (1 - get_workshop_discount(conn, f["type"])))
                 f["can_upgrade"] = f["level"] < f["max_level"] # Soft cap
                 f["next_slots"] = f["slots_unlocked"] + 1
                 
@@ -96,24 +97,45 @@ def build_facility(facility_type: str):
         
     return {"ok": True}
 
+def get_workshop_discount(conn, fac_type: str) -> float:
+    """Workshop ("Builds base upgrades and gadgets") used to do nothing at
+    all — no service file anywhere read its level or assignments. Real
+    effect now: discounts the gold cost of upgrading every OTHER facility,
+    scaling with Workshop's own level plus any assigned Magic Engineers.
+    Capped at 50% off so upgrading never becomes free, and doesn't discount
+    upgrading the Workshop itself."""
+    if fac_type == "Workshop":
+        return 0.0
+    workshop = conn.execute("SELECT id, level FROM facilities WHERE type = 'Workshop' AND base_id = 1").fetchone()
+    if not workshop:
+        return 0.0
+    assigned = conn.execute("""
+        SELECT h.hero_class FROM facility_assignments fa
+        JOIN heroes h ON fa.hero_id = h.id
+        WHERE fa.facility_id = ? AND h.is_alive = 1
+    """, (workshop["id"],)).fetchall()
+    engineer_bonus = sum(0.03 if a["hero_class"] == "Magic Engineer" else 0.01 for a in assigned)
+    return min(0.5, 0.01 * (workshop["level"] - 1) + engineer_bonus)
+
 def upgrade_facility(facility_id: int):
     with db() as conn:
         fac = conn.execute("SELECT * FROM facilities WHERE id = ?", (facility_id,)).fetchone()
         if not fac:
             raise ValueError("Facility not found.")
-            
+
         fac_type = fac["type"]
         info = FACILITY_TYPES.get(fac_type)
         if not info:
             raise ValueError("Unknown facility type.")
-            
+
         level = fac["level"]
         max_level = info.get("max_level", 50)
         if level >= max_level:
             raise ValueError("Facility is already at maximum level.")
-            
+
         cost = info["cost"] * (2 ** (level - 1))
-        
+        cost = int(cost * (1 - get_workshop_discount(conn, fac_type)))
+
         base = conn.execute("SELECT gold FROM base WHERE id = 1").fetchone()
         if base["gold"] < cost:
             raise ValueError(f"Not enough gold. Need {cost}g.")

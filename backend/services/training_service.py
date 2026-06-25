@@ -52,9 +52,12 @@ def process_training_xp(conn):
     # Tick every 1 minute
     if minutes_passed > 0:
         # Get all heroes in Training Grounds
-        tg = conn.execute("SELECT id FROM facilities WHERE type = 'Training Grounds' AND base_id = 1").fetchone()
+        tg = conn.execute("SELECT id, level FROM facilities WHERE type = 'Training Grounds' AND base_id = 1").fetchone()
         if not tg:
             return
+        # Facility level used to do nothing here — leveling it only bought
+        # more assignment slots, never made training itself any faster.
+        tg_level_mult = 1 + 0.10 * (tg["level"] - 1)
             
         assignments = conn.execute("SELECT * FROM facility_assignments WHERE facility_id = ?", (tg["id"],)).fetchall()
         
@@ -88,7 +91,7 @@ def process_training_xp(conn):
             diligence_mult = 0.5 + (hero["diligence"] / 100.0)
             
             # Chance to gain base stats just from training
-            stat_gain_chance = 0.005 * minutes_passed * diligence_mult * (0.5 + hero["talent"])
+            stat_gain_chance = 0.005 * minutes_passed * diligence_mult * (0.5 + hero["talent"]) * tg_level_mult
             if random.random() < stat_gain_chance:
                 stat_to_boost = random.choice(["strength", "intelligence", "agility", "max_health"])
                 hero[stat_to_boost] += 1
@@ -113,7 +116,7 @@ def process_training_xp(conn):
                 continue # Cannot level past 10 passively, needs breakthrough
                 
             # Base XP gain per minute
-            xp_gain = 1 * minutes_passed
+            xp_gain = 1 * minutes_passed * tg_level_mult
             
             # Global Buffs
             try:

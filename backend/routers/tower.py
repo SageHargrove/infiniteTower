@@ -308,18 +308,20 @@ def enter_floor(req: EnterFloorRequest):
                 if hero["fatigue"] >= 10:
                     raise HTTPException(status_code=400, detail=f"{hero['name']} is exhausted (Fatigue 10) and must rest before entering the tower.")
 
-        # Auto-apply Bandages (if any in inventory) to the most-injured
-        # deployed heroes before the fight — combat resolves as one
-        # deterministic simulation rather than a turn-by-turn player loop,
-        # so "using" a Bandage means patching up before you go in, not a
-        # mid-fight action.
+        # Auto-apply Bandages pre-fight to deployed heroes who specifically
+        # have "Bandage" equipped (see heroes.equipped_consumable /
+        # POST /heroes/equip-consumable) — not just whoever's most injured.
+        # Combat resolves as one deterministic simulation rather than a
+        # turn-by-turn player loop, so "using" a Bandage means patching up
+        # before you go in, not a mid-fight action.
         from services.infirmary_service import BANDAGE_HEAL_PCT
         mats_row = conn.execute("SELECT materials FROM base WHERE id = 1").fetchone()
         materials = json.loads(mats_row["materials"]) if mats_row["materials"] else {}
         bandages = materials.get("Bandage", 0)
         if bandages > 0:
             flat_heroes = [hero for team in hero_teams for hero in team]
-            injured = sorted([hero for hero in flat_heroes if hero["health"] < hero["max_health"]], key=lambda hero: hero["health"] / hero["max_health"])
+            equipped = [h for h in flat_heroes if h.get("equipped_consumable") == "Bandage" and h["health"] < h["max_health"]]
+            injured = sorted(equipped, key=lambda hero: hero["health"] / hero["max_health"])
             used = 0
             for hero in injured:
                 if used >= bandages:
@@ -332,12 +334,12 @@ def enter_floor(req: EnterFloorRequest):
                 materials["Bandage"] = bandages - used
                 conn.execute("UPDATE base SET materials = ? WHERE id = 1", (json.dumps(materials),))
 
-        # Potions/Scrolls are a shared "backpack," not a per-hero slot —
-        # unlike Bandages (decided pre-fight above), combat resolves as one
-        # deterministic simulation, so "using one at your own discretion
-        # when low" means a per-round HP check inside the turn loop itself.
-        # Only the healing-capable ones are eligible here — a Scroll of
-        # Insight isn't something you'd drink to save your life mid-fight.
+        # Potions/Scrolls draw from the same shared finite stock as
+        # Bandages above, but which hero is even allowed to reach for one
+        # mid-fight is gated by their own equipped_consumable (see
+        # combat_service.py's auto-use loop) — not a free-for-all. Only the
+        # healing-capable ones are eligible here — a Scroll of Insight isn't
+        # something you'd drink to save your life mid-fight.
         from services.alchemist_service import POTION_CATALOG
         from services.research_service import SCROLL_CATALOG
         heal_catalog = {p["name"]: p["effect"]["heal_pct"] for p in POTION_CATALOG if "heal_pct" in p["effect"]}

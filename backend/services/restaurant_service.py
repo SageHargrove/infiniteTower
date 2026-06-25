@@ -31,7 +31,7 @@ def process_restaurant(conn):
     if minutes_passed <= 0:
         return
 
-    restaurant = conn.execute("SELECT id FROM facilities WHERE type = 'Restaurant' AND base_id = 1").fetchone()
+    restaurant = conn.execute("SELECT id, level FROM facilities WHERE type = 'Restaurant' AND base_id = 1").fetchone()
     if not restaurant:
         return
 
@@ -46,14 +46,19 @@ def process_restaurant(conn):
         conn.execute("UPDATE base SET last_restaurant_tick = CURRENT_TIMESTAMP WHERE id = 1")
         return
 
+    # Facility level used to do nothing here — leveling it only ever bought
+    # more assignment slots (the universal upgrade_facility effect), never
+    # made existing Chefs cook any better. +10%/level now, same convention
+    # Training Grounds/Infirmary use below.
+    level_mult = 1 + 0.10 * (restaurant["level"] - 1)
     morale_per_tick = 0
     for a in assignments:
-        morale_per_tick += 3 if a["hero_class"] == "Chef" else 1
+        morale_per_tick += (3 if a["hero_class"] == "Chef" else 1) * level_mult
 
     ticks = minutes_passed // 5
     if ticks > 0:
         from services.morale_service import get_morale_state
-        gain = morale_per_tick * ticks
+        gain = int(morale_per_tick * ticks)
         heroes = conn.execute("SELECT id, morale FROM heroes WHERE is_alive = 1").fetchall()
         for h in heroes:
             new_morale = min(100, h["morale"] + gain)

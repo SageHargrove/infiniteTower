@@ -35,7 +35,7 @@ def process_infirmary(conn):
     if minutes_passed <= 0:
         return
 
-    infirmary = conn.execute("SELECT id FROM facilities WHERE type = 'Infirmary' AND base_id = 1").fetchone()
+    infirmary = conn.execute("SELECT id, level FROM facilities WHERE type = 'Infirmary' AND base_id = 1").fetchone()
     if not infirmary:
         return
 
@@ -50,18 +50,21 @@ def process_infirmary(conn):
         conn.execute("UPDATE base SET last_infirmary_tick = CURRENT_TIMESTAMP WHERE id = 1")
         return
 
+    # Facility level used to do nothing here — leveling it only bought more
+    # assignment slots, never made existing Medics/Priests heal any faster.
+    level_mult = 1 + 0.10 * (infirmary["level"] - 1)
     trauma_per_tick = 0
     for a in assignments:
         if a["hero_class"] in ("Medic", "Priest"):
-            trauma_per_tick += 2
+            trauma_per_tick += 2 * level_mult
         else:
-            trauma_per_tick += 1
+            trauma_per_tick += 1 * level_mult
 
     ticks = minutes_passed // 5
     if ticks > 0:
         heroes = conn.execute("SELECT id, trauma FROM heroes WHERE is_alive = 1").fetchall()
         for h in heroes:
-            new_trauma = max(0, h["trauma"] - trauma_per_tick * ticks)
+            new_trauma = max(0, h["trauma"] - int(trauma_per_tick * ticks))
             conn.execute("UPDATE heroes SET trauma = ? WHERE id = ?", (new_trauma, h["id"]))
 
     conn.execute("UPDATE base SET last_infirmary_tick = CURRENT_TIMESTAMP WHERE id = 1")

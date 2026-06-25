@@ -345,6 +345,40 @@ def get_inventory():
     return [dict(r) for r in rows]
 
 
+def _eligible_consumable_names(conn) -> set:
+    """Bandage plus every healing-capable Potion/Scroll — the same
+    "drinkable in a fight" set combat already restricts auto-use to,
+    so equip choices can't point at e.g. a non-healing Scroll of Insight."""
+    from services.alchemist_service import POTION_CATALOG
+    from services.research_service import SCROLL_CATALOG
+    names = {"Bandage"}
+    names.update(p["name"] for p in POTION_CATALOG if "heal_pct" in p["effect"])
+    names.update(s["name"] for s in SCROLL_CATALOG if "heal_pct" in s["effect"])
+    return names
+
+class EquipConsumableRequest(BaseModel):
+    hero_id: int
+    item_name: str | None = None  # None unequips
+
+@router.post("/heroes/equip-consumable")
+def equip_consumable(req: EquipConsumableRequest):
+    """A hero's consumable slot — which Bandage/Potion/Scroll they carry into
+    the tower and reach for when hurt. Deliberately scoped per-hero (not a
+    free-for-all shared backpack) so investing in a Medic's bandage habit or
+    a Mage's healing draughts is a real choice, not just "whatever's in the
+    warehouse." The item itself still comes out of the same finite shared
+    stock everyone draws from — equipping just decides who's allowed to
+    reach for it and when, it doesn't reserve or duplicate stock."""
+    with db() as conn:
+        hero = conn.execute("SELECT id FROM heroes WHERE id = ? AND is_alive = 1", (req.hero_id,)).fetchone()
+        if not hero:
+            raise HTTPException(status_code=404, detail="Hero not found or not alive.")
+        if req.item_name is not None and req.item_name not in _eligible_consumable_names(conn):
+            raise HTTPException(status_code=400, detail=f"{req.item_name} isn't a healing consumable that can be equipped.")
+        conn.execute("UPDATE heroes SET equipped_consumable = ? WHERE id = ?", (req.item_name, req.hero_id))
+    return {"ok": True}
+
+
 @router.post("/inventory/add")
 def add_inventory_item(item_name: str, item_type: str, quantity: int = 1, description: str = ""):
     """Add an item to inventory (or increment quantity if it exists)."""
@@ -604,7 +638,7 @@ def forge_craft(req: CraftRequest):
             consume_material(mats, m, q)
 
         # Find Forge facility
-        forge = conn.execute("SELECT id FROM facilities WHERE type = 'Forge'").fetchone()
+        forge = conn.execute("SELECT id, level FROM facilities WHERE type = 'Forge'").fetchone()
         if not forge:
             raise HTTPException(status_code=400, detail="You must build the Forge first!")
             
@@ -647,6 +681,11 @@ def forge_craft(req: CraftRequest):
         # scale as one smith-tier step (see SMITH_TIER_BONUS).
         from services.base_service import get_base_upgrade_level
         apt += get_base_upgrade_level(conn, "forge") * 10
+        # The Forge FACILITY's own level (separate from the Base Upgrade
+        # tier above) used to do nothing for crafting at all — leveling it
+        # only bought more assignment slots. +5 apt/level now, so the
+        # building itself is worth investing in, not just who's staffing it.
+        apt += (forge["level"] - 1) * 5
 
         conn.execute("UPDATE base SET gold = gold - 100, materials = ? WHERE id = 1", (json.dumps(mats),))
 
