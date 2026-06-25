@@ -93,6 +93,16 @@ ENEMY_TYPES = [
     ("Harpy", 0.8, 0.6, 1.8, "pack", "intermediate"),
     ("Ogre", 1.6, 1.3, 0.6, "elite", "intermediate"),
     ("Troll", 1.7, 1.0, 0.6, "elite", "intermediate"),
+    # Floor 11-20 family (Kobolds/Skeletons/Orcs/Giant Spiders) — Orc above
+    # already covers that leg of the family; these fill in the rest. See
+    # enemy_families.py for the matching miniboss/boss for this floor range.
+    ("Kobold", 0.6, 0.5, 1.2, "swarm", "intermediate"),
+    ("Skeleton", 0.9, 0.9, 0.8, "normal", "intermediate"),
+    ("Giant Spider", 0.9, 0.7, 1.5, "pack", "intermediate"),
+    ("Elite Kobold Scout", 1.0, 0.8, 1.8, "elite", "intermediate"),
+    ("Skeleton Knight", 1.3, 1.3, 0.8, "elite", "intermediate"),
+    ("Skeleton Mage", 1.0, 0.7, 0.9, "elite", "intermediate"),
+    ("Orc Berserker", 1.4, 0.9, 1.1, "elite", "intermediate"),
     # --- advanced (floor 40+) ---
     ("Corpse Rat", 1.0, 1.0, 1.5, "swarm", "advanced"),
     ("Grave Scarab", 1.0, 1.0, 1.6, "swarm", "advanced"),
@@ -130,14 +140,20 @@ ENEMY_ABILITY_OVERRIDES = {
     "Goblin Shaman": ["team_buff_aura"],
     "Giant Rat Alpha": ["summon_add"],
     "Wolf Alpha": ["enrage"],
+    "Elite Kobold Scout": ["summon_add"],
+    "Skeleton Knight": ["cleave"],
+    "Skeleton Mage": ["team_buff_aura"],
+    "Orc Berserker": ["enrage"],
 }
 
 # Which weak swarm-type a "summon_add" user calls in as reinforcements.
 ENEMY_SPAWN_TEMPLATE = {
     "Giant Rat Alpha": "Giant Rat",
+    "Elite Kobold Scout": "Kobold",
 }
 
 SELF_REGEN_PCT = 0.06  # per-round Health regen granted by the "self_regen" ability
+REVIVE_ALLY_HP_PCT = 0.4  # Health a "revive_ally" user brings a fallen ally back at, once per battle
 
 # Potions/Scrolls are a shared base-wide "backpack," not a per-hero item
 # slot — a hero who drops below this much Health drinks the best available
@@ -696,6 +712,20 @@ def _try_use_ability(attacker: CombatUnit, alive_heroes: list, log: list, morale
                 ally.strength = int(ally.strength * TEAM_BUFF_AURA_ATK_MULT)
                 buffed += 1
         log.append(f"  🔥 {attacker.log_name} channels power into the horde! {buffed} ally(s) hit harder now.")
+        return True
+
+    # "revive_ally" — once per battle, brings one fallen ally back at partial
+    # Health (Skeleton Champion "reviving the fallen"). Needs the live
+    # enemies list to find a dead ally and actually bring them back into the
+    # turn order, not just a cosmetic log line.
+    if ("revive_ally" in attacker.abilities and "revive_ally" not in attacker.used_abilities
+            and enemies is not None and any((not a.alive) and a is not attacker for a in enemies)):
+        attacker.used_abilities.add("revive_ally")
+        fallen = [a for a in enemies if not a.alive and a is not attacker]
+        target = max(fallen, key=lambda a: a.max_health)
+        target.alive = True
+        target.health = int(target.max_health * REVIVE_ALLY_HP_PCT)
+        log.append(f"  ✟ {attacker.log_name} channels dark energy — {target.log_name} rises again! [{target.health}/{target.max_health}]")
         return True
 
     if "cleave" in attacker.abilities and random.random() < 0.20:
@@ -1461,12 +1491,17 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
         print(f"Error generating drop: {e}")
 
 def run_multi_combat(hero_teams: list[list[dict]], floor_number: int, is_boss: bool = False, is_miniboss: bool = False, zone_theme: str = "", boss_data_override=_UNSET, difficulty_mult: float = 1.0, conn=None, family_override: dict = None, is_survival_swarm: bool = False, turn_limit: int = None, available_consumables: list = None) -> dict:
-    # Raid Boss (Every 20th floor is Raid Boss)
+    # Raid Boss (Every 20th floor is Raid Boss) — family_override was missing
+    # here before, so a floor-20/40/60/80/100 family boss could never
+    # actually appear; every raid floor fell through to the generic
+    # LLM-flavored naming regardless of whether that range had a built-out
+    # family. Floor 100 still gets its own random pick (Lich King/Nightwing
+    # Devourer) via family_override exactly like any other boss floor now.
     if is_boss and floor_number % 20 == 0:
         combined_heroes = []
         for team in hero_teams:
             combined_heroes.extend(team)
-        return run_combat(combined_heroes, floor_number, is_boss=True, is_miniboss=False, zone_theme=zone_theme, boss_data_override=boss_data_override, difficulty_mult=difficulty_mult * len(hero_teams), outer_conn=conn, available_consumables=available_consumables)
+        return run_combat(combined_heroes, floor_number, is_boss=True, is_miniboss=False, zone_theme=zone_theme, boss_data_override=boss_data_override, difficulty_mult=difficulty_mult * len(hero_teams), outer_conn=conn, available_consumables=available_consumables, family_override=family_override)
 
     # Shared Encounter relay — one enemy roster scaled for the combined
     # threat of every deployed team (same scaling the boss-merge branch above

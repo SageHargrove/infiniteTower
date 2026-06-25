@@ -6,7 +6,8 @@ and Boss (the range's %10 floor). Looked up by exact floor number from
 tower.py; floors with no entry here just fall back to make_boss()'s
 existing generic LLM-flavored naming — nothing breaks for ranges not yet
 built out. Building this out is intentionally staged one floor-range block
-at a time (see PLAN_floor_workshop_enemies.md) — floors 1-10 first.
+at a time (see PLAN_floor_workshop_enemies.md) — floors 1-10 and 11-20 done
+so far.
 
 Floor 50 and 100 are flagged as wanting extra-special treatment (floor 50
 is the tower's halfway point, floor 100 the final floor) but are NOT yet
@@ -28,6 +29,26 @@ WARREN_TYRANT = {
     "abilities": ["summon_add", "crushing_blow", "last_stand"],
     "spawn_template": "Giant Rat",
     "stat_mod": {"atk": 1.1, "def": 1.0, "spd": 0.9, "health": 1.2},
+}
+
+# ─── Floors 11-20: Kobold / Skeleton / Orc / Giant Spider ──────────────────
+
+SKELETON_CHAMPION = {
+    # "revive_ally" needs a dead ally to actually do anything — a solo
+    # family_override boss has none by default, so this also carries
+    # summon_add (its own Skeleton reinforcements) to have something worth
+    # bringing back once one of them falls.
+    "name": "Skeleton Champion",
+    "abilities": ["summon_add", "revive_ally", "cleave"],
+    "spawn_template": "Skeleton",
+    "stat_mod": {"atk": 1.1, "def": 1.1, "spd": 0.9, "health": 1.1},
+}
+
+GORRATH_THE_BONEBREAKER = {
+    "name": "Gorrath the Bonebreaker",
+    "abilities": ["summon_add", "crushing_blow", "last_stand"],
+    "spawn_template": "Kobold",
+    "stat_mod": {"atk": 1.2, "def": 1.1, "spd": 0.9, "health": 1.2},
 }
 
 # ─── Floors 51-100: bosses built from preserved hand-picked art ───────────
@@ -79,9 +100,11 @@ NIGHTWING_DEVOURER = {
 # since each range only has one mini-boss floor and one boss floor right now.
 MINIBOSS_OVERRIDES = {
     5: GOBLIN_KING,
+    15: SKELETON_CHAMPION,
 }
 BOSS_OVERRIDES = {
     10: WARREN_TYRANT,
+    20: GORRATH_THE_BONEBREAKER,
     70: UNDEAD_MONARCH,
     90: MASKED_HORROR_BOSS,
     100: [LICH_KING, NIGHTWING_DEVOURER],
