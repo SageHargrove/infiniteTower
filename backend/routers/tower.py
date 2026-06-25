@@ -179,9 +179,7 @@ def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, z
                         combat_result.setdefault("log", []).append(f"  💀 {surv_hr['name']}'s mind breaks from surviving another massacre. They retire from active duty.")
                         
             # Apply standard trauma
-            from services.base_service import get_base_upgrade_level
-            chapel_level = get_base_upgrade_level(conn, "chapel")
-            trauma_data = witness_death_trauma(is_close_ally=high_bonds_count > 0, chapel_level=chapel_level)
+            trauma_data = witness_death_trauma(is_close_ally=high_bonds_count > 0)
             conn.execute("""
                 UPDATE heroes SET
                     trauma = MIN(100, trauma + ?),
@@ -261,23 +259,12 @@ def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, z
 def preview_floor(floor_number: int):
     """Peek at a floor's type/flavor without spending supplies or resolving
     anything. Floor type is cached on first peek (or first enter, whichever
-    comes first) so it never changes on a later visit or rerun.
-
-    Watchtower (base upgrade) extends this beyond the immediate next floor —
-    level N also reveals the N floors after it, in the same cached, can't-
-    change-later way."""
-    from services.base_service import get_base_upgrade_level
+    comes first) so it never changes on a later visit or rerun."""
     with db() as conn:
         floor_type = get_cached_floor_type(conn, floor_number)
-        watchtower_level = get_base_upgrade_level(conn, "watchtower")
-        ahead = []
-        for offset in range(1, watchtower_level + 1):
-            ft = get_cached_floor_type(conn, floor_number + offset)
-            ahead.append({"floor_number": floor_number + offset, "floor_type": ft})
     return {
         "floor_type": floor_type,
         "blurb": FLOOR_FLAVOR_INTRO.get(floor_type, ""),
-        "ahead": ahead,
     }
 
 @router.post("/floor/enter")
@@ -668,13 +655,7 @@ def resolve_event_floor(data: ResolveEventRequest):
                 params.append(new_stress)
 
             if "trauma" in effects and effects["trauma"] != 0:
-                trauma_delta = effects["trauma"]
-                if trauma_delta > 0:
-                    # Chapel only softens trauma GAINS, not trauma-relief
-                    # events — a shrine visit's negative delta stays full strength.
-                    from services.base_service import get_base_upgrade_level
-                    trauma_delta = round(trauma_delta * max(0.0, 1.0 - 0.12 * get_base_upgrade_level(conn, "chapel")))
-                new_trauma = max(0, min(100, hero["trauma"] + trauma_delta))
+                new_trauma = max(0, min(100, hero["trauma"] + effects["trauma"]))
                 updates.append("trauma = ?")
                 params.append(new_trauma)
 

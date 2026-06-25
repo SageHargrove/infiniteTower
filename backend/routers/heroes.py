@@ -235,15 +235,12 @@ class TeamUpdate(BaseModel):
 
 @router.post("/team/set")
 def set_team(data: TeamUpdate):
+    if len(data.hero_ids) > 5:
+        raise HTTPException(status_code=400, detail="Max 5 heroes per team")
     if data.team_id < 1 or data.team_id > 10:
         raise HTTPException(status_code=400, detail="Team ID must be between 1 and 10")
 
     with db() as conn:
-        from services.base_service import get_base_upgrade_level
-        max_team_size = 5 + get_base_upgrade_level(conn, "barracks")
-        if len(data.hero_ids) > max_team_size:
-            raise HTTPException(status_code=400, detail=f"Max {max_team_size} heroes per team")
-
         # Clear this specific team
         conn.execute("UPDATE heroes SET is_on_team = 0, team_position = 0, is_team_leader = 0 WHERE is_on_team = ?", (data.team_id,))
         # Set new team

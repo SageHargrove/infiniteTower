@@ -176,14 +176,11 @@ def rest_heroes():
             raise HTTPException(status_code=400, detail=f"Not enough supplies to rest. Need {supply_cost}, have {base['supplies']}.")
             
         conn.execute("UPDATE base SET supplies = supplies - ?, last_rest_time = ? WHERE id = 1", (supply_cost, now))
-        
-        from services.base_service import get_base_upgrade_level
-        infirmary_level = get_base_upgrade_level(conn, "infirmary")
 
         # Button says "Rest All Heroes" — rest the whole living roster, not just deployed ones
         heroes = conn.execute("SELECT * FROM heroes WHERE is_alive = 1").fetchall()
         for hero in heroes:
-            recovery = rest_at_base_recovery(dict(hero), upgrade_level=infirmary_level)
+            recovery = rest_at_base_recovery(dict(hero))
             # Psych-only — HP is handled by lobby-return full heal, not Rest.
             conn.execute("""
                 UPDATE heroes SET morale = ?, stress = ?, trauma = ?, morale_state = ?, fatigue = 0

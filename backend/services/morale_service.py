@@ -72,27 +72,21 @@ def between_floor_recovery(hero: dict) -> dict:
         "morale_state": get_morale_state(morale),
     }
 
-def witness_death_trauma(is_close_ally: bool = False, chapel_level: int = 0) -> dict:
-    """Trauma from watching someone die. chapel_level is the Chapel
-    base-upgrade's level (DEFAULT_UPGRADES in routers/base.py, "Reduce
-    trauma buildup") — -12% trauma gained per level, stress is unaffected
-    since the upgrade is specifically about trauma."""
-    trauma_gain = (8 if is_close_ally else 4) * max(0.0, 1.0 - 0.12 * chapel_level)
+def witness_death_trauma(is_close_ally: bool = False) -> dict:
+    """Trauma from watching someone die."""
+    trauma_gain = 8 if is_close_ally else 4
     stress_gain = 15 if is_close_ally else 8
-    return {"trauma_delta": round(trauma_gain), "stress_delta": stress_gain}
+    return {"trauma_delta": trauma_gain, "stress_delta": stress_gain}
 
-def rest_at_base_recovery(hero: dict, rest_quality: str = "normal", upgrade_level: int = 0) -> dict:
+def rest_at_base_recovery(hero: dict, rest_quality: str = "normal") -> dict:
     """Returning to base gives more significant recovery.
 
     Psych-only — Rest no longer touches HP (lobby return already fully
     heals HP after every floor, see tower.py). Magnitude is intentionally
     modest: this represents just resting, not therapy, and the action is
-    spammable on a short cooldown.
-
-    upgrade_level is the Infirmary base-upgrade's level (DEFAULT_UPGRADES in
-    routers/base.py, "Improve rest recovery rates") — +15% recovery per level."""
+    spammable on a short cooldown."""
     quality_map = {"poor": 0.5, "normal": 1.0, "good": 1.5}
-    factor = quality_map.get(rest_quality, 1.0) * (1.0 + 0.15 * upgrade_level)
+    factor = quality_map.get(rest_quality, 1.0)
 
     morale_gain = int(12 * factor)
     stress_loss = int(10 * factor)
