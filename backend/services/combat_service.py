@@ -107,6 +107,22 @@ ENEMY_TYPES = [
 
 ENEMY_TIER_UNLOCK_FLOOR = {"beginner": 1, "intermediate": 15, "advanced": 40, "legendary": 70}
 
+# Purely organizational — which "waveN" review subfolder each named enemy's
+# portrait lives in under enemies/<tier>/waveN/ (see _enemy_portrait_path and
+# portrait_cache.py's generation functions, both of which consult this so a
+# deleted portrait regenerates back into the same wave folder instead of the
+# flat tier root). Has no effect on which floors an enemy actually spawns on
+# — that's still ENEMY_TIER_UNLOCK_FLOOR — this just keeps the art library
+# reviewable in the same batches you're already going through it in.
+ENEMY_WAVE = {
+    "Slime": 1, "Goblin": 1, "Giant Rat": 1, "Wolf": 1,
+    "Acid Slime": 1, "Goblin Warrior": 1, "Goblin Shaman": 1, "Giant Rat Alpha": 1, "Wolf Alpha": 1,
+    "Bandit": 2, "Dire Wolf": 2, "Harpy": 2, "Orc": 2, "Ogre": 2, "Troll": 2,
+    "Grave Scarab": 4, "Rotting Ghoul": 4, "Bone Warden": 4,
+    "Stone Golem": 6, "Obsidian Behemoth": 6, "Dread Brute": 6,
+    "Abyssal Lurker": 7, "Frost Wight": 7, "Shrouded Reaper": 7,
+}
+
 # Per-name ability overrides — lets a specific elite/miniboss/boss entry use
 # a different signature ability (or combo) than the blanket "elite archetype
 # always gets cleave" default in _build_enemy_group. This is the "reusable
