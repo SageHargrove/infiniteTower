@@ -140,6 +140,54 @@ MONSTER_STYLE = (
     "intricate details, masterpiece, best quality"
 )
 
+# Evil-humanoid style — for enemies that are actually person-shaped
+# (knights, demons, lich, golem lords, etc.), built from BASE_STYLE's
+# anime-portrait recipe (the same one heroes use for their 6-7★ "ornate
+# armor, glowing aura, overwhelming presence" escalation) rather than
+# MONSTER_STYLE, whose "not a human or attractive humanoid figure" line
+# exists specifically to keep actual BEASTS from drifting into "monster
+# girl" territory — that insurance would fight against rendering an
+# intentionally humanoid villain here. Negative prompt is its own list
+# rather than MONSTER_NEGATIVE, which blacklists "human, person, soldier"
+# outright (correct for beasts, would sabotage this).
+HUMANOID_EVIL_STYLE = (
+    "(Solo Leveling manhwa art style, cel-shaded anime illustration:1.3), dark fantasy anime villain design, "
+    "(menacing evil humanoid:1.2), (bold black ink outlines:1.2), thick clean lineart, cel shading, "
+    "intricate ornate dark armor or sinister regalia, elaborate menacing accessories, "
+    "glowing malevolent magical aura in background, commanding villainous presence, cruel expression, "
+    "well-lit subject with clearly visible surface detail and texture, balanced natural exposure, "
+    "rich saturated but balanced colors across the entire body, vivid distinct material colors, "
+    "highly detailed surface texture, intricate detailed anatomy, "
+    "dark atmospheric background, soft directional lighting on the subject, "
+    "full-body or three-quarter pose, dramatic rim lighting accenting edges only, "
+    "intricate details, masterpiece, best quality"
+)
+
+HUMANOID_EVIL_NEGATIVE = NEGATIVE_STYLE + (
+    ", chibi, kawaii, cute, adorable, cartoon mascot, plush toy, big head small body, "
+    "topless, nude, nudity, nsfw, sexualized, sexually suggestive, suggestive pose, seductive pose, "
+    "cleavage, exposed breasts, bikini, lingerie, underwear, panties, swimsuit, partial nudity, "
+    "monster girl, kemonomimi, pin-up pose, ecchi, fanservice, erotic, provocative, "
+    "silhouette, full black silhouette, completely black figure, indiscernible black shape, "
+    "heroic noble expression, friendly smile, kind face, good-aligned, holy radiant light"
+)
+
+# Which enemy/miniboss/boss names get HUMANOID_EVIL_STYLE instead of
+# MONSTER_STYLE — actual person-shaped villains (knights, demons, golems
+# built in a humanoid mold, lich, etc.) vs true beasts/monsters.
+HUMANOID_ENEMY_NAMES = {
+    "Hobgoblin", "Lizardman", "Hobgoblin Berserker", "Lizardman Stalker",
+    "Plague Harbinger", "Minotaur", "Minotaur Juggernaut",
+    "Stone Sentinel", "Lesser Golem", "Naga", "Death Knight", "Giant",
+    "Black Knight Commander", "Demon", "Imp", "Pit Fiend", "Wraith Sovereign",
+    "Lich Acolyte", "Archdemon Enforcer",
+    "Orc Warchief", "The Troll King", "Skarn the Lizard Chieftain",
+    "The Hobgoblin Warlord", "The Grave Sovereign", "Bullhorn the Minotaur Lord",
+    "The Ashen Colossus", "Stoneheart the Unbroken", "The Obsidian Tyrant",
+    "The Drowned Naga Queen", "Knight-Captain Mordrek", "Pit Fiend Commander",
+    "Goblin King",
+}
+
 MONSTER_NEGATIVE = NEGATIVE_STYLE + (
     ", silhouette, full black silhouette, backlit silhouette, "
     "subject rendered as a flat black shape, glowing aura with no body detail visible, "
@@ -578,6 +626,61 @@ ENEMY_PORTRAIT_HINTS = {
     "Goblin Shaman": "a goblin shaman standing in torchlight in a dungeon, green skin clearly lit on his face and hands, oversized pointed ears, a hooked nose, ragged brown cloth robes with bone trinkets tied on with twine, gripping a wooden staff topped with a glowing skull, green magic swirling around his raised hand, beady yellow eyes",
     "Giant Rat Alpha": "a large muscular rat crouched aggressively on all four legs in a brightly lit dungeon corridor, warm torchlight illuminating its whole body, bigger and bulkier than an ordinary rat, scarred brown-grey fur, a long pointed rodent snout with twitching whiskers, small rounded rat ears, a long thin hairless tail, small dark eyes, sharp yellowed incisors bared",
     "Wolf Alpha": "(a real four-legged quadruped wolf, larger and more muscular than an ordinary wolf, an animal on all four legs, NOT a werewolf, NOT bipedal, NOT humanoid:1.4), dense clearly visible dark grey and black fur, scarred muzzle, bared fangs in a snarl, glowing pale yellow eyes, thick powerful shoulders, low predatory stance on all fours like a real wolf, bushy tail held low, well-lit snowy forest background, evenly lit fur with visible texture",
+
+    # Goblin King / Warren Tyrant (floor 5/10) never actually got dedicated
+    # art despite the family-override system supporting it — discovered
+    # while auditing portrait coverage for the floor 21-100 pass below,
+    # both were silently falling back to the generic boss archetype pool.
+    "Goblin King": "a crowned goblin king seated on a crude wooden throne, sickly green mottled skin clearly lit, oversized pointed ears, a hooked nose, a dented golden crown too big for his head, ragged dark velvet robes over scavenged armor, gripping a jagged scepter, beady yellow eyes, torchlit goblin-warren throne background",
+    "The Warren Tyrant": "a colossal mutated rat overlord standing on its hind legs, matted dark brown-grey fur clearly lit with patches of scarred skin, an oversized scarred snout with broken yellowed incisors, a long thick ropey tail, glowing red eyes, hunched over a pile of bones and scraps, torchlit sewer-warren background",
+
+    # --- floor 21-100 roster (added this pass) — humanoid ones use
+    # HUMANOID_ENEMY_NAMES/HUMANOID_EVIL_STYLE instead of MONSTER_STYLE, see
+    # _generate_enemy_portrait. Plain affirmative language throughout —
+    # heavy "(NOT X:1.4)" negation backfired earlier in this same file
+    # (the model partially keys on the negated word's tokens anyway).
+    "Hobgoblin": "a hulking hobgoblin warrior standing in torchlight, leathery reddish-brown skin clearly lit, a broad brutish face with small tusks, wearing scavenged spiked armor over a muscular frame, gripping a heavy curved blade, yellow eyes, gritty dungeon background",
+    "Lizardman": "a lizardman warrior standing in torchlight, scaled green-grey skin clearly lit across its body, a reptilian snouted face with a forked tongue, wearing simple woven straps and bone ornaments, gripping a serrated bone spear, slitted yellow eyes, swampy cave background",
+    "Hobgoblin Berserker": "a scarred hobgoblin berserker mid-roar, reddish-brown leathery skin clearly lit, bulging muscles, war paint streaked across its face, wielding two crude jagged axes raised high, torn furs over its shoulders, bloodshot yellow eyes, torchlit battlefield background",
+    "Lizardman Stalker": "a lean lizardman stalker crouched low, scaled dark-green skin clearly lit with faint mottled patterns, a sharp reptilian face with a hood of bony frills, gripping twin curved bone daggers, slitted amber eyes, misty swamp background",
+    "Plague Harbinger": "a withered ghoul-priest in tattered grey-green burial robes, sickly pale-green rotting skin clearly lit on its gaunt face and hands, hollow sunken eyes glowing faint sickly yellow, clutching a rusted censer dripping dark plague vapor, hunched robed figure, dim crypt background",
+    "Minotaur": "a towering minotaur standing upright, thick dark-brown fur covering a muscular humanoid body clearly lit, a bull's head with massive curved horns and a ring through its nose, gripping a huge stone battleaxe, glowing red eyes, torchlit labyrinth background",
+    "Minotaur Juggernaut": "a massive armored minotaur juggernaut standing upright, dark-brown fur clearly lit beneath heavy plated bronze armor, a scarred bull's head with broken horns, gripping an enormous spiked maul, glowing crimson eyes, dust and rubble around its feet, torchlit arena background",
+    "Stone Sentinel": "a humanoid stone sentinel construct standing at attention, rough grey granite body clearly lit with visible cracked seams, glowing faint blue runes etched across its chest and arms, a blank featureless carved face, fists like boulders, ancient ruin background",
+    "Lesser Golem": "a humanoid clay golem standing stiffly, cracked sandy-brown clay body clearly lit with visible seams and patchwork repairs, a crude carved face with glowing dim orange eyes, simple blocky proportions, dusty workshop ruin background",
+    "Naga": "a naga warrior with a humanoid torso and a long coiled serpent tail, scaled emerald-green skin clearly lit, a crowned hooded head with slitted golden eyes, wielding a trident, ornate gold armbands, mist-shrouded temple ruin background",
+    "Death Knight": "an armored death knight standing tall, blackened plate armor clearly lit with glowing blue runic engravings, a closed helm with two piercing icy-blue eye slits, gripping a massive runed greatsword, a tattered dark cape, frosty battlefield background",
+    "Giant": "a towering giant warrior standing upright, weathered tan-grey skin clearly lit over a massive muscular frame, a craggy brutish face with a braided beard, wrapped in crude furs and banded iron plates, gripping an uprooted tree as a club, mountain pass background",
+    "Black Knight Commander": "an imposing black knight commander standing tall, polished obsidian-black plate armor clearly lit with sharp silver trim, a horned closed helm with glowing violet eye slits, gripping an ornate longsword raised, a flowing dark cape, torchlit fortress background",
+    "Demon": "a horned demon warrior standing upright, deep crimson-red skin clearly lit over a muscular humanoid body, curved black horns, leathery folded wings, clawed hands, glowing amber eyes, wreathed in faint smoke, hellish cavern background",
+    "Imp": "a small wiry imp grinning mischievously, dark reddish-purple skin clearly lit, small curved horns, batlike wings, a long barbed tail, clawed hands, glowing yellow eyes, perched on a rock, hellish cavern background",
+    "Pit Fiend": "a massive armored pit fiend standing upright, charred dark-red skin clearly lit beneath spiked black armor plates, large curved horns, tattered leathery wings, gripping a flaming trident, glowing orange eyes, molten cavern background",
+    "Wraith Sovereign": "a tall regal wraith draped in flowing tattered violet and black robes clearly lit, a pale gaunt face with glowing violet eyes beneath a torn hood, a ghostly crown hovering above its head, clawed translucent hands, misty graveyard background",
+    "Lich Acolyte": "a robed lich acolyte standing with arms raised, pale bony hands and a skeletal face clearly lit beneath a tattered dark-purple hood, glowing violet eyes in hollow sockets, clutching an ancient tome, faint violet runes swirling around it, crypt background",
+    "Archdemon Enforcer": "a hulking armored archdemon enforcer standing upright, charcoal-grey scaled skin clearly lit beneath heavy black spiked armor, large curling horns, leathery wings folded behind its back, gripping a massive cleaver, glowing red eyes, brimstone cavern background",
+    "Orc Warchief": "a battle-scarred orc warchief standing tall, uniform green-grey skin clearly lit across his muscular body, war paint across his tusked face, wearing spiked iron pauldrons over leather, gripping a massive cleaver-axe raised high, war-camp background at dusk",
+    "The Troll King": "a colossal troll king seated on a crude throne of bones, sickly grey-green warty hide clearly lit, a crooked iron crown jammed onto its elongated skull, jagged yellowed tusks, clutching a massive spiked club, glowing dull-yellow eyes, damp cave-throne background",
+    "Skarn the Lizard Chieftain": "a regal lizardman chieftain standing proudly, scaled deep-green skin clearly lit with golden ceremonial markings, an ornate bone headdress, gripping a long ceremonial trident, slitted golden eyes, ancient swamp temple background",
+    "The Hobgoblin Warlord": "an imposing hobgoblin warlord standing over a battlefield, reddish-brown leathery skin clearly lit beneath heavy spiked armor, a brutal scarred face, gripping a massive serrated greatsword, a tattered war banner behind him, torchlit battlefield background",
+    "The Grave Sovereign": "a towering undead lord draped in regal tattered burial robes clearly lit in deep purple and faded gold, a skeletal crowned face with glowing violet eyes, clutching an ornate bone scepter, swirling graveyard mist, crypt-throne background",
+    "Bullhorn the Minotaur Lord": "a massive armored minotaur lord standing triumphantly, dark-brown fur clearly lit beneath ornate bronze plate armor, enormous curved horns capped in gold, gripping a colossal battleaxe, glowing red eyes, torchlit labyrinth-throne background",
+    "The Ashen Colossus": "a colossal ash-grey stone giant towering upward, cracked charcoal-black stone skin clearly lit with glowing embers seeping through the cracks, a crude carved face with glowing orange eyes, massive boulder fists, smoldering ash-covered ruins background",
+    "Stoneheart the Unbroken": "a humanoid golem knight standing resolute, weathered grey granite body clearly lit with glowing teal runes across its chest, a stoic carved face, gripping a massive stone shield and warhammer, ancient ruin-throne background",
+    "The Obsidian Tyrant": "an imposing obsidian golem tyrant standing tall, gleaming black volcanic-glass body clearly lit with glowing molten-orange cracks, a sharp angular carved face, gripping a massive obsidian warblade, molten cavern-throne background",
+    "The Drowned Naga Queen": "a regal naga queen with a humanoid torso and a long coiled serpent tail, scaled deep-teal skin clearly lit with shimmering iridescent patterns, an ornate coral crown, slitted golden eyes, gripping a trident wreathed in mist, sunken temple background",
+    "Knight-Captain Mordrek": "an armored death knight captain standing tall, blackened plate armor clearly lit with glowing icy-blue runic engravings and a captain's sash, a closed helm with piercing blue eye slits, gripping a massive runed greatsword raised high, frosty battlefield background",
+    "Pit Fiend Commander": "a towering armored pit fiend commander standing upright, charred dark-red skin clearly lit beneath ornate spiked black armor and a commander's cape, large curved horns, gripping a flaming greatsword, glowing orange eyes, molten cavern-throne background",
+
+    # beast/monster-style entries (MONSTER_STYLE) from the same pass
+    "Scarab Swarmlord": "a massive armored beetle-like scarab, glossy dark-purple chitin shell clearly visible with iridescent sheen, oversized mandibles, six clawed legs, glowing violet eyes, surrounded by smaller scarabs skittering at its sides, torchlit crypt floor background",
+    "Wyvern": "a fierce wyvern beast with leathery dark-green wings spread wide, a long barbed tail, a sharp reptilian head with bared fangs, clawed hind legs gripping a rocky outcrop, glowing amber eyes, stormy cliffside background",
+    "Wyvern Stormrider": "a fierce wyvern beast crackling with electricity, leathery storm-grey wings spread wide with faint blue lightning arcing along the membrane, a long barbed tail, bared fangs, glowing white eyes, stormy cliffside background",
+    "Chimera": "a monstrous chimera with a lion's maned body, a goat's head growing from its back, and a serpent-headed tail, tawny fur clearly visible with patchy goat-grey fur on its second head, bared fangs on all three heads, glowing amber eyes, rocky wasteland background",
+    "Hydra Spawn": "a young multi-headed hydra beast, three serpentine necks rising from a stocky scaled body, deep-green scales clearly visible with darker mottled patterns, each head baring fangs, glowing yellow eyes, swampy lair background",
+    "Young Dragon": "a young dragon rearing back on its hind legs, gleaming dark-red scales clearly visible, small curling horns, leathery wings half-spread, sharp fangs bared, glowing amber eyes, smoke curling from its nostrils, rocky mountain lair background",
+    "Dracolich": "an undead dragon, bleached bone-white scales and exposed ribs clearly visible over a skeletal serpentine frame, tattered leathery wing-remnants, a skull-like draconic head with glowing violet eyes, faint violet mist trailing from its jaws, crypt-cavern background",
+    "The Hydra Sovereign": "a colossal multi-headed hydra beast towering upward, five serpentine necks rising from a massive scaled body, deep emerald-green scales clearly visible with darker ridged patterns, each head baring fangs and glowing yellow eyes, swampy lair-throne background",
+    "The Dracolich Herald": "an imposing undead dragon herald, bleached bone-white scales and exposed ribs clearly visible over a skeletal serpentine frame, tattered leathery wing-remnants trailing violet mist, a crowned skull-like draconic head with glowing violet eyes, crypt-cavern-throne background",
 }
 
 def _generate_enemy_portrait(enemy_name: str, hint: str, tier_dir: str = "normal"):
@@ -589,11 +692,19 @@ def _generate_enemy_portrait(enemy_name: str, hint: str, tier_dir: str = "normal
         os.makedirs(out_dir, exist_ok=True)
         slug = re.sub(r'[^a-z0-9]', '_', enemy_name.lower())
         path = f"{out_dir}/{slug}.png"
-        prompt = (
-            f"{hint}, monster design, dark fantasy creature, centered composition, "
-            f"menacing pose, dramatic lighting, {MONSTER_STYLE}"
-        )
-        success = generate_portrait_comfy(prompt, path, negative=MONSTER_NEGATIVE)
+        if enemy_name in HUMANOID_ENEMY_NAMES:
+            prompt = (
+                f"{hint}, villain character design, centered composition, "
+                f"imposing menacing pose, dramatic lighting, {HUMANOID_EVIL_STYLE}"
+            )
+            negative = HUMANOID_EVIL_NEGATIVE
+        else:
+            prompt = (
+                f"{hint}, monster design, dark fantasy creature, centered composition, "
+                f"menacing pose, dramatic lighting, {MONSTER_STYLE}"
+            )
+            negative = MONSTER_NEGATIVE
+        success = generate_portrait_comfy(prompt, path, negative=negative)
         if success:
             print(f"[Cache] Generated enemy portrait: {enemy_name} -> {path}")
         else:
@@ -626,6 +737,34 @@ def queue_missing_enemy_portraits():
             print(f"[Cache] Queued {queued} missing enemy portrait(s) (lowest priority).")
     except Exception as e:
         print(f"[Cache] Failed to queue enemy portraits: {e}")
+
+def queue_missing_family_portraits():
+    """Named Miniboss/Boss uniques from services/enemy_families.py (e.g.
+    "Goblin King", "The Warren Tyrant") aren't in ENEMY_TYPES, so the loop
+    above never sees them — they need their own pass. Saves into
+    enemies/miniboss/ or enemies/boss/ to match make_boss's family_override
+    lookup (_enemy_portrait_path(name, "miniboss"/"boss"))."""
+    try:
+        from services.enemy_families import MINIBOSS_OVERRIDES, BOSS_OVERRIDES
+        os.makedirs(ENEMY_DIR, exist_ok=True)
+        queued = 0
+        for tier_dir, overrides in (("miniboss", MINIBOSS_OVERRIDES), ("boss", BOSS_OVERRIDES)):
+            for entry in overrides.values():
+                families = entry if isinstance(entry, list) else [entry]
+                for family in families:
+                    name = family["name"]
+                    if family.get("portrait_path"):
+                        continue  # pinned to existing preserved art — never generate over it
+                    slug = re.sub(r'[^a-z0-9]', '_', name.lower())
+                    path = f"{ENEMY_DIR}/{tier_dir}/{slug}.png"
+                    if not os.path.exists(path):
+                        hint = ENEMY_PORTRAIT_HINTS.get(name, f"{name}, dark fantasy monster")
+                        _enqueue(PRIORITY_ENEMY, _generate_enemy_portrait, name, hint, tier_dir)
+                        queued += 1
+        if queued:
+            print(f"[Cache] Queued {queued} missing miniboss/boss portrait(s) (lowest priority).")
+    except Exception as e:
+        print(f"[Cache] Failed to queue family portraits: {e}")
 
 # ---------------------------------------------------------------------------
 # Boss portraits — also a small finite library, but keyed by VISUAL ARCHETYPE

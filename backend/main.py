@@ -44,12 +44,13 @@ def _reconcile_loop():
 @app.on_event("startup")
 async def startup():
     init_db()
-    from services.portrait_cache import cleanup_portraits, start_cache_worker, reconcile_pending_portraits, queue_missing_enemy_portraits, queue_missing_boss_portraits
+    from services.portrait_cache import cleanup_portraits, start_cache_worker, reconcile_pending_portraits, queue_missing_enemy_portraits, queue_missing_boss_portraits, queue_missing_family_portraits
     cleanup_portraits()
     start_cache_worker()
     reconcile_pending_portraits()
     queue_missing_enemy_portraits()
     queue_missing_boss_portraits()
+    queue_missing_family_portraits()
     from services.chat_service import start_chat_worker
     start_chat_worker()
     from routers.gacha import reconcile_pending_profiles
