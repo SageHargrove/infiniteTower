@@ -260,7 +260,8 @@ def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, z
 def preview_floor(floor_number: int):
     """Peek at a floor's type/flavor without spending supplies or resolving
     anything. Floor type is cached on first peek (or first enter, whichever
-    comes first) so it never changes on a later visit or rerun."""
+    comes first) so it never changes on a later visit or rerun. Free and
+    unconditional — there is no facility gate on this."""
     with db() as conn:
         floor_type = get_cached_floor_type(conn, floor_number)
     return {

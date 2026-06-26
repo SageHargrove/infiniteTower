@@ -178,9 +178,11 @@ def rest_heroes():
         conn.execute("UPDATE base SET supplies = supplies - ?, last_rest_time = ? WHERE id = 1", (supply_cost, now))
 
         # Button says "Rest All Heroes" — rest the whole living roster, not just deployed ones
+        from services.base_service import get_base_upgrade_level
+        chapel_level = get_base_upgrade_level(conn, "chapel")
         heroes = conn.execute("SELECT * FROM heroes WHERE is_alive = 1").fetchall()
         for hero in heroes:
-            recovery = rest_at_base_recovery(dict(hero))
+            recovery = rest_at_base_recovery(dict(hero), chapel_level=chapel_level)
             # Psych-only — HP is handled by lobby-return full heal, not Rest.
             conn.execute("""
                 UPDATE heroes SET morale = ?, stress = ?, trauma = ?, morale_state = ?, fatigue = 0
@@ -479,7 +481,6 @@ DEFAULT_UPGRADES = [
     {"id": "barracks", "name": "Barracks", "description": "Increase max team size.", "max_level": 5},
     {"id": "infirmary", "name": "Infirmary", "description": "Improve rest recovery rates.", "max_level": 5},
     {"id": "forge", "name": "Forge", "description": "Improves the quality of crafted equipment.", "max_level": 5},
-    {"id": "watchtower", "name": "Watchtower", "description": "Reveal floor types in advance.", "max_level": 3},
     {"id": "archive", "name": "Archive", "description": "Reveal hero aptitudes faster.", "max_level": 3},
     {"id": "chapel", "name": "Chapel", "description": "Reduce trauma buildup.", "max_level": 5},
 ]
@@ -509,6 +510,11 @@ def get_upgrades():
                 "UPDATE base_upgrades SET name = ?, description = ?, max_level = ? WHERE id = ?",
                 (u["name"], u["description"], u["max_level"], u["id"])
             )
+        # Retired upgrades (e.g. Watchtower — removed entirely, never had a
+        # working effect) shouldn't linger in old saves just because they
+        # were inserted before the removal.
+        valid_ids = [u["id"] for u in DEFAULT_UPGRADES]
+        conn.execute(f"DELETE FROM base_upgrades WHERE id NOT IN ({','.join('?' * len(valid_ids))})", valid_ids)
         rows = conn.execute("SELECT * FROM base_upgrades ORDER BY name").fetchall()
         
     results = []

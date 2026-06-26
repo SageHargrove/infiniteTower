@@ -1,6 +1,6 @@
 def get_base_upgrade_level(conn, upgrade_id: str) -> int:
     """Shared lookup for the base-wide upgrade tree (Barracks/Infirmary/Forge/
-    Watchtower/Archive/Chapel — see DEFAULT_UPGRADES in routers/base.py).
+    Archive/Chapel — see DEFAULT_UPGRADES in routers/base.py).
     Returns 0 if the upgrade hasn't been purchased yet (or doesn't exist),
     same as a hero who's never leveled up."""
     row = conn.execute("SELECT level FROM base_upgrades WHERE id = ?", (upgrade_id,)).fetchone()

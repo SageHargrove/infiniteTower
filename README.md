@@ -99,8 +99,4 @@ still genuinely incomplete:
   match resolution lives in the separate `arena_server/` and that loop isn't
   fully closed end-to-end yet (no live opponent matching/leaderboard in the main app).
 - **Leaderboards / achievements** — not started.
-- **Base Upgrades' described effects** — most facilities (Restaurant, Infirmary,
-  Training Grounds, Forge, Workshop) are wired to real per-tick effects now,
-  but a full audit of every facility's promised description against what it
-  actually does hasn't happened yet.
 - **Enemy roster overhaul art** — waves of floors is implemented; art needs polish

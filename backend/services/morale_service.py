@@ -78,19 +78,26 @@ def witness_death_trauma(is_close_ally: bool = False) -> dict:
     stress_gain = 15 if is_close_ally else 8
     return {"trauma_delta": trauma_gain, "stress_delta": stress_gain}
 
-def rest_at_base_recovery(hero: dict, rest_quality: str = "normal") -> dict:
+def rest_at_base_recovery(hero: dict, rest_quality: str = "normal", chapel_level: int = 0) -> dict:
     """Returning to base gives more significant recovery.
 
     Psych-only — Rest no longer touches HP (lobby return already fully
     heals HP after every floor, see tower.py). Magnitude is intentionally
     modest: this represents just resting, not therapy, and the action is
-    spammable on a short cooldown."""
+    spammable on a short cooldown.
+
+    chapel_level scales trauma recovery specifically (Chapel's described
+    effect is "Reduce trauma buildup") — was previously never wired to
+    anything, so every Chapel level purchased had zero effect. +15%/level,
+    max_level=5, so a fully-upgraded Chapel heals trauma at 1.75x the base
+    rate. Morale/stress recovery are untouched by Chapel — those aren't
+    part of its promise."""
     quality_map = {"poor": 0.5, "normal": 1.0, "good": 1.5}
     factor = quality_map.get(rest_quality, 1.0)
 
     morale_gain = int(12 * factor)
     stress_loss = int(10 * factor)
-    trauma_loss = int(2 * factor)  # trauma heals very slowly
+    trauma_loss = int(2 * factor * (1 + 0.15 * chapel_level))  # trauma heals very slowly
 
     morale = min(100 - int(hero["trauma"] * 0.4), hero["morale"] + morale_gain)
     stress = max(0, hero["stress"] - stress_loss)

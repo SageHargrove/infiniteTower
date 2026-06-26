@@ -8,7 +8,6 @@ const UPGRADE_BANNERS = {
   barracks: 'http://localhost:8000/static/facilities/Barracks.png',
   infirmary: 'http://localhost:8000/static/facilities/Infirmary.png',
   forge: 'http://localhost:8000/static/facilities/Forge.png',
-  watchtower: 'http://localhost:8000/static/facilities/Watchtower.png',
   archive: 'http://localhost:8000/static/facilities/Archive.png',
   chapel: 'http://localhost:8000/static/facilities/Chapel.png',
 }
