@@ -239,6 +239,25 @@ export function HpBar({ health, maxHp }) {
   )
 }
 
+export function ManaBar({ maxMana }) {
+  // Mana is combat-session-only state (resets to 50% of max at the start of
+  // every fight, see services/combat_service.py) — there's no persisted
+  // "current" value to show outside combat, so this always reads as full,
+  // same as how a weapon's damage stat is shown at its base value on the
+  // roster screen rather than mid-fight state.
+  return (
+    <div className="mana-bar-wrap" title="Mana resets each fight — this is the pool size, not a current value.">
+      <div className="morale-label">
+        <span>Mana</span>
+        <span>{maxMana}</span>
+      </div>
+      <div className="mana-bar-bg">
+        <div className="mana-bar-fill" style={{ width: '100%' }} />
+      </div>
+    </div>
+  )
+}
+
 function AscensionStars({ count }) {
   if (!count || count <= 0) return null
   return (
@@ -623,6 +642,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
         <>
           <HpBar health={hero.health} maxHp={hero.max_health} />
           <MoraleBar morale={hero.morale} state={hero.morale_state || 'steady'} />
+          {hero.max_mana != null && <ManaBar maxMana={hero.max_mana} />}
 
           <div className="stats-grid" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div className="stats-row">
@@ -635,11 +655,6 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
               <div className="stat" title={`Base: ${hero.base_willpower ?? hero.willpower ?? 6}`}>WIL <span>{hero.willpower ?? 6}</span></div>
               <div className="stat" title={`Base: ${hero.base_luck ?? hero.luck ?? 5}`}>LUC <span>{hero.luck ?? 5}</span></div>
             </div>
-            {hero.max_mana != null && (
-              <div className="stats-row">
-                <div className="stat" title="Mana resets each fight — this is the pool size, not a current value." style={{ color: '#3a7bd5' }}>MAX MP <span>{hero.max_mana}</span></div>
-              </div>
-            )}
           </div>
 
           {showFull && (
@@ -810,7 +825,12 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
                           }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.1em' }}>
                               <span style={{ fontSize: '0.75em', color: SKILL_RARITY_COLORS[s.rarity] || 'var(--text-hi)' }}>{s.name}</span>
-                              <span className="text-dim" style={{ fontSize: '0.65em', textTransform: 'uppercase' }}>{s.type} {s.cooldown ? `(${s.cooldown} CD)` : ''}</span>
+                              <span className="text-dim" style={{ fontSize: '0.65em', textTransform: 'uppercase' }}>
+                                {s.type} {s.cooldown ? `(${s.cooldown} CD)` : ''}
+                                {/* 25 mirrors backend's DEFAULT_SKILL_MANA_COST fallback for
+                                    active skills with no explicit effect.mana_cost set yet. */}
+                                {s.type === 'active' && ` · ${s.effect?.mana_cost ?? 25} MP`}
+                              </span>
                             </div>
                             {s.tier && (
                               <div style={{ fontSize: '0.65em', color: 'var(--gold)', marginBottom: '0.2em' }}>

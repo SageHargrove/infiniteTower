@@ -24,27 +24,15 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Custom scrollbar — the default browser bar clashes hard with the dark
-   fantasy theme everywhere else. Webkit (Chrome/Edge) gets the full
-   styled treatment; Firefox gets the closest equivalent it supports. */
+/* No visible scrollbar anywhere — a styled bar still clashed with the rest
+   of the UI, so just hide it. Scrolling itself (wheel/touch/keyboard)
+   still works fine; this only removes the visual track/thumb. */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--gold-dim) var(--bg-panel);
+  scrollbar-width: none;
 }
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-*::-webkit-scrollbar-track {
-  background: var(--bg-panel);
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--gold-dim);
-  border-radius: 5px;
-  border: 2px solid var(--bg-panel);
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--gold);
+  width: 0;
+  height: 0;
 }
 
 body {
@@ -248,6 +236,11 @@ h1, h2, h3, .title-font {
 .health-bar-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .health-bar-fill { height: 100%; background: var(--red); border-radius: 2px; transition: width 0.4s; }
 
+/* Mana bar — same shape as Health/Morale, just blue */
+.mana-bar-wrap { margin-top: 0.4rem; }
+.mana-bar-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.mana-bar-fill { height: 100%; background: #3a7bd5; border-radius: 2px; transition: width 0.4s; }
+
 /* Stat row */
 .stats-row {
   display: flex;
@@ -268,7 +261,8 @@ h1, h2, h3, .title-font {
 .hero-card.full .health-bar-wrap .morale-label,
 .hero-card.full .morale-bar-wrap .morale-label { font-size: 1.05em; }
 .hero-card.full .health-bar-bg,
-.hero-card.full .morale-bar-bg { height: 7px; }
+.hero-card.full .morale-bar-bg,
+.hero-card.full .mana-bar-bg { height: 7px; }
 .hero-card.full .stats-row { font-size: 1em; }
 .hero-card.full .story-block { font-size: 0.62em; }
 

@@ -172,6 +172,37 @@ def _draw_star(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color:
     draw.polygon(points, fill=(*color, 255))
 
 
+def _draw_sparkle(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color: tuple):
+    """Hand-drawn 4-point sparkle/diamond for the "Classless" medallion —
+    the emoji font has no glyph at all for "*" (U+2726), renders as a
+    plain tofu box, same failure mode _draw_star works around."""
+    import math
+    points = []
+    for i in range(8):
+        angle = i * math.pi / 4
+        radius = r if i % 2 == 0 else r * 0.35
+        points.append((cx + radius * math.cos(angle), cy - radius * math.sin(angle)))
+    draw.polygon(points, fill=(*color, 255))
+
+
+def _render_emoji_glyph(glyph: str, size: int) -> Image.Image:
+    """Renders an emoji glyph to a tightly-cropped RGBA image, centered on
+    its own visible pixels. PIL's anchor="mm" and textbbox() both report
+    metrics that don't match where color/bitmap emoji glyphs actually
+    paint (confirmed: a 34px Acolyte cross glyph visibly painted ~10px
+    off-center using either), so this renders to an oversized scratch
+    canvas and crops to Image.getbbox()'s real ink instead of trusting
+    font metrics at all."""
+    font = _emoji_font(size)
+    scratch = Image.new("RGBA", (size * 4, size * 4), (0, 0, 0, 0))
+    d = ImageDraw.Draw(scratch, "RGBA")
+    d.text((size * 2, size * 2), glyph, font=font, anchor="mm", embedded_color=True)
+    bbox = scratch.getbbox()
+    if bbox is None:
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    return scratch.crop(bbox)
+
+
 def _fit_name_font(draw: ImageDraw.ImageDraw, name: str, max_width: int, max_size: int = 52, min_size: int = 18) -> ImageFont.FreeTypeFont:
     size = max_size
     while size > min_size:
@@ -252,12 +283,20 @@ def composite_card(hero_id: int, portrait_path: str, birth_star: int, hero_name:
     icon_y = margin + 38
     icon_color = _tier_color_at(tier, 0.6)
     draw.ellipse([cx - 32, icon_y - 32, cx + 32, icon_y + 32], fill=(20, 20, 24, 255), outline=(*icon_color, 255), width=4)
-    icon_glyph = get_class_icon(hero_class)
-    icon_font = _emoji_font(34)
-    # anchor="mm" rather than manual textbbox-centered math — color/bitmap
-    # emoji glyphs report bbox dimensions that don't match where the glyph
-    # actually paints, which left the icon visibly off-center.
-    draw.text((cx, icon_y), icon_glyph, font=icon_font, anchor="mm", embedded_color=True)
+    if hero_class == "Classless":
+        # "Classless" has no real emoji glyph in this font (renders as a
+        # tofu box) — hand-drawn sparkle instead, same approach as
+        # _draw_star for exactly this kind of glyph-coverage gap.
+        _draw_sparkle(draw, cx, icon_y, 16, icon_color)
+    else:
+        icon_glyph = get_class_icon(hero_class)
+        # Rendered+cropped to its own true ink bbox rather than drawn
+        # directly with anchor="mm" — font-reported metrics for color
+        # emoji glyphs don't match where they actually paint, which left
+        # icons (the Acolyte cross especially) visibly off-center.
+        glyph_img = _render_emoji_glyph(icon_glyph, 34)
+        gw, gh = glyph_img.size
+        canvas.alpha_composite(glyph_img, (int(cx - gw / 2), int(icon_y - gh / 2)))
 
     band_top = int(h * 0.86)
     band_bot = int(h * 0.94)

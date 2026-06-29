@@ -279,12 +279,32 @@ def scrap_equipment(equipment_id: int) -> dict:
 
     return {"ok": True, "material": mat_name, "amount": amount, "scrapped": item["name"]}
 
+def ensure_hero_has_weapon(hero_id: int, hero_eq: list) -> list:
+    """A hero who unequipped their weapon (including the guaranteed F-grade
+    starter — nothing stops a player from unequipping that too) would
+    otherwise fight bare-handed with no weapon stat bonus at all and no
+    way back short of a Vault pull or craft. Auto-issues a fresh starter
+    weapon and equips it right before combat, same placeholder role the
+    original one played. Mutates hero_eq in place and returns it."""
+    if any(eq["type"] == "Weapon" for eq in hero_eq):
+        return hero_eq
+    weapon = generate_starting_weapon()
+    weapon_id = save_equipment(weapon)
+    with db() as conn:
+        conn.execute("UPDATE equipment SET is_equipped_to = ? WHERE id = ?", (hero_id, weapon_id))
+    weapon["id"] = weapon_id
+    weapon["is_equipped_to"] = hero_id
+    hero_eq.append(weapon)
+    return hero_eq
+
+
 def apply_equipment_stats(hero: dict, equipment_list: list = None) -> dict:
     """Add equipped gear's stat bonuses on top of a hero's (already
     level-scaled, if the caller did that first) strength/intelligence/agility/health.
     Pass equipment_list if the caller already has it (e.g. a bulk-fetched
     list for a whole roster) to avoid a redundant per-hero query."""
     hero_eq = equipment_list if equipment_list is not None else get_hero_equipment(hero["id"])
+    hero_eq = ensure_hero_has_weapon(hero["id"], hero_eq)
 
     str_pct = int_pct = hlt_pct = agi_pct = 0.0
     dmg_reduction_pct = hero.get("dmg_reduction_pct", 0.0)

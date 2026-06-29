@@ -526,13 +526,6 @@ export default function TowerPage({ onGoldChange }) {
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <div className="section-header" style={{ marginBottom: 0 }}>The Tower</div>
-        {base && (
-          <div className="card" style={{ padding: '0.5rem 1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <div><span className="text-dim text-sm">Gold: </span><span className="text-gold" style={{ fontFamily: 'Cinzel, serif' }}>{base.gold.toLocaleString()}</span></div>
-            <div><span className="text-dim text-sm">Gems: </span><span style={{ fontFamily: 'Cinzel, serif', color: '#00ffff' }}>{(base.gems || 0).toLocaleString()} 💎</span></div>
-            <div><span className="text-dim text-sm">Supplies: </span><span style={{ fontFamily: 'Cinzel, serif', color: '#c8a030' }}>{base.supplies || 0} 🍖</span></div>
-          </div>
-        )}
       </div>
 
       {lastResult ? (
