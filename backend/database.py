@@ -34,13 +34,21 @@ def get_db_path():
         raise ValueError("No active profile set")
     return os.path.join(SAVES_DIR, f"{ACTIVE_PROFILE}.db")
 
-def set_profile(profile_name):
+def set_profile(profile_name, difficulty=None):
     global ACTIVE_PROFILE
     ACTIVE_PROFILE = profile_name
     os.makedirs(SAVES_DIR, exist_ok=True)
+    # difficulty is only ever applied on first creation of a profile — an
+    # existing save's difficulty is locked in (see difficulty_service.py),
+    # so we must know whether this .db file existed *before* init_db()
+    # creates it.
+    is_new_profile = not os.path.exists(get_db_path())
     with open(_ACTIVE_PROFILE_FILE, "w") as f:
         f.write(profile_name)
     init_db()
+    if is_new_profile and difficulty in ("easy", "normal", "hard"):
+        with db() as conn:
+            conn.execute("UPDATE base SET difficulty = ? WHERE id = 1", (difficulty,))
 
 def clear_active_profile():
     global ACTIVE_PROFILE
@@ -207,7 +215,7 @@ CREATE TABLE IF NOT EXISTS base (
             equip_spark_points INTEGER DEFAULT 0,
             last_training_tick TIMESTAMP,
             last_fatigue_tick TIMESTAMP
-        , last_research_tick TIMESTAMP, last_mage_tick TIMESTAMP, last_alchemist_tick TIMESTAMP, last_restaurant_tick TIMESTAMP, master_name TEXT, tutorial_complete INTEGER DEFAULT 0);
+        , last_research_tick TIMESTAMP, last_mage_tick TIMESTAMP, last_alchemist_tick TIMESTAMP, last_restaurant_tick TIMESTAMP, master_name TEXT, tutorial_complete INTEGER DEFAULT 0, difficulty TEXT DEFAULT 'normal');
 
 CREATE TABLE IF NOT EXISTS event_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -338,10 +346,21 @@ CREATE TABLE IF NOT EXISTS hero_bonds (
     PRIMARY KEY (hero_a_id, hero_b_id)
 );
 
+CREATE TABLE IF NOT EXISTS mail (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    rewards_json TEXT NOT NULL,
+    is_read INTEGER DEFAULT 0,
+    is_claimed INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT OR IGNORE INTO base (id) VALUES (1);
 INSERT INTO facilities (base_id, type, slots_unlocked) 
-SELECT 1, 'Training Center', 1 
-WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE type = 'Training Center');
+SELECT 1, 'Training Grounds', 1 
+WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE type = 'Training Grounds');
 
 INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
 SELECT 'Basic Sword', 'weapon', 'A sturdy basic sword.', '{"Iron Ore": 3, "Monster Bone": 1}', 100, 1.0, 1
@@ -473,6 +492,12 @@ WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Void Ring');
                 "OR EXISTS (SELECT 1 FROM heroes)"
             )
             print("[DB] Migrated: added column 'tutorial_complete' to base")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE base ADD COLUMN difficulty TEXT DEFAULT 'normal'")
+            print("[DB] Migrated: added column 'difficulty' to base (existing profiles default to normal)")
         except sqlite3.OperationalError:
             pass
 

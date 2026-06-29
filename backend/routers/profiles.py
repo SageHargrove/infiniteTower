@@ -8,6 +8,7 @@ router = APIRouter()
 
 class ProfileSwitchReq(BaseModel):
     name: str
+    difficulty: str | None = None  # only honored when the profile is brand new — see database.set_profile
 
 @router.get("/")
 def list_profiles():
@@ -19,8 +20,8 @@ def switch_profile(req: ProfileSwitchReq):
     name = re.sub(r'[^a-zA-Z0-9_]', '', req.name)
     if not name:
         raise HTTPException(status_code=400, detail="Invalid profile name")
-    
-    set_profile(name)
+
+    set_profile(name, difficulty=req.difficulty)
     
     # After switching DBs, we must heal the portrait cache so the new profile 
     # claims the shared pool of pre-generated portraits, and queue up any 

@@ -416,15 +416,15 @@ def craft_equipment(crafter_id: int):
         )
         return {"id": cursor.lastrowid, "name": name, "type": eq_type, "rarity": rarity, "set_family": set_family}
 
-def generate_equipment_drop(floor_number: int, is_boss: bool = False, drop_bonus: float = 0.0) -> dict | None:
+def generate_equipment_drop(floor_number: int, is_boss: bool = False, drop_bonus: float = 0.0, rarity_boost: float = 0.0) -> dict | None:
     # Base chance: 10% on normal floors, 100% on bosses
     base_chance = 1.0 if is_boss else 0.10
     total_chance = min(1.0, base_chance + drop_bonus)
-    
+
     if random.random() > total_chance:
         return None
-        
-    score = floor_number * 3 + random.randint(0, 50)
+
+    score = floor_number * 3 + random.randint(0, 50) + rarity_boost
     if is_boss:
         score += 100
         

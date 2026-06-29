@@ -423,10 +423,14 @@ def enter_floor(req: EnterFloorRequest):
                 npc = random.choice(["a wounded traveler", "a lost child", "a captured merchant", "a dying scholar"])
                 flavor_intro = f"You find {npc} who needs safe passage. Enemies close in on the path."
 
+            from services.difficulty_service import get_difficulty_mults
+            enemy_stat_mult = get_difficulty_mults(conn)["enemy_stat_mult"]
+
             result = _resolve_real_combat(
                 conn, hero_teams, req.floor_number, is_boss, is_miniboss, zone_theme,
                 boss_data_override, base_row, pending_legacies,
                 enemy_count_override=enemy_count_override, flavor_intro=flavor_intro,
+                difficulty_mult=enemy_stat_mult,
                 family_override=family_override, is_survival_swarm=is_survival_swarm,
                 available_consumables=available_consumables, is_escort=(floor_type == "escort"),
             )
@@ -745,10 +749,13 @@ def resolve_explore_floor_choice(data: ResolveExploreRequest):
         template = generate_explore_floor(data.floor_number)
         choice = get_explore_choice(template, data.choice_id)
 
+        from services.difficulty_service import get_difficulty_mults
+        enemy_stat_mult = get_difficulty_mults(conn)["enemy_stat_mult"]
+
         result = _resolve_real_combat(
             conn, hero_list, data.floor_number, is_boss=False, is_miniboss=False, zone_theme="",
             boss_data_override=None, base_row=base_row, pending_legacies=pending_legacies,
-            difficulty_mult=choice["difficulty_mult"], flavor_intro=template["theme"],
+            difficulty_mult=choice["difficulty_mult"] * enemy_stat_mult, flavor_intro=template["theme"],
         )
         result["floor_type"] = "explore"
 

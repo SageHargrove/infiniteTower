@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase, getMarketCatalog, purchaseMarketItem, getBaseUpgrades, buyBaseUpgrade } from '../api/client'
+import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase, getMarketCatalog, purchaseMarketItem, getBaseUpgrades, buyBaseUpgrade, getMailList, claimMail } from '../api/client'
 
 // Hand-painted banner art for the base-wide upgrade tree — keyed by the
 // upgrade's id (see DEFAULT_UPGRADES in routers/base.py) so a rename there
@@ -12,13 +12,8 @@ const UPGRADE_BANNERS = {
   chapel: 'http://localhost:8000/static/facilities/Chapel.png',
 }
 
-// Same art, reused for the assignable Facilities tab where the names happen
-// to overlap (Forge/Infirmary exist as both a base-wide upgrade tier and a
-// separate assignable building) — everything else in that tab has no art yet.
-const FACILITY_BANNERS = {
-  Forge: 'http://localhost:8000/static/facilities/Forge.png',
-  Infirmary: 'http://localhost:8000/static/facilities/Infirmary.png',
-}
+// We now dynamically load banners for facilities based on their type name.
+// E.g. http://localhost:8000/static/facilities/The Market.png
 
 const FACILITY_TOOLTIPS = {
   "Forge": "Crafts powerful weapons, armor, and accessories. Quality is capped by your single best Blacksmith — more Blacksmiths of that same tier assigned together adds a smaller bonus on top.",
@@ -47,6 +42,10 @@ export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTa
   const [purchasing, setPurchasing] = useState(false)
   const [baseUpgrades, setBaseUpgrades] = useState([])
   const [upgradingId, setUpgradingId] = useState(null)
+  
+  // Mail
+  const [mailList, setMailList] = useState([])
+  const [claiming, setClaiming] = useState(false)
   
   // Legacy & Floors
   const [legacies, setLegacies] = useState([])
@@ -91,7 +90,7 @@ export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTa
 
   async function loadAll() {
     try {
-      const [b, fac, heroes, leg, flrs, ch, catalog, upgrades] = await Promise.all([
+      const [b, fac, heroes, leg, flrs, ch, catalog, upgrades, mail] = await Promise.all([
         getBase(),
         getFacilities(),
         listHeroes(true),
@@ -99,7 +98,8 @@ export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTa
         getBaseFloors().catch(() => ({ floors: [], base_heroes: [] })),
         getChatLogs(5).catch(() => []),
         getMarketCatalog().catch(() => ({})),
-        getBaseUpgrades().catch(() => [])
+        getBaseUpgrades().catch(() => []),
+        getMailList().catch(() => [])
       ])
       setBase(b)
       setFacilitiesData(fac)
@@ -109,6 +109,7 @@ export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTa
       applyChats(ch)
       setMarketCatalog(catalog)
       setBaseUpgrades(upgrades)
+      setMailList(mail)
       
       const hasMage = fac.built?.some(f => f.type === 'Mage Tower')
       if (hasMage) {
@@ -285,6 +286,19 @@ const handleRenameBase = async () => {
     }
   }
 
+  async function handleClaimMail(mailId) {
+    setClaiming(true)
+    try {
+      await claimMail(mailId)
+      loadAll()
+      if (onGoldChange) onGoldChange()
+    } catch(e) {
+      alert(e.message || e)
+    } finally {
+      setClaiming(false)
+    }
+  }
+
   if (!base) return <div className="page text-dim">Loading...</div>
   if (!facilitiesData) return <div className="page text-dim">Loading facilities...</div>
 
@@ -305,19 +319,35 @@ const handleRenameBase = async () => {
 
   const renderTabs = () => (
     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
-      {['lobby', 'facilities', 'legacy', 'floors'].map(tab => {
+      {['lobby', 'facilities', 'mail', 'legacy', 'floors'].map(tab => {
         const locked = !!tourTargetSubTab && tab !== tourTargetSubTab
+        
+        let label = tab
+        if (tab === 'floors') label = 'Base Hierarchy'
+        else if (tab === 'legacy') label = 'Legacies'
+        else if (tab === 'lobby') label = 'The Lobby'
+        else if (tab === 'mail') label = 'Mailbox'
+        
+        // Unclaimed mail indicator
+        let badge = null;
+        if (tab === 'mail') {
+          const unclaimed = mailList.filter(m => !m.is_claimed).length
+          if (unclaimed > 0) {
+            badge = <span style={{ marginLeft: '0.4rem', background: 'var(--gold)', color: '#000', borderRadius: '50%', padding: '0.1rem 0.4rem', fontSize: '0.8rem', fontWeight: 'bold' }}>{unclaimed}</span>
+          }
+        }
+
         return (
           <button key={tab} className={`tab-btn ${activeTab === tab ? 'active' : ''}`} disabled={locked} onClick={() => { if (!locked) setActiveTab(tab) }}
           style={{
-            background: 'none', border: 'none', padding: '0.5rem 1rem', cursor: locked ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+            background: 'none', border: 'none', padding: '0.5rem 1rem', cursor: locked ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center',
             color: activeTab === tab ? 'var(--gold)' : 'var(--text-dim)',
             borderBottom: activeTab === tab ? '2px solid var(--gold)' : '2px solid transparent',
             fontFamily: 'Cinzel, serif', fontSize: '1.1rem', textTransform: 'uppercase',
             opacity: locked ? 0.35 : 1,
             boxShadow: tab === tourTargetSubTab ? '0 0 8px var(--gold)' : 'none',
           }}>
-            {tab === 'floors' ? 'Base Hierarchy' : tab === 'legacy' ? 'Legacies' : tab === 'lobby' ? 'The Lobby' : tab}
+            {label} {badge}
           </button>
         )
       })}
@@ -351,6 +381,16 @@ const getGenRate = (fac) => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
                 <div style={{ fontFamily: 'Cinzel, serif', fontSize: '2.0rem', color: 'var(--gold)' }}>
                   {base.name} <span style={{ fontSize: '1.4rem', color: 'var(--text-dim)' }}>(Lv.{base.level})</span>
+                  {base.difficulty && base.difficulty !== 'normal' && (
+                    <span style={{
+                      fontSize: '0.7rem', marginLeft: '0.6rem', padding: '0.15rem 0.5rem', borderRadius: 5,
+                      verticalAlign: 'middle', fontFamily: 'Cinzel, serif', letterSpacing: '1px',
+                      color: base.difficulty === 'hard' ? '#e66' : '#6e6',
+                      border: `1px solid ${base.difficulty === 'hard' ? 'rgba(230,100,100,0.4)' : 'rgba(100,230,100,0.4)'}`,
+                    }}>
+                      {base.difficulty.toUpperCase()} MODE
+                    </span>
+                  )}
                 </div>
                 <button className="btn" style={{ padding: '0.4rem', fontSize: '0.9rem' }} onClick={handleRenameBase} title="Rename Base">✎ Edit</button>
               </div>
@@ -454,12 +494,10 @@ const getGenRate = (fac) => {
           <div style={{ flex: '2 1 500px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {facilitiesData.built.sort((a,b) => a.cost - b.cost).map(fac => (
               <div key={fac.id} className="card" style={{ overflow: 'hidden', padding: 0 }}>
-                {FACILITY_BANNERS[fac.type] && (
-                  <div style={{ width: '100%', height: '140px', overflow: 'hidden', position: 'relative' }}>
-                    <img src={FACILITY_BANNERS[fac.type]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,14,0.95) 100%)' }} />
-                  </div>
-                )}
+                <div style={{ width: '100%', height: '160px', overflow: 'hidden', position: 'relative' }}>
+                  <img src={`http://localhost:8000/static/facilities/${fac.type}.png`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%', display: 'block' }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'none'; }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,14,0.95) 100%)' }} />
+                </div>
                 <div style={{ padding: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -569,18 +607,22 @@ const getGenRate = (fac) => {
             <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '1rem' }}>Available Facilities</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {facilitiesData.available.sort((a,b) => a.cost - b.cost).map(fac => (
-                <div key={fac.type} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontFamily: 'Cinzel, serif', fontSize: '1.1rem' }}>{fac.type}</span>
-                      <span title={FACILITY_TOOLTIPS[fac.type] || "Base facility."} style={{ fontSize: '0.8rem', color: 'var(--gold)', cursor: 'help' }}>[?]</span>
+                <div key={fac.type} className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+                  <div style={{ width: '100%', height: '110px', overflow: 'hidden', position: 'relative' }}>
+                    <img src={`http://localhost:8000/static/facilities/${fac.type}.png`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%', display: 'block' }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.background = 'transparent'; }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(10,10,14,0.9) 0%, rgba(10,10,14,0.4) 50%, rgba(10,10,14,0.1) 100%)' }} />
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 1rem', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontFamily: 'Cinzel, serif', fontSize: '1.1rem', color: 'var(--gold)', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>{fac.type}</span>
+                        <span title={FACILITY_TOOLTIPS[fac.type] || "Base facility."} style={{ fontSize: '0.8rem', color: 'var(--gold)', cursor: 'help' }}>[?]</span>
+                      </div>
+                      <button className="btn btn-gold" onClick={() => handleBuildFacility(fac.type)} disabled={facilityLoading || base.gold < fac.cost} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', zIndex: 2 }}>
+                        Build ({fac.cost}g)
+                      </button>
                     </div>
-                    <button className="btn btn-gold" onClick={() => handleBuildFacility(fac.type)} disabled={facilityLoading || base.gold < fac.cost} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
-                      Build ({fac.cost}g)
-                    </button>
                   </div>
                   {fac.floor_restricted && (
-                    <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem', fontStyle: 'italic' }}>Unlocked at Floor {fac.unlock_floor}</span>
+                    <div style={{ padding: '0.5rem 1rem', color: 'var(--text-dim)', fontSize: '0.8rem', fontStyle: 'italic', background: 'var(--bg-dark)' }}>Unlocked at Floor {fac.unlock_floor}</div>
                   )}
                 </div>
               ))}
@@ -588,38 +630,53 @@ const getGenRate = (fac) => {
           </div>
         </div>
 
-        {/* Base Upgrades — base-wide tiers (not tied to any one hero
-            assignment), separate from the assignable Facilities above. */}
-        {baseUpgrades.length > 0 && (
-          <div style={{ marginTop: '1.5rem' }}>
-            <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '1rem' }}>Base Upgrades</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-              {baseUpgrades.map(u => (
-                <div key={u.id} className="card" style={{ overflow: 'hidden', padding: 0 }}>
-                  {UPGRADE_BANNERS[u.id] && (
-                    <div style={{ width: '100%', height: '110px', overflow: 'hidden', position: 'relative' }}>
-                      <img src={UPGRADE_BANNERS[u.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,14,0.95) 100%)' }} />
-                    </div>
-                  )}
-                  <div style={{ padding: '0.75rem' }}>
-                    <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)' }}>{u.name} (Lv.{u.level || 0}/{u.max_level})</div>
-                    <div className="text-dim" style={{ fontSize: '0.8rem', margin: '0.3rem 0 0.6rem' }}>{u.description}</div>
-                    <button
-                      className="btn btn-gold"
-                      onClick={() => handleBuyBaseUpgrade(u.id)}
-                      disabled={u.is_maxed || upgradingId === u.id || base.gold < u.next_cost}
-                      style={{ width: '100%', fontSize: '0.8rem', padding: '0.4rem' }}
-                    >
-                      {u.is_maxed ? 'MAX' : `Upgrade (${u.next_cost}g)`}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Base Upgrades section removed as requested */}
         </>
+      )}
+
+      {activeTab === 'mail' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '800px', margin: '0 auto' }}>
+          <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '0.5rem' }}>Mailbox</h3>
+          {mailList.length === 0 && <div className="text-dim text-sm text-center" style={{ marginTop: '2rem' }}>Your inbox is empty.</div>}
+          
+          {mailList.map(mail => (
+            <div key={mail.id} className="card" style={{ padding: '1rem', border: mail.is_claimed ? '1px solid var(--border)' : '1px solid var(--gold)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <div>
+                  <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem', color: mail.is_claimed ? 'var(--text-hi)' : 'var(--gold)' }}>{mail.subject}</div>
+                  <div className="text-dim text-sm" style={{ marginTop: '0.2rem' }}>From: {mail.sender} &nbsp;·&nbsp; {new Date(mail.created_at).toLocaleDateString()}</div>
+                </div>
+                {!mail.is_claimed ? (
+                  <button className="btn btn-gold" onClick={() => handleClaimMail(mail.id)} disabled={claiming} style={{ padding: '0.5rem 1rem' }}>
+                    Claim Rewards
+                  </button>
+                ) : (
+                  <span className="text-dim text-sm">Claimed</span>
+                )}
+              </div>
+              
+              <div style={{ lineHeight: 1.6, color: 'var(--text-hi)', whiteSpace: 'pre-wrap', marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: 6 }}>
+                {mail.body}
+              </div>
+              
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <span className="text-dim text-sm" style={{ alignSelf: 'center' }}>Rewards:</span>
+                {(() => {
+                  try {
+                    const rw = JSON.parse(mail.rewards_json || '{}')
+                    const badges = []
+                    if (rw.gems) badges.push(<div key="gems" style={{ padding: '0.3rem 0.6rem', background: 'rgba(0,255,255,0.1)', border: '1px solid rgba(0,255,255,0.3)', borderRadius: 4, color: '#00ffff' }}>{rw.gems} 💎</div>)
+                    if (rw.gold) badges.push(<div key="gold" style={{ padding: '0.3rem 0.6rem', background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold)', borderRadius: 4, color: 'var(--gold)' }}>{rw.gold} Gold</div>)
+                    if (rw.supplies) badges.push(<div key="supplies" style={{ padding: '0.3rem 0.6rem', background: 'rgba(200,200,200,0.1)', border: '1px solid #aaa', borderRadius: 4, color: 'var(--text-hi)' }}>{rw.supplies} Supplies</div>)
+                    return badges
+                  } catch (e) {
+                    return null
+                  }
+                })()}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {activeTab === 'legacy' && (

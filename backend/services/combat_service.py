@@ -1889,20 +1889,27 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
         # transaction is still uncommitted causes "database is locked"
         # on SQLite, which this block's except then silently swallowed,
         # also skipping the gold/supplies/materials grant below it.
+        from services.difficulty_service import get_difficulty_mults
         if outer_conn is not None:
             base_info = outer_conn.execute("SELECT global_buffs FROM base WHERE id = 1").fetchone()
             buffs = __import__('json').loads(base_info["global_buffs"] or "{}") if base_info else {}
+            diff_mults = get_difficulty_mults(outer_conn)
         else:
             from database import db
             with db() as _conn:
                 base_info = _conn.execute("SELECT global_buffs FROM base WHERE id = 1").fetchone()
                 buffs = __import__('json').loads(base_info["global_buffs"] or "{}") if base_info else {}
+                diff_mults = get_difficulty_mults(_conn)
         from services.equipment_service import generate_equipment_drop
         # Luck is averaged across the deployed team, not taken from a
         # single hero — a team-comp consideration, not "stack one lucky
         # hero and ignore the rest."
         drop_bonus = buffs.get("drop_boost", 0) * 0.05 + avg_luck / 100
-        equip = generate_equipment_drop(floor_number, is_boss, drop_bonus)
+        # rare_drop_mult shifts the rarity SCORE (Easy skews down ~half a
+        # tier, Hard skews up ~half a tier), not drop_bonus — drop_bonus
+        # only gates whether anything drops at all, not how good it is.
+        rarity_boost = (diff_mults["rare_drop_mult"] - 1.0) * 40
+        equip = generate_equipment_drop(floor_number, is_boss, drop_bonus, rarity_boost=rarity_boost)
         if equip:
             result["equipment_drop"] = equip
 
@@ -1940,6 +1947,10 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
                 mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops
+
+        # Easy mode's appeal is quantity (gold), Hard's is quality (rarity
+        # boost above) — Hard deliberately leaves gold at baseline per spec.
+        result["gold_gained"] = int(result["gold_gained"] * diff_mults["gold_mult"])
     except Exception as e:
         print(f"Error generating drop: {e}")
 

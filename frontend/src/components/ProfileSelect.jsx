@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { listProfiles, switchProfile, renameProfile, deleteProfile } from '../api/client'
 
+const DIFFICULTY_OPTIONS = [
+  { id: 'easy', label: 'Easy', desc: 'Weaker enemies, +25% gold. Rare drops are less common.', note: 'Easy mode profiles are not eligible for leaderboard rankings.' },
+  { id: 'normal', label: 'Normal', desc: 'The baseline experience.', note: null },
+  { id: 'hard', label: 'Hard', desc: 'Stronger enemies, better rare drops. Gold stays at baseline.', note: 'Hard mode: full leaderboard access, separate prestige tier.' },
+]
+
 export default function ProfileSelect({ onSelect }) {
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [newProfile, setNewProfile] = useState('')
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [msg, setMsg] = useState(null)
+  // Difficulty is locked in at creation — see backend/services/difficulty_service.py
+  const [pendingNewName, setPendingNewName] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -32,13 +40,19 @@ export default function ProfileSelect({ onSelect }) {
     } catch (e) { setMsg(e.message); setLoading(false) }
   }
 
-  async function handleCreate(e) {
+  function handleCreate(e) {
     e.preventDefault()
     const name = newProfile.trim()
     if (!name) return
+    setPendingNewName(name)
+  }
+
+  async function confirmCreate(difficulty) {
+    const name = pendingNewName
+    setPendingNewName(null)
     try {
       setLoading(true)
-      await switchProfile(name)
+      await switchProfile(name, difficulty)
       onSelect(name)
     } catch (e) { setMsg(e.message); setLoading(false) }
   }
@@ -214,6 +228,46 @@ export default function ProfileSelect({ onSelect }) {
           </div>
         </div>
       </div>
+
+      {pendingNewName && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'rgba(10,10,18,0.95)', border: '1px solid rgba(201,168,76,0.3)',
+            borderRadius: 14, padding: '2rem', width: '420px', maxWidth: '90vw',
+            boxShadow: '0 8px 50px rgba(0,0,0,0.7)',
+          }}>
+            <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.3rem', color: 'var(--gold)', marginBottom: '0.4rem', textAlign: 'center' }}>
+              Choose Your Difficulty
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: '1.4rem' }}>
+              "{pendingNewName}" — this cannot be changed later.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {DIFFICULTY_OPTIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  className="btn"
+                  style={{ textAlign: 'left', padding: '0.75rem 0.9rem', borderRadius: 8 }}
+                  onClick={() => confirmCreate(opt.id)}
+                >
+                  <div style={{ fontFamily: 'Cinzel, serif', fontWeight: 'bold', fontSize: '0.95rem', color: opt.id === 'hard' ? '#e66' : opt.id === 'easy' ? '#6e6' : '#fff' }}>
+                    {opt.label}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.65)', marginTop: '0.2rem' }}>{opt.desc}</div>
+                  {opt.note && <div style={{ fontSize: '0.7rem', color: 'rgba(201,168,76,0.7)', marginTop: '0.25rem' }}>{opt.note}</div>}
+                </button>
+              ))}
+            </div>
+            <button className="btn" style={{ width: '100%', marginTop: '1rem', fontSize: '0.8rem' }} onClick={() => setPendingNewName(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

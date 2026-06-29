@@ -172,7 +172,7 @@ export const applyTraining = (studentId, gemCost, teacherStats, teacherSkills) =
 
 // Profiles
 export const listProfiles = () => request('/profiles/')
-export const switchProfile = (name) => request('/profiles/switch', { method: 'POST', body: JSON.stringify({ name }) })
+export const switchProfile = (name, difficulty) => request('/profiles/switch', { method: 'POST', body: JSON.stringify(difficulty ? { name, difficulty } : { name }) })
 export const renameProfile = (oldName, newName) => request('/profiles/rename', { method: 'POST', body: JSON.stringify({ old_name: oldName, new_name: newName }) })
 export const deleteProfile = (name) => request('/profiles/delete', { method: 'POST', body: JSON.stringify({ name }) })
 
