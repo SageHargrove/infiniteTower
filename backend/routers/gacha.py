@@ -240,7 +240,7 @@ def pull_heroes(req: PullRequest):
         raise HTTPException(status_code=400, detail="Pull 1-10 heroes at a time")
 
     use_gold = req.currency == "gold"
-    min_star, max_star = (1, 4) if use_gold else (2, 7)
+    min_star, max_star = (1, 4) if use_gold else (1, 7)
     cost = 250 * req.count if use_gold else 100 * req.count
     currency_col = "gold" if use_gold else "gems"
 
@@ -282,7 +282,8 @@ def pull_heroes(req: PullRequest):
             synergy_leader_idx = random.choice(list(synergy_indices))
 
     results = []
-    rolled_rarities = [pull_rarity(min_star, max_star) for _ in range(req.count)]
+    currency_str = "gold" if use_gold else "gem"
+    rolled_rarities = [pull_rarity(min_star, max_star, currency=currency_str) for _ in range(req.count)]
 
     if synergy_group_name:
         follower_rarities = [rolled_rarities[i] for i in synergy_indices if i != synergy_leader_idx]
@@ -468,31 +469,30 @@ def pull_equipment(req: PullRequest):
 
 @router.get("/odds")
 def get_odds(currency: str = "gem"):
-    from services.gacha_service import RARITY_WEIGHTS
-    min_star, max_star = (1, 4) if currency == "gold" else (2, 7)
-    allowed = {s: w for s, w in RARITY_WEIGHTS.items() if min_star <= s <= max_star}
-    total = sum(allowed.values())
+    from services.gacha_service import GEM_WEIGHTS, GOLD_WEIGHTS
+    weights = GOLD_WEIGHTS if currency == "gold" else GEM_WEIGHTS
+    total = sum(weights.values())
     return {
         str(star): {
             "weight": w,
             "percent": round(w / total * 100, 4)
         }
-        for star, w in allowed.items()
+        for star, w in weights.items()
     }
 
 @router.get("/equipment-odds")
 def get_equipment_odds(currency: str = "gold"):
-    from services.gacha_service import EQUIPMENT_PULL_ODDS
+    from services.gacha_service import EQUIPMENT_PULL_ODDS, EQUIPMENT_GRADE_WEIGHTS
     tiers = EQUIPMENT_PULL_ODDS.get(currency, EQUIPMENT_PULL_ODDS["gold"])
+    weights = EQUIPMENT_GRADE_WEIGHTS.get(currency, EQUIPMENT_GRADE_WEIGHTS["gold"])
+    total = sum(weights.values())
     return [
         {
-            "grades": list(t[:-1]),
-            "percent": round(t[-1] * 100, 2),
-            # pull_equipment_gacha() rolls a sub-grade with random.choice()
-            # once the group is hit — an even split, not a separate weight.
+            "grades": list(t),
+            "percent": round(sum(weights[g] for g in t) / total * 100, 4),
             "breakdown": [
-                {"grade": g, "percent": round(t[-1] * 100 / len(t[:-1]), 2)}
-                for g in t[:-1]
+                {"grade": g, "percent": round(weights[g] / total * 100, 4)}
+                for g in t
             ],
         }
         for t in tiers

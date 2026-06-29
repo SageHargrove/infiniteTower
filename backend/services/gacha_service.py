@@ -1,31 +1,43 @@
 import random
 import math
 
-# Pull weights — strict percentages (out of 100000 total). Steeply
-# exponential by design: the game should start heavily 1★/2★-focused, with
-# higher rarities reading as a genuine lottery rather than a routine pull.
-# Evolution (see routers/heroes.py promote_hero) is the intended way out of
-# low rarity, not re-rolling — this curve is what makes that path matter.
-RARITY_WEIGHTS = {
-    1: 80000, # 80.000%
-    2: 15000, # 15.000%
-    3: 3900,  # 3.900%
-    4: 1000,  # 1.000%
-    5: 80,    # 0.080%
-    6: 15,    # 0.015%
-    7: 5,     # 0.005%
+# ── Gem pulls (1–7★) ─────────────────────────────────────────────────────────
+# Baseline from the manhwa: 4★ = exactly 1%. 1★ included but at ~70% vs
+# gold's brutal 95%, so gems feel meaningfully better without being easy.
+# Game is meant to be hard. Total = 100 000.
+GEM_WEIGHTS = {
+    1: 70859,  # 70.859%  ← bulk commons
+    2: 20000,  # 20.000%
+    3:  8000,  #  8.000%
+    4:  1000,  #  1.000%  ← manhwa baseline
+    5:   130,  #  0.130%  ← 7.7× rarer than 4★ (user: gap is fine)
+    6:    10,  #  0.010%  ← 13× rarer than 5★ — insane gap
+    7:     1,  #  0.001%  ← 10× rarer than 6★ — near-mythical
 }
 
+# ── Gold pulls (1–4★) ────────────────────────────────────────────────────────
+# Even harsher than gems — gold is the grind currency.
+# 1★ dominates at 95%, 4★ is a genuine miracle at 0.05%. Total = 100 000.
+GOLD_WEIGHTS = {
+    1: 95000,  # 95.000%  ← you will be swimming in 1★ heroes
+    2:  4300,  #  4.300%
+    3:   650,  #  0.650%
+    4:    50,  #  0.050%  ← rarer than gem 4★ by 20×; a true gold jackpot
+}
+
+# Keep the old name as an alias so any legacy callers don't break
+RARITY_WEIGHTS = {**GOLD_WEIGHTS, **{k: v for k, v in GEM_WEIGHTS.items() if k not in GOLD_WEIGHTS}}
 TOTAL_WEIGHT = sum(RARITY_WEIGHTS.values())
 
-def pull_rarity(min_star: int = 1, max_star: int = 7) -> int:
-    """Roll a birth star rarity using weighted RNG, optionally restricted to
-    a [min_star, max_star] window (gold pulls are capped at 1-4★, gem pulls
-    at 2-7★ — see /gacha/pull). Re-normalizes against just that subset of
-    RARITY_WEIGHTS rather than clamping the unrestricted roll, so the
-    relative odds between the allowed stars stay proportional to their
-    original weights instead of getting distorted by clamping."""
-    allowed = {s: w for s, w in RARITY_WEIGHTS.items() if min_star <= s <= max_star}
+def pull_rarity(min_star: int = 1, max_star: int = 7, currency: str = "gem") -> int:
+    """Roll a birth star rarity using the appropriate weight table for the
+    given currency ('gem' or 'gold').  min_star/max_star are still respected
+    as a safety clamp but the weight tables already encode the intended range,
+    so no re-normalization artefacts from clamping a shared table."""
+    weights = GEM_WEIGHTS if currency == "gem" else GOLD_WEIGHTS
+    allowed = {s: w for s, w in weights.items() if min_star <= s <= max_star}
+    if not allowed:
+        return min_star
     total = sum(allowed.values())
     roll = random.uniform(0, total)
     cumulative = 0
@@ -159,12 +171,33 @@ def get_pull_cost() -> int:
     return 100  # gold per pull, can expand to pity system later
 
 EQUIPMENT_PULL_COST = {"gold": 500, "gem": 150}
-# Gold pulls: D-B tier (cheap, common gear). Gem pulls: C-S tier (pricier,
-# meaningfully better floor). SS/SSS/Z are never available from any gacha
-# pull either way — crafting and rare boss/high-floor drops only.
+# Per-grade exponential weights (out of 100000), matching the same
+# philosophy as GEM_WEIGHTS/GOLD_WEIGHTS above — every grade is its own
+# weighted roll now, not a bucket of 3 sub-grades picked uniformly (the
+# old shape made B+ exactly as likely as B within its bucket, which is
+# the opposite of "B+ should feel dramatically rarer than B").
+# Gold pulls: D-B+ tier (cheap, common gear). Gem pulls: C-S+ tier
+# (pricier, meaningfully better floor, skews up overall). SS/SSS/Z are
+# never available from any gacha pull either way — crafting and rare
+# boss/high-floor drops only.
+EQUIPMENT_GRADE_WEIGHTS = {
+    "gold": {
+        "D-": 42000, "D": 24000, "D+": 14000,
+        "C-": 9000, "C": 5500, "C+": 3000,
+        "B-": 1700, "B": 700, "B+": 100,
+    },
+    "gem": {
+        "C-": 30000, "C": 20000, "C+": 12000,
+        "B-": 15000, "B": 9000, "B+": 5000,
+        "A-": 4500, "A": 2500, "A+": 1200,
+        "S-": 500, "S": 250, "S+": 50,
+    },
+}
+# Kept as a name (no longer the actual roll mechanism) so the `/equipment-odds`
+# endpoint's existing bucket grouping still reads sensibly in the UI.
 EQUIPMENT_PULL_ODDS = {
-    "gold": [("D-", "D", "D+", 0.55), ("C-", "C", "C+", 0.35), ("B-", "B", "B+", 0.10)],
-    "gem":  [("C-", "C", "C+", 0.45), ("B-", "B", "B+", 0.40), ("A-", "A", "A+", 0.12), ("S-", "S", "S+", 0.03)],
+    "gold": [("D-", "D", "D+"), ("C-", "C", "C+"), ("B-", "B", "B+")],
+    "gem":  [("C-", "C", "C+"), ("B-", "B", "B+"), ("A-", "A", "A+"), ("S-", "S", "S+")],
 }
 
 def pull_equipment_gacha(conn, currency: str = "gold") -> dict:
@@ -179,14 +212,15 @@ def pull_equipment_gacha(conn, currency: str = "gold") -> dict:
         raise ValueError(f"Not enough {col}.")
     conn.execute(f"UPDATE base SET {col} = {col} - ? WHERE id = 1", (cost,))
 
-    roll = random.random()
-    cumulative = 0.0
-    tiers = EQUIPMENT_PULL_ODDS[currency]
-    rarity = tiers[-1][1]  # fallback to the top tier's middle sub-grade
-    for *grades, weight in tiers:
+    weights = EQUIPMENT_GRADE_WEIGHTS[currency]
+    total = sum(weights.values())
+    roll = random.uniform(0, total)
+    cumulative = 0
+    rarity = next(reversed(weights))  # fallback to the rarest grade
+    for grade, weight in weights.items():
         cumulative += weight
         if roll <= cumulative:
-            rarity = random.choice(grades)
+            rarity = grade
             break
 
     eq_type = random.choice(["Weapon", "Armor", "Accessory"])
