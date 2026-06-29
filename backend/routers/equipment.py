@@ -19,16 +19,27 @@ class ScrapReq(BaseModel):
     equipment_id: int
 
 @router.get("/")
-def list_equipment():
+def list_equipment(show_all: bool = False):
     from services.equipment_service import get_all_equipment, get_hero_equipment
     all_eq = get_all_equipment()
     equipped = [e for e in all_eq if e["is_equipped_to"]]
-    
+
     with db() as conn:
         rows = conn.execute("SELECT * FROM equipment WHERE is_equipped_to IS NULL ORDER BY created_at DESC").fetchall()
         unequipped = [dict(r) for r in rows]
-        
-    return {"equipped": equipped, "unequipped": unequipped}
+
+    # "F" rarity is never droppable/craftable — it only exists as a hero's
+    # guaranteed starting weapon (generate_starting_weapon). Once a hero
+    # equips something better, the old F-grade item lands back here with
+    # no slot, no artwork, and nothing a player would ever want — pure
+    # clutter. Hidden by default; ?show_all=true reveals it.
+    hidden_count = 0
+    if not show_all:
+        visible = [e for e in unequipped if e.get("rarity") != "F"]
+        hidden_count = len(unequipped) - len(visible)
+        unequipped = visible
+
+    return {"equipped": equipped, "unequipped": unequipped, "hidden_count": hidden_count}
 
 @router.post("/craft")
 def do_craft(req: CraftReq):

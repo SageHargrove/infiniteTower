@@ -39,14 +39,16 @@ export default function InventoryPage() {
 
   const [vaultCapacity, setVaultCapacity] = useState(20)
 
-  useEffect(() => { refresh() }, [])
+  const [showJunk, setShowJunk] = useState(false)
+
+  useEffect(() => { refresh() }, [showJunk])
 
   async function refresh() {
     setLoading(true)
     try {
       const [inv, eq, facs, heroList] = await Promise.all([
         getInventory(),
-        listEquipment(),
+        listEquipment(showJunk),
         getFacilities().catch(() => null),
         listHeroes(true).catch(() => [])
       ])
@@ -228,6 +230,14 @@ export default function InventoryPage() {
           {rarityFilter.size > 0 && (
             <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', marginLeft: '0.5rem' }} onClick={() => { setRarityFilter(new Set()); setSelectedItems(new Set()); }}>Clear Rarities</button>
           )}
+          <button
+            className={`btn ${showJunk ? 'btn-gold' : ''}`}
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', marginLeft: 'auto' }}
+            onClick={() => setShowJunk(s => !s)}
+            title="F-grade starter weapons left over after upgrading a hero's gear are hidden by default."
+          >
+            {showJunk ? 'Hide Starter Gear' : 'Show Starter Gear'}
+          </button>
         </div>
       )}
 

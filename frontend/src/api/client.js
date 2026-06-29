@@ -138,7 +138,7 @@ export const getHeroAptitudes = (heroId) => request(`/heroes/${heroId}/aptitudes
 export const getBonds = () => request('/heroes/bonds')
 
 // Equipment
-export const listEquipment = () => request('/equipment/')
+export const listEquipment = (showAll = false) => request(`/equipment/${showAll ? '?show_all=true' : ''}`)
 export const craftEquipment = (crafterId) => request('/equipment/craft', { method: 'POST', body: JSON.stringify({ crafter_id: crafterId }) })
 export const equipItem = (equipmentId, heroId) => request('/equipment/equip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId, hero_id: heroId }) })
 export const unequipItem = (equipmentId) => request('/equipment/unequip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
@@ -168,6 +168,7 @@ export const getEventLog = (runId = null, limit = 50) => request(`/runs/log?${ru
 // exactly like a Tower floor would, for shipping to the separate Arena
 // server. See api/arenaServerClient.js for the remote-host calls.)
 export const getArenaSnapshot = (teamId) => request(`/arena/team/${teamId}/snapshot`)
+export const applyTraining = (studentId, gemCost, teacherStats, teacherSkills) => request('/arena/apply_training', { method: 'POST', body: JSON.stringify({ student_id: studentId, gem_cost: gemCost, teacher_stats: teacherStats, teacher_skills: teacherSkills }) })
 
 // Profiles
 export const listProfiles = () => request('/profiles/')
@@ -175,4 +176,7 @@ export const switchProfile = (name) => request('/profiles/switch', { method: 'PO
 export const renameProfile = (oldName, newName) => request('/profiles/rename', { method: 'POST', body: JSON.stringify({ old_name: oldName, new_name: newName }) })
 export const deleteProfile = (name) => request('/profiles/delete', { method: 'POST', body: JSON.stringify({ name }) })
 
-// Portrait Cache
+// Mail
+export const getMailList = () => request('/base/mail/list')
+export const claimMail = (mailId) => request('/base/mail/claim', { method: 'POST', body: JSON.stringify({ mail_id: mailId }) })
+export const receiveMail = (sender, subject, body, rewardsJson) => request('/base/mail/receive', { method: 'POST', body: JSON.stringify({ sender, subject, body, rewards_json: rewardsJson }) })
