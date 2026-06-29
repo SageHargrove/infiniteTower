@@ -39,16 +39,14 @@ export default function InventoryPage() {
 
   const [vaultCapacity, setVaultCapacity] = useState(20)
 
-  const [showJunk, setShowJunk] = useState(false)
-
-  useEffect(() => { refresh() }, [showJunk])
+  useEffect(() => { refresh() }, [])
 
   async function refresh() {
     setLoading(true)
     try {
       const [inv, eq, facs, heroList] = await Promise.all([
         getInventory(),
-        listEquipment(showJunk),
+        listEquipment(),
         getFacilities().catch(() => null),
         listHeroes(true).catch(() => [])
       ])
@@ -240,14 +238,6 @@ export default function InventoryPage() {
             title="Only show equipment nobody currently has equipped."
           >
             {hideEquipped ? 'Showing Unequipped Only' : 'Show Unequipped Only'}
-          </button>
-          <button
-            className={`btn ${showJunk ? 'btn-gold' : ''}`}
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
-            onClick={() => setShowJunk(s => !s)}
-            title="F-grade starter weapons left over after upgrading a hero's gear are hidden by default."
-          >
-            {showJunk ? 'Hide Starter Gear' : 'Show Starter Gear'}
           </button>
         </div>
       )}

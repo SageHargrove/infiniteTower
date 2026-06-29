@@ -280,19 +280,22 @@ def scrap_equipment(equipment_id: int) -> dict:
     return {"ok": True, "material": mat_name, "amount": amount, "scrapped": item["name"]}
 
 def ensure_hero_has_weapon(hero_id: int, hero_eq: list) -> list:
-    """A hero who unequipped their weapon (including the guaranteed F-grade
-    starter — nothing stops a player from unequipping that too) would
-    otherwise fight bare-handed with no weapon stat bonus at all and no
-    way back short of a Vault pull or craft. Auto-issues a fresh starter
-    weapon and equips it right before combat, same placeholder role the
-    original one played. Mutates hero_eq in place and returns it."""
+    """A hero with no weapon equipped (including one who unequipped the
+    F-grade starter — nothing stops a player from doing that) would
+    otherwise fight bare-handed with no weapon stat bonus at all. Rather
+    than persisting a real F-grade item to the equipment table (the old
+    approach — it then had to be hidden from every inventory view forever
+    and never had a clean way back to "weaponless" once issued), this
+    injects a purely in-memory placeholder dict with the same stat shape
+    apply_equipment_stats reads, used for this one stat calculation only
+    and never written to the database. The hero stays genuinely
+    weaponless in the Vault between fights, exactly like having no weapon
+    at all — this only ever exists for the duration of a single combat
+    resolution. Mutates hero_eq in place and returns it."""
     if any(eq["type"] == "Weapon" for eq in hero_eq):
         return hero_eq
     weapon = generate_starting_weapon()
-    weapon_id = save_equipment(weapon)
-    with db() as conn:
-        conn.execute("UPDATE equipment SET is_equipped_to = ? WHERE id = ?", (hero_id, weapon_id))
-    weapon["id"] = weapon_id
+    weapon["id"] = None
     weapon["is_equipped_to"] = hero_id
     hero_eq.append(weapon)
     return hero_eq

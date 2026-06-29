@@ -19,8 +19,8 @@ class ScrapReq(BaseModel):
     equipment_id: int
 
 @router.get("/")
-def list_equipment(show_all: bool = False):
-    from services.equipment_service import get_all_equipment, get_hero_equipment
+def list_equipment():
+    from services.equipment_service import get_all_equipment
     all_eq = get_all_equipment()
     equipped = [e for e in all_eq if e["is_equipped_to"]]
 
@@ -28,23 +28,18 @@ def list_equipment(show_all: bool = False):
         rows = conn.execute("SELECT * FROM equipment WHERE is_equipped_to IS NULL ORDER BY created_at DESC").fetchall()
         unequipped = [dict(r) for r in rows]
 
-    # "F" rarity is never droppable/craftable — it only exists as a hero's
-    # guaranteed starting weapon (generate_starting_weapon), a placeholder
-    # so nobody fights bare-handed. No slot, no artwork, nothing a player
-    # would ever want to see — hidden everywhere by default (both while
-    # still equipped on a hero who hasn't replaced it yet, and once
-    # unequipped and sitting unused), regardless of show_all, which only
-    # ever applied to the unequipped list before and missed the equipped
-    # case. ?show_all=true reveals both.
-    hidden_count = 0
-    if not show_all:
-        visible_equipped = [e for e in equipped if e.get("rarity") != "F"]
-        visible_unequipped = [e for e in unequipped if e.get("rarity") != "F"]
-        hidden_count = (len(equipped) - len(visible_equipped)) + (len(unequipped) - len(visible_unequipped))
-        equipped = visible_equipped
-        unequipped = visible_unequipped
+    # "F" rarity is never droppable/craftable/persisted — heroes don't get
+    # a real starting weapon row anymore at all (see hero creation in
+    # routers/gacha.py). ensure_hero_has_weapon (equipment_service.py)
+    # injects a purely in-memory placeholder for stat math at combat time
+    # only, never written to this table. This filter just guards against
+    # any leftover F-grade rows from before that change, on existing save
+    # files — nothing new should ever produce one. Unconditionally
+    # hidden, no show_all override; there's nothing here worth revealing.
+    equipped = [e for e in equipped if e.get("rarity") != "F"]
+    unequipped = [e for e in unequipped if e.get("rarity") != "F"]
 
-    return {"equipped": equipped, "unequipped": unequipped, "hidden_count": hidden_count}
+    return {"equipped": equipped, "unequipped": unequipped}
 
 @router.post("/craft")
 def do_craft(req: CraftReq):

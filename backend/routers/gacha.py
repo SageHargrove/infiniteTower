@@ -395,10 +395,11 @@ def pull_heroes(req: PullRequest):
             ))
             hero_id = cursor.lastrowid
 
-            from services.equipment_service import generate_starting_weapon, save_equipment
-            starting_weapon = generate_starting_weapon()
-            weapon_id = save_equipment(starting_weapon, conn=conn)
-            conn.execute("UPDATE equipment SET is_equipped_to = ? WHERE id = ?", (hero_id, weapon_id))
+            # No persisted starting weapon — heroes are genuinely weaponless
+            # in the Vault by default now. equipment_service.py's
+            # ensure_hero_has_weapon injects an in-memory-only placeholder
+            # at combat time instead, so there's nothing here to clutter
+            # the inventory or need hiding.
 
             # Convert cached image to a permanent custom image instantly
             if portrait_path and "cached_" in portrait_path:
@@ -637,10 +638,9 @@ def spark_redeem():
         ))
         hero_id = cursor.lastrowid
 
-        from services.equipment_service import generate_starting_weapon, save_equipment
-        starting_weapon = generate_starting_weapon()
-        weapon_id = save_equipment(starting_weapon, conn=conn)
-        conn.execute("UPDATE equipment SET is_equipped_to = ? WHERE id = ?", (hero_id, weapon_id))
+        # No persisted starting weapon — see the matching comment at the
+        # other hero-creation call site above; ensure_hero_has_weapon
+        # covers this in-memory at combat time instead.
 
         # Convert cached image to a permanent custom image instantly
         if portrait_path and "cached_" in portrait_path:

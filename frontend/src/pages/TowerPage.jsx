@@ -47,8 +47,15 @@ function FloorBadge({ type }) {
   )
 }
 
-function FloorTypeCallout({ type }) {
-  const info = FLOOR_TYPE_INFO[type]
+// Survival Swarm is a random 35%-chance ALTERNATIVE rolled inside a
+// miniboss floor's combat resolution (services/combat_service.py's
+// SWARM_SURVIVAL_CHANCE) — not its own floor type, so the static
+// "Miniboss: A tougher single enemy" blurb was actively wrong (and
+// confusing — see the 30-50 enemy swarm) whenever that roll landed.
+const SURVIVAL_SWARM_INFO = { color: '#c44', label: 'Survival Swarm', blurb: 'An overwhelming horde — outlast the clock, don\'t try to clear it.' }
+
+function FloorTypeCallout({ type, isSurvivalSwarm }) {
+  const info = isSurvivalSwarm ? SURVIVAL_SWARM_INFO : FLOOR_TYPE_INFO[type]
   if (!info) return null
   return (
     <div style={{
@@ -538,7 +545,11 @@ export default function TowerPage({ onGoldChange }) {
             </div>
           </div>
 
-          {lastResult && <FloorTypeCallout type={lastResult.floor_type} />}
+          {lastResult && <FloorTypeCallout type={lastResult.floor_type} isSurvivalSwarm={
+            (lastResult.combat?.team_results || lastResult.team_results || []).some(tr => tr?.initial_state?.is_survival_swarm)
+            || lastResult.combat?.initial_state?.is_survival_swarm
+            || lastResult.initial_state?.is_survival_swarm
+          } />}
 
           {postCombatPhase && lastResult.run_over && (
             <div className="text-red" style={{ maxWidth: '600px', margin: '0 auto 2rem auto', textAlign: 'center', padding: '1rem', background: 'rgba(192,64,64,0.1)', border: '1px solid #c44', borderRadius: 6 }}>

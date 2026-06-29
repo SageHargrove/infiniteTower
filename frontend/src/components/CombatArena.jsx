@@ -34,6 +34,13 @@ const ENEMY_SIZE_TIERS = {
   swarmTiny:{ circle: 56,  container: 64,  icon: '1.2rem', name: '0.6rem',  pos: null },
 }
 
+// Survival Swarm floors can spawn 30-50 enemies at once server-side — fine
+// for the "can't realistically kill them all" combat math, but rendering
+// that many sprites reads as a dense unreadable mass rather than "epic".
+// Caps how many get an actual sprite; the rest are summarized as an
+// overflow badge (see the enemy render block below).
+const MAX_VISIBLE_ENEMIES = 16
+
 // TEAM_POSITIONS only has 5 hand-placed slots per side, matching the 5-hero
 // team cap — fine for normal encounters, but a swarm (or a hero side padded
 // out by a summoned Construct past 5 units) needs a layout that scales with
@@ -400,28 +407,55 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
         )
       })}
 
-      {/* Render Enemies */}
-      {enemies.map((enemy, idx) => {
-        const isAttacker = currentTurn?.attacker_id === enemy.id
-        const isTarget = currentTurn?.target_id === enemy.id
-        const dmgInfo = isTarget ? { amount: currentTurn.damage, crit: currentTurn.is_crit } : null
+      {/* Render Enemies — Survival Swarm floors can spawn 30-50 at once
+          (the "overwhelming, can't realistically kill them all" framing),
+          which getGridPosition can technically lay out but reads as a
+          dense unreadable mass rather than "epic," not a real fight view.
+          Capped to MAX_VISIBLE_ENEMIES; the rest still exist and act in
+          the actual combat resolution (this is display-only), represented
+          by an overflow badge instead. Always keeps the current turn's
+          attacker/target visible even if that pushes 1-2 past the cap, so
+          the highlighted action is never hidden behind the cap. */}
+      {(() => {
+        const visible = enemies.filter((e, idx) => idx < MAX_VISIBLE_ENEMIES
+          || currentTurn?.attacker_id === e.id || currentTurn?.target_id === e.id)
+        const hiddenCount = enemies.length - visible.length
         return (
-          <CombatUnitSprite
-            key={enemy.id}
-            unit={enemy}
-            team="enemy"
-            position={idx}
-            teamCount={enemies.length}
-            pos={soloEnemyPos}
-            tier={enemyTier}
-            isActive={isAttacker}
-            isHit={isTarget}
-            health={unitHPs[enemy.id] ?? enemy.health}
-            maxHp={enemy.max_health}
-            damageInfo={dmgInfo}
-          />
+          <>
+            {visible.map((enemy, idx) => {
+              const isAttacker = currentTurn?.attacker_id === enemy.id
+              const isTarget = currentTurn?.target_id === enemy.id
+              const dmgInfo = isTarget ? { amount: currentTurn.damage, crit: currentTurn.is_crit } : null
+              return (
+                <CombatUnitSprite
+                  key={enemy.id}
+                  unit={enemy}
+                  team="enemy"
+                  position={idx}
+                  teamCount={visible.length}
+                  pos={soloEnemyPos}
+                  tier={enemyTier}
+                  isActive={isAttacker}
+                  isHit={isTarget}
+                  health={unitHPs[enemy.id] ?? enemy.health}
+                  maxHp={enemy.max_health}
+                  damageInfo={dmgInfo}
+                />
+              )
+            })}
+            {hiddenCount > 0 && (
+              <div style={{
+                position: 'absolute', right: '4%', bottom: '4%',
+                background: 'rgba(10,10,14,0.85)', border: '1px solid rgba(170,68,68,0.5)',
+                borderRadius: 6, padding: '0.35rem 0.7rem', color: '#e88',
+                fontSize: '0.8rem', fontFamily: 'Cinzel, serif', zIndex: 60,
+              }}>
+                +{hiddenCount} more
+              </div>
+            )}
+          </>
         )
-      })}
+      })()}
 
       <style>{`
         @keyframes floatUpAndFade {

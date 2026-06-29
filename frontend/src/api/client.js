@@ -139,7 +139,7 @@ export const getHeroAptitudes = (heroId) => request(`/heroes/${heroId}/aptitudes
 export const getBonds = () => request('/heroes/bonds')
 
 // Equipment
-export const listEquipment = (showAll = false) => request(`/equipment/${showAll ? '?show_all=true' : ''}`)
+export const listEquipment = () => request('/equipment/')
 export const craftEquipment = (crafterId) => request('/equipment/craft', { method: 'POST', body: JSON.stringify({ crafter_id: crafterId }) })
 export const equipItem = (equipmentId, heroId) => request('/equipment/equip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId, hero_id: heroId }) })
 export const unequipItem = (equipmentId) => request('/equipment/unequip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
