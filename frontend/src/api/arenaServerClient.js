@@ -62,5 +62,26 @@ export const arenaSubmitTeam = (team) =>
 export const arenaChallenge = (opponent) =>
   arenaRequest('/arena/challenge', { method: 'POST', body: JSON.stringify({ opponent }) }, true)
 
+export const arenaMatchmake = () =>
+  arenaRequest('/arena/matchmake', { method: 'POST' }, true)
+
+export const arenaUpdateFloor = (highest_floor) =>
+  arenaRequest('/arena/update_floor', { method: 'POST', body: JSON.stringify({ highest_floor }) }, true)
+
 export const arenaLeaderboard = (limit = 20) =>
   arenaRequest(`/arena/leaderboard?limit=${limit}`)
+
+export const arenaMyRewards = () =>
+  arenaRequest('/arena/my_rewards', {}, true)
+
+export const arenaClaimReward = (reward_id) =>
+  arenaRequest('/arena/claim_reward', { method: 'POST', body: JSON.stringify({ reward_id }) }, true)
+
+export const arenaMarketList = (hero_name, hero_class, hero_stats, hero_skills, gem_cost) =>
+  arenaRequest('/arena/market/list', { method: 'POST', body: JSON.stringify({ hero_name, hero_class, hero_stats, hero_skills, gem_cost }) }, true)
+
+export const arenaMarketGet = () =>
+  arenaRequest('/arena/market', {}, true)
+
+export const arenaMarketHire = (listing_id) =>
+  arenaRequest('/arena/market/hire', { method: 'POST', body: JSON.stringify({ listing_id }) }, true)

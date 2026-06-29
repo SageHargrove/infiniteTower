@@ -44,6 +44,56 @@ def roll_material_name(floor_number: int = 1) -> str:
         return random.choice(INTERMEDIATE_CRAFTING_MATERIALS)
     return random.choice(CRAFTING_MATERIALS)
 
+
+# Which material(s) a given enemy name thematically yields — "Slime Core"
+# dropping from a fight with zero Slime-family enemies in it was a real
+# reported bug ("fought floor 1, no slimes, got a slime core, doesn't make
+# sense"). Only covers the body-derived materials (Slime Core/Goblin Ear/
+# Monster Bone/Wolf Pelt/Ogre Hide/Hardened Bone) — Iron Ore/Steel/Copper/
+# Leather/Mystic Dust/*Crystal/Mithril etc. are mined or found, not harvested
+# from a specific creature, so those stay in the unconditional generic pool
+# rather than needing an enemy tie. Not exhaustive over every single enemy
+# in the roster (100+ named enemies) — covers the early/common ones where
+# the mismatch would actually be noticed; anything not listed here falls
+# back to the existing generic floor-gated roll, same as before this fix.
+ENEMY_MATERIAL_HINTS = {
+    "Shadow Wisp": ["Slime Core"], "Acid Slime": ["Slime Core"],
+    "Goblin": ["Goblin Ear"], "Goblin Warrior": ["Goblin Ear"], "Goblin Shaman": ["Goblin Ear"],
+    "Hobgoblin": ["Goblin Ear"], "Hobgoblin Berserker": ["Goblin Ear"], "Goblin King": ["Goblin Ear"],
+    "Bandit": ["Monster Bone"], "Kobold": ["Monster Bone"], "Skeleton": ["Monster Bone"],
+    "Dungeon Imp": ["Monster Bone"], "Dungeon Imp Alpha": ["Monster Bone"],
+    "Wolf": ["Wolf Pelt"], "Dire Wolf": ["Wolf Pelt"], "Wolf Alpha": ["Wolf Pelt"], "Mangy Hyena": ["Wolf Pelt"],
+    "Ogre": ["Ogre Hide"], "The Ashen Colossus": ["Ogre Hide"],
+    "Troll": ["Hardened Bone"], "The Troll King": ["Hardened Bone"], "Giant": ["Hardened Bone"],
+    "Wyvern": ["Wyvern Scale"], "Wyvern Stormrider": ["Wyvern Scale"],
+    "Demon": ["Demon Ichor"], "Pit Fiend": ["Demon Ichor"], "Archdemon": ["Demon Ichor"],
+    "Young Dragon": ["Dragon Scale"], "Dracolich": ["Dragon Scale"],
+}
+
+
+def roll_material_name_for_enemies(floor_number: int, enemy_names: list[str]) -> str:
+    """Same floor-gated pool roll_material_name uses, but prefers a material
+    actually tied to one of the enemies that were really in this fight, when
+    one's available — falls back to the plain floor roll otherwise (e.g. an
+    enemy with no hint mapping, or pure bad luck on the 70% roll below)."""
+    unlocked = set(CRAFTING_MATERIALS)
+    if floor_number >= INTERMEDIATE_MATERIAL_UNLOCK_FLOOR:
+        unlocked |= set(INTERMEDIATE_CRAFTING_MATERIALS)
+    if floor_number >= ADVANCED_MATERIAL_UNLOCK_FLOOR:
+        unlocked |= set(ADVANCED_CRAFTING_MATERIALS)
+    if floor_number >= LEGENDARY_MATERIAL_UNLOCK_FLOOR:
+        unlocked |= set(LEGENDARY_CRAFTING_MATERIALS)
+
+    candidates = []
+    for name in enemy_names:
+        for mat in ENEMY_MATERIAL_HINTS.get(name, []):
+            if mat in unlocked:
+                candidates.append(mat)
+
+    if candidates and random.random() < 0.7:
+        return random.choice(candidates)
+    return roll_material_name(floor_number)
+
 MATERIAL_TIERS = ["D", "C", "B", "A", "S"]
 MATERIAL_TIER_WEIGHTS = [0.45, 0.30, 0.16, 0.07, 0.02]
 

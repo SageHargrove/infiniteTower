@@ -507,6 +507,8 @@ UPGRADE_GOLD_COST = {
 def get_upgrades():
     """Return all base upgrades and their current levels."""
     with db() as conn:
+        base = conn.execute("SELECT highest_floor FROM base WHERE id = 1").fetchone()
+        highest_floor = base["highest_floor"] if base else 0
         # Ensure defaults exist, and keep name/description/max_level in sync
         # for rows created before a wording change (e.g. Forge's "unlock
         # crafting" claim, which never matched reality since crafting
@@ -530,11 +532,20 @@ def get_upgrades():
     results = []
     for r in rows:
         upgrade = dict(r)
+        if upgrade["id"] == "talent_observatory" and highest_floor < 5:
+            continue
+            
         current_level = upgrade.get("level", 0)
         max_level = upgrade.get("max_level", 5)
         next_level = current_level + 1
         upgrade["is_maxed"] = current_level >= max_level
-        upgrade["next_cost"] = UPGRADE_GOLD_COST.get(next_level, 10000)
+        
+        if upgrade["id"] == "talent_observatory":
+            obs_costs = {1: 2500, 2: 10000, 3: 25000}
+            upgrade["next_cost"] = obs_costs.get(next_level, 25000)
+        else:
+            upgrade["next_cost"] = UPGRADE_GOLD_COST.get(next_level, 10000)
+            
         results.append(upgrade)
     return results
 
@@ -557,9 +568,18 @@ def buy_upgrade(data: UpgradeRequest):
             raise HTTPException(status_code=400, detail="Upgrade already at max level.")
 
         next_level = current_level + 1
-        cost = UPGRADE_GOLD_COST.get(next_level, 10000)
+        
+        if data.upgrade_id == "talent_observatory":
+            obs_costs = {1: 2500, 2: 10000, 3: 25000}
+            cost = obs_costs.get(next_level, 25000)
+        else:
+            cost = UPGRADE_GOLD_COST.get(next_level, 10000)
 
-        base = conn.execute("SELECT gold FROM base WHERE id = 1").fetchone()
+        base = conn.execute("SELECT gold, highest_floor FROM base WHERE id = 1").fetchone()
+        
+        if data.upgrade_id == "talent_observatory" and base["highest_floor"] < 5:
+            raise HTTPException(status_code=400, detail="Must reach Floor 5 to unlock Talent Observatory.")
+
         if base["gold"] < cost:
             raise HTTPException(
                 status_code=400,

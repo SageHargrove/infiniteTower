@@ -695,6 +695,31 @@ export default function HeroesPage() {
 
       {!synthMode && (
         <div style={{ marginBottom: '1.5rem' }}>
+          {/* Comparison entry points — deliberately their own standalone bar,
+              not folded into the crowded filter row below (that's where they
+              lived before; got reported as impossible to find). */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
+            background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.3)',
+            borderRadius: 6, padding: '0.6rem 1rem', marginBottom: '1rem',
+          }}>
+            <span style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)' }}>⚖ Compare</span>
+            <span className="text-dim text-sm">
+              Click the circle in a hero's top-left corner to select 2-4, then compare.
+            </span>
+            <button
+              className="btn btn-gold"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => setCompareHeroesOpen(true)}
+              disabled={selected.size < 2 || selected.size > 4}
+            >
+              Compare Selected Heroes ({selected.size})
+            </button>
+            <button className="btn btn-gold" onClick={() => setCompareTeamsOpen(true)}>
+              Compare Teams
+            </button>
+          </div>
+
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '0.25rem', overflowX: 'auto', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
             <button className={`btn ${activeTab === 'all' ? 'btn-gold' : ''}`} onClick={() => { setActiveTab('all'); setSelected(new Set()) }}>
@@ -705,9 +730,6 @@ export default function HeroesPage() {
                 Team {t}
               </button>
             ))}
-            <button className="btn" style={{ marginLeft: 'auto' }} onClick={() => setCompareTeamsOpen(true)}>
-              ⚖ Compare Teams
-            </button>
           </div>
 
           {/* Filters & Actions */}
@@ -751,18 +773,12 @@ export default function HeroesPage() {
                 <button className="btn btn-danger" onClick={removeFromTeamFromAll} disabled={saving || selected.size === 0}>
                   {saving ? 'Removing...' : 'Remove from Team'}
                 </button>
-                <button className="btn" onClick={() => setCompareHeroesOpen(true)} disabled={selected.size < 2 || selected.size > 4} title="Select 2-4 heroes to compare.">
-                  ⚖ Compare Selected ({selected.size})
-                </button>
               </div>
             ) : (
               <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <span className="text-dim text-sm">Team {activeTab} Members ({displayHeroes.length}/5)</span>
                 <button className="btn btn-danger" onClick={removeFromTeam} disabled={saving || selected.size === 0}>
                   {saving ? 'Removing...' : `Remove Selected (${selected.size})`}
-                </button>
-                <button className="btn" onClick={() => setCompareHeroesOpen(true)} disabled={selected.size < 2 || selected.size > 4} title="Select 2-4 heroes to compare.">
-                  ⚖ Compare Selected ({selected.size})
                 </button>
               </div>
             )}

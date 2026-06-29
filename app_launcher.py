@@ -35,12 +35,75 @@ def _acquire_single_instance_lock() -> bool:
     globals()['_mutex_handle'] = handle  # keep a reference alive for the process lifetime
     return True
 
-def start_backend():
+def get_base_dir():
+    """Return the project root regardless of frozen vs source."""
     if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        exe_dir = os.path.dirname(sys.executable)
+        # Check if the exe is in tower-gacha/ or tower-gacha/dist/
+        if os.path.isdir(os.path.join(exe_dir, "frontend")):
+            return exe_dir
+        parent_dir = os.path.dirname(exe_dir)
+        if os.path.isdir(os.path.join(parent_dir, "frontend")):
+            return parent_dir
+        return os.path.dirname(parent_dir)
+    return os.path.dirname(os.path.abspath(__file__))
 
+def update_codebase():
+    """Pull the latest changes from git so the exe is always fully up to date."""
+    base_dir = get_base_dir()
+    if os.path.isdir(os.path.join(base_dir, ".git")):
+        print("Checking for updates via git pull...")
+        try:
+            result = subprocess.run(
+                ["git", "pull"],
+                cwd=base_dir,
+                capture_output=True, text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+            if result.returncode == 0:
+                print("Codebase is up to date.")
+            else:
+                print(f"Git pull warning: {result.stderr}")
+        except FileNotFoundError:
+            print("Git not found — skipping auto-update.")
+
+
+def build_frontend():
+    """Auto-rebuild the React frontend before launch so code changes are
+    always picked up without manually running npm commands."""
+    base_dir = get_base_dir()
+    frontend_dir = os.path.join(base_dir, "frontend")
+    if not os.path.isdir(frontend_dir):
+        print("Frontend directory not found — skipping build.")
+        return
+    # Find npm: try PATH first, then common Node install locations
+    npm_candidates = ["npm", r"C:\Program Files\nodejs\npm.cmd", r"C:\Program Files (x86)\nodejs\npm.cmd"]
+    npm_cmd = None
+    for candidate in npm_candidates:
+        try:
+            subprocess.run([candidate, "--version"], capture_output=True, check=True,
+                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            npm_cmd = candidate
+            break
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            continue
+    if not npm_cmd:
+        print("npm not found — skipping frontend build.")
+        return
+    print("Building frontend...")
+    result = subprocess.run(
+        [npm_cmd, "run", "build"],
+        cwd=frontend_dir,
+        capture_output=True, text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    )
+    if result.returncode == 0:
+        print("Frontend built successfully.")
+    else:
+        print(f"Frontend build warning: {result.stderr[-500:] if result.stderr else 'unknown error'}")
+
+def start_backend():
+    base_dir = get_base_dir()
     backend_dir = os.path.join(base_dir, "backend")
     python_exe = os.path.join(backend_dir, "venv", "Scripts", "python.exe")
     print("Starting backend...")
@@ -65,10 +128,14 @@ def start_comfyui():
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-
+    
     if not _acquire_single_instance_lock():
-        print("Another instance is already running — exiting.")
+        print("Another instance of Infinite Gacha is already running. Exiting.")
         sys.exit(0)
+
+    print("Launching Infinite Gacha services...")
+    update_codebase()  # auto-update from git
+    build_frontend()   # auto-rebuild frontend on every launch
 
     comfy_process = None
     backend_process = None
@@ -90,11 +157,7 @@ if __name__ == "__main__":
         # browser profile — localStorage (sound settings, etc.) silently
         # resets every launch. A persistent storage_path next to the exe
         # fixes that.
-        if getattr(sys, 'frozen', False):
-            base_dir = os.path.dirname(sys.executable)
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-        storage_path = os.path.join(base_dir, "webview_data")
+        storage_path = os.path.join(get_base_dir(), "webview_data")
         os.makedirs(storage_path, exist_ok=True)
         webview.start(private_mode=False, storage_path=storage_path)
         

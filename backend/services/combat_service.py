@@ -1948,10 +1948,16 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
         result["gold_gained"] = int(300 * (1 + (floor_number/10)))
         result["supplies_gained"] = random.randint(2, 5)
 
-        from services.materials_service import roll_material_name, tiered_material_name
+        from services.materials_service import roll_material_name_for_enemies, tiered_material_name
+        # Drops are now biased toward materials tied to the enemies actually
+        # in this fight (e.g. a Slime Core only has a real chance if a
+        # Shadow Wisp/Acid Slime was actually fought) instead of a pure
+        # floor-wide pool with no connection to what you fought — confirmed
+        # reported bug: "fought floor 1, no slimes, got a slime core."
+        enemy_names = [e["name"] for e in result.get("initial_state", {}).get("enemies", [])]
         drops = {}
         for _ in range(random.randint(2, 4)):
-            mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
+            mat = tiered_material_name(roll_material_name_for_enemies(floor_number, enemy_names), avg_luck=avg_luck)
             drops[mat] = drops.get(mat, 0) + 1
         result["materials_gained"] = drops
 
@@ -1959,7 +1965,7 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
             result["gold_gained"] += int(1500 * (1 + (floor_number/10)))
             result["supplies_gained"] += 10
             for _ in range(5):
-                mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
+                mat = tiered_material_name(roll_material_name_for_enemies(floor_number, enemy_names), avg_luck=avg_luck)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops
         elif is_miniboss:
@@ -1970,7 +1976,7 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
             result["gold_gained"] += int(600 * (1 + (floor_number/10)))
             result["supplies_gained"] += 4
             for _ in range(2):
-                mat = tiered_material_name(roll_material_name(floor_number), avg_luck=avg_luck)
+                mat = tiered_material_name(roll_material_name_for_enemies(floor_number, enemy_names), avg_luck=avg_luck)
                 drops[mat] = drops.get(mat, 0) + 1
             result["materials_gained"] = drops
 

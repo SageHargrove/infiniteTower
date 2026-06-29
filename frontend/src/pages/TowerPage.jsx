@@ -334,6 +334,7 @@ export default function TowerPage({ onGoldChange }) {
   // in for the raw damage-number log line once it arrives (see pollTurnNarrative).
   const [turnNarrations, setTurnNarrations] = useState({})
   const [floorPreview, setFloorPreview] = useState(null)
+  const [zoneFloorTypes, setZoneFloorTypes] = useState({})
 
   useEffect(() => {
     refresh()
@@ -349,6 +350,26 @@ export default function TowerPage({ onGoldChange }) {
     previewFloor(selectedFloor).then(p => { if (!cancelled) setFloorPreview(p) }).catch(() => {})
     return () => { cancelled = true }
   }, [selectedFloor, highestFloor, lastResult])
+
+  useEffect(() => {
+    // Floor type is deterministic/cached server-side per floor number, so
+    // previewing the whole zone's grid up front (not just the one selected
+    // floor) is safe — it never changes the outcome, just lets the grid
+    // show each tile's real type instead of being blank/generic.
+    let cancelled = false
+    const start = selectedZone * 10 + 1
+    const floors = Array.from({ length: 10 }, (_, i) => start + i)
+    Promise.all(floors.map(f => previewFloor(f).then(p => [f, p]).catch(() => [f, null])))
+      .then(results => {
+        if (cancelled) return
+        setZoneFloorTypes(prev => {
+          const next = { ...prev }
+          for (const [f, p] of results) if (p) next[f] = p
+          return next
+        })
+      })
+    return () => { cancelled = true }
+  }, [selectedZone])
 
   useEffect(() => {
     // Silently sync highest_floor to the Arena server if logged in
@@ -774,33 +795,50 @@ export default function TowerPage({ onGoldChange }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.5rem' }}>
           {/* Floor Grid */}
           <div className="card">
-            <div className="text-gold" style={{ fontFamily: 'Cinzel, serif', marginBottom: '1rem', fontSize: '1.1rem' }}>
-              Zone {selectedZone + 1} Floors
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1rem' }}>
+              <div className="text-gold" style={{ fontFamily: 'Cinzel, serif', fontSize: '1.1rem' }}>
+                Zone {selectedZone + 1} Floors
+              </div>
+              <div className="text-dim" style={{ fontSize: '0.75rem' }}>
+                Floors {startFloorOfZone}–{startFloorOfZone + 9}
+              </div>
             </div>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(5, 1fr)', 
-              gap: '0.5rem' 
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(5, 1fr)',
+              gap: '0.6rem'
             }}>
               {Array.from({ length: 10 }).map((_, i) => {
                 const floorNum = startFloorOfZone + i
                 const isLocked = floorNum > highestFloor + 1
                 const isNext = floorNum === highestFloor + 1
                 const isSelected = floorNum === selectedFloor
+                const isBoss = floorNum % 10 === 0
+                const preview = zoneFloorTypes[floorNum]
+                const typeInfo = preview ? FLOOR_TYPE_INFO[preview.floor_type] : null
+                const icon = isBoss ? '👿' : (preview ? FLOOR_ICONS[preview.floor_type] : null)
 
                 let bg = 'rgba(255,255,255,0.05)'
-                let border = '1px solid rgba(255,255,255,0.1)'
+                let border = '1px solid rgba(255,255,255,0.12)'
                 let color = 'var(--text-hi)'
+                const extraClass = isNext ? ' floor-tile-next' : ''
 
                 if (isLocked) {
-                  bg = 'rgba(0,0,0,0.3)'
+                  bg = 'rgba(0,0,0,0.35)'
                   color = 'var(--text-dim)'
-                } else if (isNext) {
+                } else if (typeInfo) {
+                  bg = `${typeInfo.color}22`
+                  border = `1px solid ${typeInfo.color}88`
+                }
+                if (isNext) {
                   border = '1px solid var(--gold)'
                 }
                 if (isSelected) {
-                  bg = 'rgba(201, 168, 76, 0.2)'
-                  border = '1px solid var(--gold)'
+                  bg = 'rgba(201, 168, 76, 0.25)'
+                  border = '2px solid var(--gold)'
+                }
+                if (isBoss) {
+                  border = isSelected ? '2px solid var(--gold)' : '1px solid rgba(227,51,51,0.6)'
                 }
 
                 return (
@@ -808,27 +846,33 @@ export default function TowerPage({ onGoldChange }) {
                     key={floorNum}
                     disabled={isLocked}
                     onClick={() => setSelectedFloor(floorNum)}
+                    className={`floor-tile${extraClass}`}
+                    title={typeInfo ? `${typeInfo.label}${isLocked ? ' (locked)' : ''}` : undefined}
                     style={{
-                      padding: '1rem',
                       background: bg,
-                      border: border,
-                      color: color,
-                      borderRadius: '6px',
+                      border,
+                      color,
                       cursor: isLocked ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      transition: 'all 0.2s ease'
+                      opacity: isLocked ? 0.6 : 1,
                     }}
                   >
-                    <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem' }}>{floorNum}</div>
-                    {isNext && <div style={{ fontSize: '0.7rem', color: 'var(--gold)', textTransform: 'uppercase' }}>Next</div>}
-                    {!isLocked && !isNext && <div style={{ fontSize: '0.7rem', color: 'var(--green)', textTransform: 'uppercase' }}>Cleared</div>}
-                    {floorNum % 10 === 0 && <div style={{ fontSize: '0.7rem', color: 'var(--red)', textTransform: 'uppercase' }}>Boss</div>}
+                    {isBoss && <div className="floor-tile-boss-stripe" />}
+                    <div className="floor-tile-icon">{isLocked ? '🔒' : (icon || '·')}</div>
+                    <div className="floor-tile-num">{floorNum}</div>
+                    {isNext && <span className="floor-tile-tag" style={{ background: 'rgba(201,168,76,0.3)', color: 'var(--gold)' }}>Next</span>}
+                    {!isLocked && !isNext && <span className="floor-tile-tag" style={{ background: 'rgba(80,200,120,0.2)', color: 'var(--green)' }}>Cleared</span>}
+                    {isLocked && typeInfo && <span className="floor-tile-tag" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-dim)' }}>{typeInfo.label}</span>}
                   </button>
                 )
               })}
+            </div>
+            <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', marginTop: '1rem', fontSize: '0.7rem' }}>
+              {Object.entries(FLOOR_TYPE_INFO).filter(([k]) => k !== 'miniboss').map(([key, info]) => (
+                <span key={key} className="text-dim" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: info.color, display: 'inline-block' }} />
+                  {FLOOR_ICONS[key]} {info.label}
+                </span>
+              ))}
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem' }}>

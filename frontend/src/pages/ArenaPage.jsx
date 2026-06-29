@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { getAllTeams, getArenaSnapshot } from '../api/client'
 import {
   getArenaServerUrl, setArenaServerUrl, getArenaToken, getArenaUsername, clearArenaSession,
-  arenaRegister, arenaLogin, arenaSubmitTeam, arenaChallenge, arenaLeaderboard,
+  arenaRegister, arenaLogin, arenaSubmitTeam, arenaChallenge, arenaMatchmake, arenaLeaderboard,
+  arenaMyRewards, arenaClaimReward, arenaMarketList, arenaMarketGet, arenaMarketHire
 } from '../api/arenaServerClient'
+import { receiveMail, applyTraining, listHeroes } from '../api/client'
 
 export default function ArenaPage() {
   const [serverUrl, setServerUrl] = useState(getArenaServerUrl())
@@ -24,9 +26,19 @@ export default function ArenaPage() {
   const [fightResult, setFightResult] = useState(null)
 
   const [leaderboard, setLeaderboard] = useState([])
+  const [pveLeaderboard, setPveLeaderboard] = useState([])
+  const [activeTab, setActiveTab] = useState('pvp')
+
+  // Training Market
+  const [marketListings, setMarketListings] = useState([])
+  const [allHeroes, setAllHeroes] = useState([])
+  const [marketStudentId, setMarketStudentId] = useState('')
+  const [marketTeacherId, setMarketTeacherId] = useState('')
+  const [marketGemCost, setMarketGemCost] = useState(100)
 
   useEffect(() => {
     getAllTeams().then(setTeams).catch(() => {})
+    listHeroes(true).then(setAllHeroes).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -34,8 +46,44 @@ export default function ArenaPage() {
   }, [serverUrl])
 
   function refreshLeaderboard() {
-    arenaLeaderboard().then(data => setLeaderboard(data.leaderboard)).catch(() => {})
+    arenaLeaderboard().then(data => {
+      setLeaderboard(data.leaderboard)
+      setPveLeaderboard(data.pve_leaderboard || [])
+    }).catch(() => {})
+    arenaMarketGet().then(data => {
+      setMarketListings(data.listings || [])
+    }).catch(() => {})
   }
+
+  // Check for season rewards
+  useEffect(() => {
+    if (token) {
+      arenaMyRewards().then(async data => {
+        if (data.rewards && data.rewards.length > 0) {
+          let claimedCount = 0;
+          for (const rew of data.rewards) {
+            try {
+              // Claim it on the remote server
+              await arenaClaimReward(rew.id);
+              // Send it to the local mail inbox
+              await receiveMail(
+                "Arena Master", 
+                "Arena Season Rewards", 
+                `Congratulations on your performance this season!\nHere are your rewards.`, 
+                { [rew.reward_type]: rew.amount }
+              );
+              claimedCount++;
+            } catch (e) {
+              console.error("Failed to claim reward", e);
+            }
+          }
+          if (claimedCount > 0) {
+            setMsg(`Received ${claimedCount} season reward(s) in your local Mailbox!`);
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [token])
 
   function handleSaveUrl() {
     setArenaServerUrl(serverUrl)
@@ -97,6 +145,74 @@ export default function ArenaPage() {
     try {
       const result = await arenaChallenge(opponent.trim())
       setFightResult(result)
+      refreshLeaderboard()
+    } catch (err) {
+      setMsg(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleMatchmake() {
+    setBusy(true)
+    setMsg(null)
+    setFightResult(null)
+    try {
+      const result = await arenaMatchmake()
+      setFightResult(result)
+      setMsg(`Matched against ${result.opponent}!`)
+      refreshLeaderboard()
+    } catch (err) {
+      setMsg(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleListTeacher() {
+    if (!marketTeacherId) return;
+    setBusy(true)
+    setMsg(null)
+    try {
+      const h = allHeroes.find(x => x.id === Number(marketTeacherId))
+      if (!h) throw new Error("Hero not found.")
+      
+      const stats = { max_health: h.max_health, attack: h.attack, defense: h.defense, speed: h.speed }
+      const skills = h.skills ? JSON.parse(h.skills) : []
+      
+      await arenaMarketList(h.name, h.hero_class, stats, skills, Number(marketGemCost))
+      setMsg(`Listed ${h.name} on the Training Market!`)
+      refreshLeaderboard()
+    } catch (err) {
+      setMsg(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleHireTeacher(listingId) {
+    if (!marketStudentId) {
+      setMsg("Please select a student hero to train.");
+      return;
+    }
+    setBusy(true)
+    setMsg(null)
+    try {
+      // Step 1: Hire on server (verifies cost & pays lister)
+      const res = await arenaMarketHire(listingId);
+      
+      // Step 2: Apply locally
+      const applyRes = await applyTraining(Number(marketStudentId), res.teacher.gem_cost, res.teacher.hero_stats, res.teacher.hero_skills);
+      
+      const st = allHeroes.find(x => x.id === Number(marketStudentId));
+      let report = `${st.name} trained under ${res.teacher.hero_name} and gained ${applyRes.xp} XP! `;
+      for (const [k, v] of Object.entries(applyRes.stats)) {
+        if (v > 0) report += `+${v} ${k}. `;
+      }
+      if (applyRes.skills && applyRes.skills.length > 0) {
+        report += `Skills: ${applyRes.skills.join(', ')}.`;
+      }
+      setMsg(report);
       refreshLeaderboard()
     } catch (err) {
       setMsg(err.message)
@@ -172,11 +288,15 @@ export default function ArenaPage() {
 
           <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
             <div className="text-dim text-sm" style={{ marginBottom: '0.5rem' }}>Challenge a Player</div>
-            <form onSubmit={handleChallenge} style={{ display: 'flex', gap: '0.5rem' }}>
-              <input type="text" className="input" placeholder="Opponent's username" value={opponent} onChange={e => setOpponent(e.target.value)}
-                style={{ flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border)', padding: '0.5rem', color: '#fff', borderRadius: 4 }} />
-              <button type="submit" className="btn btn-gold" disabled={busy || !opponent.trim()}>Fight</button>
-            </form>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <button className="btn btn-gold" disabled={busy} onClick={handleMatchmake}>Find Ranked Match</button>
+              <span className="text-dim text-sm">or</span>
+              <form onSubmit={handleChallenge} style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
+                <input type="text" className="input" placeholder="Opponent's username" value={opponent} onChange={e => setOpponent(e.target.value)}
+                  style={{ flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border)', padding: '0.5rem', color: '#fff', borderRadius: 4 }} />
+                <button type="submit" className="btn btn-gold" disabled={busy || !opponent.trim()}>Direct Fight</button>
+              </form>
+            </div>
           </div>
 
           {fightResult && (
@@ -193,17 +313,89 @@ export default function ArenaPage() {
           )}
 
           <div className="card" style={{ padding: '1rem' }}>
-            <div className="text-dim text-sm" style={{ marginBottom: '0.5rem' }}>Leaderboard</div>
-            {leaderboard.length === 0 && <div className="text-dim text-sm">No matches recorded yet.</div>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-              {leaderboard.map((p, i) => (
-                <div key={p.username} style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
-                  <span className="text-dim" style={{ minWidth: 30 }}>#{i + 1}</span>
-                  <span style={{ color: p.username === username ? 'var(--gold)' : 'inherit', flex: 1 }}>{p.username}</span>
-                  <span className="text-dim">{p.wins}W / {p.losses}L</span>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', overflowX: 'auto' }}>
+              <button className={`btn ${activeTab === 'pvp' ? 'btn-gold' : ''}`} onClick={() => setActiveTab('pvp')}>PvP Leaderboard</button>
+              <button className={`btn ${activeTab === 'pve' ? 'btn-gold' : ''}`} onClick={() => setActiveTab('pve')}>PvE Leaderboard</button>
+              <button className={`btn ${activeTab === 'market' ? 'btn-gold' : ''}`} onClick={() => setActiveTab('market')}>Training Market</button>
             </div>
+            
+            {activeTab === 'pvp' && (
+              <>
+                {leaderboard.length === 0 && <div className="text-dim text-sm">No matches recorded yet.</div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  {leaderboard.map((p, i) => (
+                    <div key={p.username} style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
+                      <span className="text-dim" style={{ minWidth: 30 }}>#{i + 1}</span>
+                      <span style={{ color: p.username === username ? 'var(--gold)' : 'inherit', flex: 1 }}>{p.username}</span>
+                      <span className="text-dim">{p.wins}W / {p.losses}L</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {activeTab === 'pve' && (
+              <>
+                {pveLeaderboard.length === 0 && <div className="text-dim text-sm">No highest floor records yet.</div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <div className="text-dim text-sm" style={{ marginBottom: '0.5rem' }}>Highest Floor</div>
+                  {pveLeaderboard.map((p, i) => (
+                    <div key={p.username} style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
+                      <span className="text-dim" style={{ minWidth: 30 }}>#{i + 1}</span>
+                      <span style={{ color: p.username === username ? 'var(--gold)' : 'inherit', flex: 1 }}>{p.username}</span>
+                      <span className="text-dim">Floor {p.highest_floor}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {activeTab === 'market' && (
+              <div>
+                <div className="text-dim text-sm" style={{ marginBottom: '1rem' }}>
+                  Rent out your strongest heroes as Teachers, or hire a Teacher for your heroes. You earn gems when someone hires your Teacher!
+                </div>
+                
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="text-hi text-sm" style={{ marginBottom: '0.5rem' }}>List a Teacher</div>
+                    <select className="input" value={marketTeacherId} onChange={e => setMarketTeacherId(e.target.value)} style={{ width: '100%', marginBottom: '0.5rem' }}>
+                      <option value="">Select Hero...</option>
+                      {allHeroes.map(h => <option key={h.id} value={h.id}>{h.name} (Lv.{h.level})</option>)}
+                    </select>
+                    <input type="number" className="input" value={marketGemCost} onChange={e => setMarketGemCost(e.target.value)} placeholder="Gem Cost" style={{ width: '100%', marginBottom: '0.5rem' }} />
+                    <button className="btn btn-gold" style={{ width: '100%' }} onClick={handleListTeacher} disabled={busy || !marketTeacherId}>List Teacher</button>
+                  </div>
+                  
+                  <div style={{ flex: 1 }}>
+                    <div className="text-hi text-sm" style={{ marginBottom: '0.5rem' }}>Your Student</div>
+                    <select className="input" value={marketStudentId} onChange={e => setMarketStudentId(e.target.value)} style={{ width: '100%', marginBottom: '0.5rem' }}>
+                      <option value="">Select Hero to Train...</option>
+                      {allHeroes.map(h => <option key={h.id} value={h.id}>{h.name} (Lv.{h.level})</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="text-hi text-sm" style={{ marginBottom: '0.5rem' }}>Available Teachers</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {marketListings.length === 0 && <div className="text-dim text-sm">No teachers available right now.</div>}
+                  {marketListings.map(listing => (
+                    <div key={listing.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: 4 }}>
+                      <div>
+                        <div style={{ color: 'var(--gold)' }}>{listing.hero_name} <span className="text-dim" style={{ fontSize: '0.8rem' }}>({listing.hero_class})</span></div>
+                        <div className="text-dim text-sm">Master: {listing.username}</div>
+                        <div className="text-dim" style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                          Stats: HP {listing.hero_stats.max_health} · ATK {listing.hero_stats.attack} · DEF {listing.hero_stats.defense} · SPD {listing.hero_stats.speed}
+                        </div>
+                      </div>
+                      <button className="btn btn-gold" onClick={() => handleHireTeacher(listing.id)} disabled={busy || listing.username === username} style={{ padding: '0.4rem 0.8rem' }}>
+                        Hire ({listing.gem_cost} 💎)
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

@@ -155,10 +155,23 @@ def _roll_equipment_stats(eq_type: str, mult: float) -> dict:
             "base_luck": (0.5, lambda: max(1, int(scale * random.uniform(0.3, 0.7)))),
         }
         guaranteed = set(random.sample(list(rolls.keys()), 2))
-        results = {}
+        # The guaranteed-2 floor above only fixed the "rolled nothing" case —
+        # there was never a ceiling, so with most of these at 50-70% each,
+        # a low-tier accessory could (and confirmed: did) come back with
+        # 6+ of the 10 possible bonus stats at once, no different from a
+        # much rarer item. Cap scales with rarity instead: a D-tier accessory
+        # gets exactly its guaranteed 2, a mid-tier gets a couple more
+        # chances to add on top, and only top-end gear (S+/SS/SSS/Z) can
+        # plausibly roll most or all of them.
+        max_stats = min(len(rolls), 2 + int(mult / 4))
+        hit = {}
         for key, (chance, roll_fn) in rolls.items():
             if key in guaranteed or random.random() < chance:
-                results[key] = roll_fn()
+                hit[key] = roll_fn
+        extra_keys = [k for k in hit if k not in guaranteed]
+        random.shuffle(extra_keys)
+        keep = guaranteed | set(extra_keys[:max(0, max_stats - len(guaranteed))])
+        results = {key: roll_fn() for key, roll_fn in hit.items() if key in keep}
         dodge = results.get("dodge", 0.0)
         crit = results.get("crit", 0.0)
         armor_pen = results.get("armor_pen", 0.0)

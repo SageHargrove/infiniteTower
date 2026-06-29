@@ -14,10 +14,7 @@ def _build_workflow(prompt: str, negative: str = "", seed: int = None, init_imag
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
 
-    full_prompt = (
-        "masterpiece, best quality, amazing quality, very aesthetic, "
-        "dark fantasy, anime style, " + prompt
-    )
+    full_prompt = prompt
 
     neg = negative or (
         "blurry, low quality, watermark, text, signature, bad anatomy, "

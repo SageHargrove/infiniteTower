@@ -131,5 +131,5 @@ def serve_react_app(catchall: str):
         return FileResponse(file_path)
     index_path = os.path.join(frontend_dist, "index.html")
     if os.path.exists(index_path):
-        return FileResponse(index_path)
+        return FileResponse(index_path, headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
     return {"error": "Frontend not built. Run 'npm run build' in frontend directory."}

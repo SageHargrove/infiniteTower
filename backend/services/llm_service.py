@@ -36,6 +36,8 @@ def await_flavor_text(future, timeout=1.5, fallback=None):
 
 # Fallback chain 
 MODELS_BY_PRIORITY = [
+    "gemini-2.5-pro",
+    "gemini-1.5-pro",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
 ]

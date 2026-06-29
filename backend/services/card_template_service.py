@@ -82,6 +82,45 @@ def _tier_color_at(tier: str, t: float) -> tuple:
     return tuple(int(c0[k] + (c1[k] - c0[k]) * frac) for k in range(3))
 
 
+def _hsv_to_rgb(h: float) -> tuple:
+    import colorsys
+    r, g, b = colorsys.hsv_to_rgb(h % 1.0, 0.85, 1.0)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
+def _draw_rainbow_border(draw: ImageDraw.ImageDraw, box: tuple, width: int, alpha: int = 255):
+    """Draws a rectangle outline as a continuous hue sweep instead of a
+    flat color — star7's border previously reused the same handful of
+    discrete PRISMATIC_HUES colors independently for the outer line,
+    diamonds, and band, which read as scattered/inconsistent rather than
+    a clean gradient. PIL has no built-in gradient stroke, so this walks
+    the perimeter as straight-line segments (corners are sharp, not
+    arced — at this line width the difference isn't visible) and colors
+    each one by its position around the loop."""
+    x0, y0, x1, y1 = box
+    perimeter_w, perimeter_h = x1 - x0, y1 - y0
+    total = 2 * (perimeter_w + perimeter_h)
+    points = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+    segments = []
+    for i in range(4):
+        segments.append((points[i], points[i + 1]))
+
+    n_steps = 120
+    dist_so_far = 0.0
+    for (sx, sy), (ex, ey) in segments:
+        seg_len = ((ex - sx) ** 2 + (ey - sy) ** 2) ** 0.5
+        steps_here = max(1, int(n_steps * seg_len / total))
+        for i in range(steps_here):
+            t0 = i / steps_here
+            t1 = (i + 1) / steps_here
+            p0 = (sx + (ex - sx) * t0, sy + (ey - sy) * t0)
+            p1 = (sx + (ex - sx) * t1, sy + (ey - sy) * t1)
+            hue = (dist_so_far + seg_len * t0) / total
+            color = _hsv_to_rgb(hue)
+            draw.line([p0, p1], fill=(*color, alpha), width=width)
+        dist_so_far += seg_len
+
+
 def _build_template(tier: str) -> Image.Image:
     w, h = CANVAS_SIZE
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -91,10 +130,13 @@ def _build_template(tier: str) -> Image.Image:
     # underneath the sharp one, which is what actually reads as "luminous"
     # rather than just a brighter flat color. 1-4* skip this entirely.
     if tier in GLOW_TIERS:
-        glow_color = _tier_color_at(tier, 0.0)
         glow_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         glow_draw = ImageDraw.Draw(glow_layer, "RGBA")
-        glow_draw.rounded_rectangle([margin, margin, w - margin, h - margin], radius=22, outline=(*glow_color, 255), width=14)
+        if tier == "star7":
+            _draw_rainbow_border(glow_draw, (margin, margin, w - margin, h - margin), width=14)
+        else:
+            glow_color = _tier_color_at(tier, 0.0)
+            glow_draw.rounded_rectangle([margin, margin, w - margin, h - margin], radius=22, outline=(*glow_color, 255), width=14)
         glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(10))
         img.alpha_composite(glow_layer)
 
@@ -102,13 +144,21 @@ def _build_template(tier: str) -> Image.Image:
     cx, cy = w // 2, int(h * 0.42)
 
     # Outer ornate border — double rounded-rect outline + corner diamonds.
-    outer_color = _tier_color_at(tier, 0.0)
-    draw.rounded_rectangle([margin, margin, w - margin, h - margin], radius=22, outline=(*outer_color, 230), width=6)
-    draw.rounded_rectangle([margin + 14, margin + 14, w - margin - 14, h - margin - 14], radius=16, outline=(*outer_color, 140), width=2)
+    # star7 gets a real continuous hue-sweep gradient instead of a flat
+    # color sampled once — the previous version independently sampled
+    # PRISMATIC_HUES at different points for the outer line/diamonds/band,
+    # which read as scattered colors rather than one coherent rainbow.
+    if tier == "star7":
+        _draw_rainbow_border(draw, (margin, margin, w - margin, h - margin), width=6, alpha=230)
+        _draw_rainbow_border(draw, (margin + 14, margin + 14, w - margin - 14, h - margin - 14), width=2, alpha=140)
+    else:
+        outer_color = _tier_color_at(tier, 0.0)
+        draw.rounded_rectangle([margin, margin, w - margin, h - margin], radius=22, outline=(*outer_color, 230), width=6)
+        draw.rounded_rectangle([margin + 14, margin + 14, w - margin - 14, h - margin - 14], radius=16, outline=(*outer_color, 140), width=2)
 
     diamond_r = 10
-    for dx, dy in [(margin, margin), (w - margin, margin), (margin, h - margin), (w - margin, h - margin)]:
-        diamond_color = _tier_color_at(tier, 0.25)
+    for idx, (dx, dy) in enumerate([(margin, margin), (w - margin, margin), (margin, h - margin), (w - margin, h - margin)]):
+        diamond_color = _hsv_to_rgb(idx / 4) if tier == "star7" else _tier_color_at(tier, 0.25)
         draw.polygon([(dx, dy - diamond_r), (dx + diamond_r, dy), (dx, dy + diamond_r), (dx - diamond_r, dy)], fill=(*diamond_color, 255))
 
     # star6 (crimson) gets rune-like tick marks along the border on top of

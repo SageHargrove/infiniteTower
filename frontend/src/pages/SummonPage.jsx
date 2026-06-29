@@ -26,7 +26,7 @@ export default function SummonPage({ onGoldChange }) {
   const [heroResults, setHeroResults] = useState([])
   const [equipResults, setEquipResults] = useState([])
   const [heroOddsCurrency, setHeroOddsCurrency] = useState('gem')
-  const [equipOddsCurrency, setEquipOddsCurrency] = useState('gold')
+  const [equipOddsCurrency, setEquipOddsCurrency] = useState('gem')
   const [error, setError] = useState(null)
   const [usePortrait, setUsePortrait] = useState(true)
   const [expandedId, setExpandedId] = useState(null)
@@ -179,8 +179,7 @@ export default function SummonPage({ onGoldChange }) {
             </label>
           </div>
 
-          <div className="text-dim" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>Hero Summon — Gems (premium, 2★-7★)</div>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.5rem' }}>
             <button
               className="btn btn-gold"
               onClick={() => doPull(1, 'gem')}
@@ -202,8 +201,7 @@ export default function SummonPage({ onGoldChange }) {
             </button>
           </div>
 
-          <div className="text-dim" style={{ fontSize: '0.85rem', marginTop: '1rem' }}>Hero Summon — Gold (common, 1★-4★)</div>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem' }}>
             <button
               className="btn btn-gold"
               onClick={() => doPull(1, 'gold')}
@@ -296,49 +294,47 @@ export default function SummonPage({ onGoldChange }) {
 
         {activeTab === 'equipment' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-          <div className="text-dim" style={{ fontSize: '0.85rem' }}>Equipment Summon — Gold (common, D-B tier)</div>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
-            <button
-              className="btn btn-gold"
-              onClick={() => doPullEquipment(1, 'gold')}
-              disabled={pulling || gold < 500}
-              style={{ flex: 1, padding: '2rem', fontSize: '1.6rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', border: '2px solid var(--star1)', borderRadius: 8, background: 'rgba(150,150,150,0.1)' }}
-            >
-              <div>{pulling ? 'Summoning...' : 'Summon 1x'}</div>
-              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>500 GOLD 💰</div>
-            </button>
-
-            <button
-              className="btn btn-gold"
-              onClick={() => doPullEquipment(10, 'gold')}
-              disabled={pulling || gold < 5000}
-              style={{ flex: 1, padding: '2rem', fontSize: '1.6rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', border: '2px solid var(--star1)', borderRadius: 8, background: 'rgba(150,150,150,0.15)', boxShadow: '0 0 20px rgba(150,150,150,0.3)' }}
-            >
-              <div>{pulling ? 'Summoning...' : 'Summon 10x'}</div>
-              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>5000 GOLD 💰</div>
-            </button>
-          </div>
-
-          <div className="text-dim" style={{ fontSize: '0.85rem', marginTop: '1rem' }}>Equipment Summon — Gems (premium, C-S tier)</div>
           <div style={{ display: 'flex', gap: '1.5rem' }}>
             <button
               className="btn btn-gold"
               onClick={() => doPullEquipment(1, 'gem')}
               disabled={pulling || gems < 150}
-              style={{ flex: 1, padding: '1.25rem', fontSize: '1.3rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', border: '2px solid var(--gold)', borderRadius: 8, background: 'rgba(201,168,76,0.1)' }}
+              style={{ flex: 1, padding: '2rem', fontSize: '1.6rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', border: '2px solid var(--gold)', borderRadius: 8, background: 'rgba(201,168,76,0.1)' }}
             >
               <div>{pulling ? 'Summoning...' : 'Summon 1x'}</div>
-              <div style={{ fontSize: '0.9rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>150 GEMS 💎</div>
+              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>150 GEMS 💎</div>
             </button>
 
             <button
               className="btn btn-gold"
               onClick={() => doPullEquipment(10, 'gem')}
               disabled={pulling || gems < 1500}
-              style={{ flex: 1, padding: '1.25rem', fontSize: '1.3rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', border: '2px solid var(--gold)', borderRadius: 8, background: 'rgba(201,168,76,0.15)' }}
+              style={{ flex: 1, padding: '2rem', fontSize: '1.6rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', border: '2px solid var(--gold)', borderRadius: 8, background: 'rgba(201,168,76,0.15)', boxShadow: '0 0 20px rgba(201,168,76,0.3)' }}
             >
               <div>{pulling ? 'Summoning...' : 'Summon 10x'}</div>
-              <div style={{ fontSize: '0.9rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>1500 GEMS 💎</div>
+              <div style={{ fontSize: '1rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>1500 GEMS 💎</div>
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem' }}>
+            <button
+              className="btn btn-gold"
+              onClick={() => doPullEquipment(1, 'gold')}
+              disabled={pulling || gold < 500}
+              style={{ flex: 1, padding: '1.25rem', fontSize: '1.3rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', border: '2px solid var(--star1)', borderRadius: 8, background: 'rgba(150,150,150,0.1)' }}
+            >
+              <div>{pulling ? 'Summoning...' : 'Summon 1x'}</div>
+              <div style={{ fontSize: '0.9rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>500 GOLD 💰</div>
+            </button>
+
+            <button
+              className="btn btn-gold"
+              onClick={() => doPullEquipment(10, 'gold')}
+              disabled={pulling || gold < 5000}
+              style={{ flex: 1, padding: '1.25rem', fontSize: '1.3rem', fontFamily: 'Cinzel, serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', border: '2px solid var(--star1)', borderRadius: 8, background: 'rgba(150,150,150,0.15)' }}
+            >
+              <div>{pulling ? 'Summoning...' : 'Summon 10x'}</div>
+              <div style={{ fontSize: '0.9rem', color: '#fff', opacity: 0.8, letterSpacing: '2px' }}>5000 GOLD 💰</div>
             </button>
           </div>
 
@@ -347,8 +343,8 @@ export default function SummonPage({ onGoldChange }) {
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                 <div className="section-header" style={{ margin: 0 }}>Equipment Rates</div>
                 <div style={{ display: 'flex', gap: '0.3rem' }}>
-                  <button className="btn" onClick={() => setEquipOddsCurrency('gold')} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', opacity: equipOddsCurrency === 'gold' ? 1 : 0.5 }}>Gold</button>
                   <button className="btn" onClick={() => setEquipOddsCurrency('gem')} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', opacity: equipOddsCurrency === 'gem' ? 1 : 0.5 }}>Gem</button>
+                  <button className="btn" onClick={() => setEquipOddsCurrency('gold')} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', opacity: equipOddsCurrency === 'gold' ? 1 : 0.5 }}>Gold</button>
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

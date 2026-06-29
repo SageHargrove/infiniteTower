@@ -98,9 +98,9 @@ export default function ProfileSelect({ onSelect }) {
           scale instead, anchored to the right where the panel isn't. */}
       <div style={{
         position: 'absolute', inset: 0,
-        backgroundImage: 'url(/tower_bg_v2.png)',
-        backgroundSize: '100% 100%',
-        backgroundPosition: 'center',
+        backgroundImage: 'url(/tower_wide.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center center',
         backgroundRepeat: 'no-repeat',
       }} />
 

@@ -207,6 +207,14 @@ import time
 import threading
 
 def chat_worker_loop():
+    # Generates immediately on startup instead of only after the first
+    # 300s sleep — a short play session never saw any chat at all before
+    # this, since the loop used to sleep before ever calling
+    # generate_hero_chat() even once. Still every 5 minutes after that.
+    try:
+        generate_hero_chat()
+    except Exception as e:
+        print(f'[Chat Worker] Error: {e}')
     while True:
         try:
             time.sleep(300)  # Generate new chat every 5 mins to save API quota

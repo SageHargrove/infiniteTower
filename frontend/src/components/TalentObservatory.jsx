@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { listHeroes, revealHeroTalent, buyBaseUpgrade } from '../api/client'
+import { listHeroes, revealHeroTalent } from '../api/client'
 
 // Talent Observatory: a paid, on-demand Talent reveal, separate from
-// Archive's free per-level aptitude drip (see backend/services/
-// level_service.py for why these two don't share state). The level of
+// Archive's free per-level aptitude drip. The level of
 // detail (tier/range/exact) is gated by this facility's own level.
 export default function TalentObservatory({ upgrade, gold, onGoldChange, onUpgrade }) {
   const [heroes, setHeroes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState('')
   const [revealing, setRevealing] = useState(false)
   const [msg, setMsg] = useState(null)
 
@@ -28,7 +27,7 @@ export default function TalentObservatory({ upgrade, gold, onGoldChange, onUpgra
 
   const level = upgrade?.level || 0
   const maxLevel = upgrade?.max_level || 3
-  const selected = heroes.find(h => h.id === selectedId)
+  const selected = heroes.find(h => h.id === parseInt(selectedId))
   const cost = selected ? (selected.current_star || selected.birth_star) * 500 : 0
 
   async function handleReveal() {
@@ -47,64 +46,60 @@ export default function TalentObservatory({ upgrade, gold, onGoldChange, onUpgra
   }
 
   return (
-    <div className="card" style={{ padding: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-        <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', margin: 0 }}>
-          Talent Observatory <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>(Lv.{level}/{maxLevel})</span>
-        </h3>
-        {level < maxLevel && (
-          <button className="btn" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={onUpgrade}>
-            Upgrade ({upgrade?.next_cost ?? '?'}g)
-          </button>
-        )}
+    <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+      <div style={{ width: '100%', aspectRatio: '3/1', overflow: 'hidden', position: 'relative' }}>
+        <img src={`http://localhost:8000/static/facilities/talent_observatory.png`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'none'; }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,14,0.95) 100%)' }} />
       </div>
-      <div className="text-dim text-sm" style={{ marginBottom: '1rem', lineHeight: 1.5 }}>
-        Pay gold to reveal a hero's hidden Talent right now, instead of waiting on it to surface naturally as they level.{' '}
-        {level <= 1 && 'At this level, you only learn a vague tier (Poor/Average/Good/Exceptional).'}
-        {level === 2 && 'At this level, you learn a numeric range.'}
-        {level >= 3 && 'At this level, you learn the exact number.'}
-      </div>
-
-      {msg && <div style={{ color: '#f87', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{msg}</div>}
-
-      <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 280px', maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          {loading && <div className="text-dim text-sm">Loading heroes...</div>}
-          {!loading && heroes.length === 0 && <div className="text-dim text-sm">No heroes yet.</div>}
-          {heroes.map(h => (
-            <button
-              key={h.id}
-              onClick={() => setSelectedId(h.id)}
-              className={`btn ${selectedId === h.id ? 'btn-gold' : ''}`}
-              style={{ textAlign: 'left', padding: '0.5rem 0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <span>{h.name} <span className="text-dim" style={{ fontSize: '0.78rem' }}>Lv.{h.level} {h.hero_class}</span></span>
-              {h.talent_reveal
-                ? <span style={{ fontSize: '0.78rem', color: 'var(--gold)' }}>{h.talent_reveal}</span>
-                : <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Unrevealed</span>}
+      <div style={{ padding: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', margin: 0 }}>Talent Observatory (Lv.{level}/{maxLevel})</h3>
+            </div>
+            <div className="text-dim text-sm" style={{ marginTop: '0.2rem', lineHeight: 1.4 }}>
+              Pay gold to instantly reveal a hero's hidden Talent.
+              {level <= 1 && ' Reveals a vague tier (Poor/Average/Good/Exceptional).'}
+              {level === 2 && ' Reveals a numeric range.'}
+              {level >= 3 && ' Reveals the exact number.'}
+            </div>
+          </div>
+          {level < maxLevel && (
+            <button className="btn" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', alignSelf: 'flex-start' }} onClick={onUpgrade}>
+              Upgrade ({upgrade?.next_cost ?? '?'}g)
             </button>
-          ))}
+          )}
         </div>
 
-        <div style={{ flex: '1 1 220px' }}>
-          {!selected && <div className="text-dim text-sm">Select a hero to reveal their Talent.</div>}
-          {selected && selected.talent_reveal && (
-            <div>
-              <div className="text-hi" style={{ fontFamily: 'Cinzel, serif', marginBottom: '0.5rem' }}>{selected.name}</div>
-              <div style={{ fontSize: '1.1rem', color: 'var(--gold)' }}>{selected.talent_reveal}</div>
-              <div className="text-dim text-sm" style={{ marginTop: '0.5rem' }}>Already revealed — frozen at the Observatory's level when revealed.</div>
-            </div>
-          )}
+        {msg && <div style={{ color: '#f87', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{msg}</div>}
+
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'flex-start' }}>
+          <select 
+            value={selectedId} 
+            onChange={e => setSelectedId(e.target.value)}
+            className="input" 
+            style={{ flex: 1 }}
+          >
+            <option value="">Select a hero to reveal...</option>
+            {heroes.map(h => {
+              const displayInfo = h.talent_reveal ? ` - ${h.talent_reveal}` : ' - Unrevealed'
+              return <option key={h.id} value={h.id}>{h.name} ({h.class_name}){displayInfo}</option>
+            })}
+          </select>
           {selected && !selected.talent_reveal && (
-            <div>
-              <div className="text-hi" style={{ fontFamily: 'Cinzel, serif', marginBottom: '0.5rem' }}>{selected.name}</div>
-              <div className="text-dim text-sm" style={{ marginBottom: '0.75rem' }}>Cost to reveal: <span className="text-gold">{cost}g</span></div>
-              <button className="btn btn-gold" disabled={revealing || gold < cost} onClick={handleReveal}>
-                {revealing ? 'Awakening...' : 'Awaken'}
-              </button>
-            </div>
+             <button className="btn btn-gold" disabled={revealing || gold < cost} onClick={handleReveal}>
+                {revealing ? 'Awakening...' : `Awaken (${cost}g)`}
+             </button>
           )}
         </div>
+
+        {selected && selected.talent_reveal && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+            <div className="text-hi" style={{ fontFamily: 'Cinzel, serif' }}>{selected.name}</div>
+            <div style={{ fontSize: '1.1rem', color: 'var(--gold)' }}>{selected.talent_reveal}</div>
+            <div className="text-dim text-sm">Already revealed — frozen at the Observatory's level when revealed.</div>
+          </div>
+        )}
       </div>
     </div>
   )

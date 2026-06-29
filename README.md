@@ -89,14 +89,8 @@ arena_server/                 # Separate small FastAPI service for Arena match
 
 ## Known Gaps
 
-Most of the original rough-draft TODO list (events, evolution/ascension,
-synthesis, aptitude reveal, skills, legacy bonuses, escort/survival floors,
-status effects, mana/active skills, equipment sets, gacha pity, the floor
-11-100 enemy roster, and per-hero combat consumables) is now built. What's
-still genuinely incomplete:
-
 - **Arena PvP** — the local backend only builds and submits a team snapshot;
   match resolution lives in the separate `arena_server/` and that loop isn't
   fully closed end-to-end yet (no live opponent matching/leaderboard in the main app).
 - **Leaderboards / achievements** — not started.
-- **Enemy roster overhaul art** — waves of floors is implemented; art needs polish
+- **Enemy roster overhaul art** — waves of floors is implemented; enemy art needs polish

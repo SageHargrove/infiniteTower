@@ -371,9 +371,30 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
     }}>
       {/* Background elements */}
       <div style={{ position: 'absolute', inset: 0, opacity: 0.1, backgroundImage: 'url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAABZJREFUeNpi2r9//38bIxsDB1AMBgwAE2gDG9mC9U8AAAAASUVORK5CYII=)', backgroundSize: '10px' }} />
-      
+
       {/* Divider */}
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', background: 'rgba(255,255,255,0.05)' }} />
+
+      {/* Speed toggle — was a bare "1x"/"2x" tucked into the Battle Log
+          header's corner with no label, reported as not intuitive to find.
+          Moved to a clearly-labeled control fixed at the top of the arena
+          itself, where it's the first thing visible when a fight starts. */}
+      <button
+        onClick={toggleSpeed}
+        title="Toggle combat playback speed"
+        style={{
+          position: 'absolute', top: '10px', left: '10px', zIndex: 50,
+          display: 'flex', alignItems: 'center', gap: '0.4rem',
+          fontSize: '0.78rem', padding: '0.35rem 0.7rem', borderRadius: 6,
+          fontFamily: 'Cinzel, serif',
+          background: speedMult === 2 ? 'rgba(201,168,76,0.25)' : 'rgba(10,10,14,0.85)',
+          border: `1px solid ${speedMult === 2 ? 'var(--gold)' : 'rgba(255,255,255,0.2)'}`,
+          color: speedMult === 2 ? 'var(--gold)' : '#ccc', cursor: 'pointer',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
+        }}
+      >
+        Speed: {speedMult}x
+      </button>
 
       {/* Survival Floor round counter — frames the fight as "outlast the
           clock," not "kill count," since the normal enemies-remaining
@@ -497,18 +518,6 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
         <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', fontSize: '0.8rem', letterSpacing: 1, textTransform: 'uppercase' }}>
           Battle Log
         </div>
-        <button
-          onClick={toggleSpeed}
-          title="Toggle combat playback speed"
-          style={{
-            fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: 4,
-            background: speedMult === 2 ? 'rgba(201,168,76,0.25)' : 'rgba(255,255,255,0.05)',
-            border: `1px solid ${speedMult === 2 ? 'var(--gold)' : 'rgba(255,255,255,0.15)'}`,
-            color: speedMult === 2 ? 'var(--gold)' : '#aaa', cursor: 'pointer',
-          }}
-        >
-          {speedMult}x
-        </button>
       </div>
       {revealedLines.map(line => (
         <div key={line.key} style={{

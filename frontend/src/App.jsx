@@ -348,7 +348,7 @@ export default function App() {
                 setShowSettings(false)
                 setActiveProfile(null)
               }}>
-                🔄 Switch Profile (Main Menu)
+                🔄 Main Menu
               </button>
               
               <button className="btn" style={{ marginTop: '1rem', background: 'var(--border)' }} onClick={() => setShowSettings(false)}>

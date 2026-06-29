@@ -40,7 +40,8 @@ def init_db():
             token_expiry REAL,
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0,
-            team_json TEXT
+            team_json TEXT,
+            highest_floor INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS arena_matches (
@@ -51,7 +52,33 @@ def init_db():
             log_json TEXT,
             timestamp REAL NOT NULL
         );
+        
+        CREATE TABLE IF NOT EXISTS arena_season_rewards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            season_end_date REAL NOT NULL,
+            reward_type TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            claimed INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS training_market (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            hero_name TEXT NOT NULL,
+            hero_class TEXT NOT NULL,
+            hero_stats_json TEXT NOT NULL,
+            hero_skills_json TEXT NOT NULL,
+            gem_cost INTEGER NOT NULL,
+            listed_at REAL NOT NULL
+        );
     """)
+
+    # Attempt to add highest_floor column if it doesn't exist (for existing DBs)
+    try:
+        conn.execute("ALTER TABLE arena_players ADD COLUMN highest_floor INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass # Column already exists
     conn.commit()
     conn.close()
     print("[Arena] Database initialized.")
