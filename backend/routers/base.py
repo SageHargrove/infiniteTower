@@ -264,15 +264,24 @@ def get_base_floors():
                 continue
             floors[f]["heroes"].append(dict(h))
             
-        # Calculate math
+        # Calculate math — must match get_floor_lp() in base_service.py
+        # exactly, since that's what combat_service.py actually applies as
+        # the real stat bonus. This used to be a separate flat-division
+        # formula that didn't match (displayed bonus != applied bonus).
+        from services.base_service import get_floor_lp
         for f in floors.values():
-            if len(f["heroes"]) > 0:
-                f["lp_per_hero"] = round(f["total_lp"] / len(f["heroes"]))
-                f["stat_bonus_pct"] = round(f["lp_per_hero"] / 10)
-            else:
-                f["lp_per_hero"] = f["total_lp"]
-                f["stat_bonus_pct"] = round(f["total_lp"] / 10)
-                
+            lp_data = get_floor_lp(conn, f["floor_number"])
+            f["lp_per_hero"] = lp_data["lp_per_hero"]
+            f["stat_bonus_pct"] = lp_data["stat_bonus_pct"]
+            # Diminishing-returns preview: same sqrt-crowding formula, shown
+            # for a range of headcounts so the frontend can plot the curve
+            # and mark where this floor currently sits on it.
+            import math
+            f["bonus_curve"] = [
+                {"headcount": n, "stat_bonus_pct": round((f["total_lp"] * (1.0 / math.sqrt(n))) // 10)}
+                for n in range(1, 6)
+            ]
+
     return {"floors": list(floors.values()), "unlocked": unlocked_floors, "base_heroes": base_heroes}
 
 @router.post("/floors/assign")
@@ -904,4 +913,52 @@ def buy_research_upgrade(req: BuyResearchReq):
         conn.execute("UPDATE base SET research_points = research_points - ?, global_buffs = ? WHERE id = 1", 
                      (cost, json.dumps(buffs)))
                      
+    return {"ok": True}
+
+# ─── Mail System ──────────────────────────────────────────────────
+
+@router.get("/mail/list")
+def list_mail():
+    with db() as conn:
+        rows = conn.execute("SELECT * FROM mail ORDER BY created_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
+class ClaimMailReq(BaseModel):
+    mail_id: int
+
+@router.post("/mail/claim")
+def claim_mail(req: ClaimMailReq):
+    with db() as conn:
+        mail = conn.execute("SELECT * FROM mail WHERE id = ?", (req.mail_id,)).fetchone()
+        if not mail:
+            raise HTTPException(status_code=404, detail="Mail not found.")
+        if mail["is_claimed"]:
+            raise HTTPException(status_code=400, detail="Mail already claimed.")
+
+        rewards = json.loads(mail["rewards_json"])
+        
+        # Grant rewards
+        if "gems" in rewards:
+            conn.execute("UPDATE base SET gems = gems + ? WHERE id = 1", (rewards["gems"],))
+        if "gold" in rewards:
+            conn.execute("UPDATE base SET gold = gold + ? WHERE id = 1", (rewards["gold"],))
+        if "supplies" in rewards:
+            conn.execute("UPDATE base SET supplies = supplies + ? WHERE id = 1", (rewards["supplies"],))
+
+        conn.execute("UPDATE mail SET is_claimed = 1, is_read = 1 WHERE id = ?", (req.mail_id,))
+    return {"ok": True, "rewards": rewards}
+
+class ReceiveMailReq(BaseModel):
+    sender: str
+    subject: str
+    body: str
+    rewards_json: dict
+
+@router.post("/mail/receive")
+def receive_mail(req: ReceiveMailReq):
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO mail (sender, subject, body, rewards_json) VALUES (?, ?, ?, ?)",
+            (req.sender, req.subject, req.body, json.dumps(req.rewards_json))
+        )
     return {"ok": True}

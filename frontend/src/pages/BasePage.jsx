@@ -28,6 +28,35 @@ const FACILITY_TOOLTIPS = {
   "Mage Tower": "Conducts magical research. Magic Engineers are the most effective, with Mages and Spellswords close behind."
 }
 
+// Tiny inline sparkline showing the real diminishing-returns curve a
+// stationed floor follows: stat_bonus_pct = (total_lp / sqrt(headcount)) / 10
+// (see get_floor_lp in base_service.py — the backend value this curve is
+// built from, not a separate frontend-side recalculation). Steep drop from
+// 1→2 heroes, flattening out by 4-5 — exactly the "diminishing returns"
+// shape, just keyed on crowding a floor rather than a level number.
+function DiminishingReturnsCurve({ curve, current }) {
+  if (!curve || curve.length < 2) return null
+  const w = 80, h = 28, pad = 3
+  const maxVal = curve[0].stat_bonus_pct || 1
+  const points = curve.map((pt, i) => {
+    const x = pad + (i / (curve.length - 1)) * (w - pad * 2)
+    const y = h - pad - (pt.stat_bonus_pct / maxVal) * (h - pad * 2)
+    return { x, y, ...pt }
+  })
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+  const currentPt = points[Math.min(current, points.length) - 1]
+  return (
+    <svg width={w} height={h} style={{ marginTop: '0.25rem', overflow: 'visible' }}>
+      <path d={pathD} fill="none" stroke="rgba(74,222,128,0.5)" strokeWidth="1.5" />
+      {currentPt && (
+        <circle cx={currentPt.x} cy={currentPt.y} r="3" fill="var(--gold)">
+          <title>{`${current} stationed → +${currentPt.stat_bonus_pct}% stats`}</title>
+        </circle>
+      )}
+    </svg>
+  )
+}
+
 export default function BasePage({ onGoldChange, onSubTabChange, tourTargetSubTab }) {
   const [activeTab, setActiveTab] = useState('lobby')
   const [base, setBase] = useState(null)
@@ -739,6 +768,9 @@ const getGenRate = (fac) => {
             <div className="text-dim text-sm" style={{ lineHeight: 1.5, marginTop: '0.5rem' }}>
               <span className="text-hi">Benefit:</span> a stationed hero gets an all-stats bonus while climbing the Tower, and recovers from fatigue faster at the base. Each floor has a fixed bonus pool that's split evenly among whoever's stationed there — higher floors have a bigger pool, but spreading more heroes across one floor shrinks everyone's individual share. Check each floor's current bonus % below before assigning.
             </div>
+            <div className="text-dim text-sm" style={{ lineHeight: 1.5, marginTop: '0.5rem', color: 'rgba(201,168,76,0.7)' }}>
+              Diminishing returns kick in fast: going from 1 to 2 heroes on a floor costs each of them far more than 2 to 3 does. The little curve under each floor's bonus % shows exactly where it sits on that drop-off.
+            </div>
           </div>
           
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
@@ -817,11 +849,12 @@ const getGenRate = (fac) => {
               <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', marginBottom: '0.5rem' }}>Floors</h3>
               {floorsData.floors.map(f => (
                 <div key={f.floor_number} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem' }}>
-                  <div style={{ width: '80px' }}>
+                  <div style={{ width: '90px' }}>
                     <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)' }}>Floor {f.floor_number}</div>
                     <div className="text-green" style={{ fontSize: '0.75rem', fontWeight: 'bold' }} title="Stat bonus per stationed hero, and bonus fatigue recovery rate">
                       +{f.stat_bonus_pct}% stats
                     </div>
+                    {f.bonus_curve && <DiminishingReturnsCurve curve={f.bonus_curve} current={Math.max(1, f.heroes.length)} />}
                   </div>
                   <div style={{ flex: 1, display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                     {/* Render assigned heroes */}
