@@ -635,6 +635,11 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
               <div className="stat" title={`Base: ${hero.base_willpower ?? hero.willpower ?? 6}`}>WIL <span>{hero.willpower ?? 6}</span></div>
               <div className="stat" title={`Base: ${hero.base_luck ?? hero.luck ?? 5}`}>LUC <span>{hero.luck ?? 5}</span></div>
             </div>
+            {hero.max_mana != null && (
+              <div className="stats-row">
+                <div className="stat" title="Mana resets each fight — this is the pool size, not a current value." style={{ color: '#3a7bd5' }}>MAX MP <span>{hero.max_mana}</span></div>
+              </div>
+            )}
           </div>
 
           {showFull && (

@@ -73,6 +73,7 @@ export default function InventoryPage() {
 
   const [filter, setFilter] = useState('All')
   const [rarityFilter, setRarityFilter] = useState(new Set())
+  const [hideEquipped, setHideEquipped] = useState(false)
   const [bulkScrapping, setBulkScrapping] = useState(false)
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [selectedItems, setSelectedItems] = useState(new Set())
@@ -117,7 +118,9 @@ export default function InventoryPage() {
     if (item.itemType === 'equipment' && rarityFilter.size > 0) {
       if (!rarityFilter.has(item.rarity)) return false;
     }
-    
+
+    if (hideEquipped && item.itemType === 'equipment' && item.isEquipped) return false;
+
     return true;
   });
 
@@ -231,8 +234,16 @@ export default function InventoryPage() {
             <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', marginLeft: '0.5rem' }} onClick={() => { setRarityFilter(new Set()); setSelectedItems(new Set()); }}>Clear Rarities</button>
           )}
           <button
-            className={`btn ${showJunk ? 'btn-gold' : ''}`}
+            className={`btn ${hideEquipped ? 'btn-gold' : ''}`}
             style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', marginLeft: 'auto' }}
+            onClick={() => setHideEquipped(s => !s)}
+            title="Only show equipment nobody currently has equipped."
+          >
+            {hideEquipped ? 'Showing Unequipped Only' : 'Show Unequipped Only'}
+          </button>
+          <button
+            className={`btn ${showJunk ? 'btn-gold' : ''}`}
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
             onClick={() => setShowJunk(s => !s)}
             title="F-grade starter weapons left over after upgrading a hero's gear are hidden by default."
           >

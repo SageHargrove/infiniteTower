@@ -24,6 +24,29 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Custom scrollbar — the default browser bar clashes hard with the dark
+   fantasy theme everywhere else. Webkit (Chrome/Edge) gets the full
+   styled treatment; Firefox gets the closest equivalent it supports. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-dim) var(--bg-panel);
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--bg-panel);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--gold-dim);
+  border-radius: 5px;
+  border: 2px solid var(--bg-panel);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
 body {
   background: var(--bg);
   color: var(--text);

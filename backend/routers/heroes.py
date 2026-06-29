@@ -31,6 +31,12 @@ def row_to_hero(row, equipment_rows=[], is_ego_satisfied=None) -> dict:
     h = apply_equipment_stats(h, h["equipment"])
     if is_ego_satisfied is not None:
         h["is_ego_satisfied"] = is_ego_satisfied
+    # Mana is combat-session-only state (see combat_service.py's CombatUnit)
+    # — there's no stored "current mana" outside a fight — but Max Mana is
+    # a pure function of post-equipment INT/WIL, so it's safe to surface
+    # here for the hero stat sheet even though no fight is running.
+    from services.gacha_service import mana_from_stats
+    h["max_mana"] = mana_from_stats(h["intelligence"], h.get("willpower", 6))
     return h
 
 @router.get("/{hero_id}/card-image")
@@ -44,7 +50,7 @@ def get_hero_card_image(hero_id: int, mini: bool = False):
     mini=True returns a face-cropped variant sized for small grid thumbnails
     instead of the full head-to-chest card — see composite_card's docstring."""
     with db() as conn:
-        hero = conn.execute("SELECT portrait_path, birth_star, name FROM heroes WHERE id = ?", (hero_id,)).fetchone()
+        hero = conn.execute("SELECT portrait_path, birth_star, name, hero_class FROM heroes WHERE id = ?", (hero_id,)).fetchone()
     if not hero or not hero["portrait_path"] or not os.path.exists(hero["portrait_path"]):
         raise HTTPException(status_code=404, detail="No portrait available for this hero.")
 

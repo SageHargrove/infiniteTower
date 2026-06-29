@@ -84,7 +84,32 @@ function FloatingDamage({ number, isCrit, onComplete }) {
   )
 }
 
-function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverride, isActive, isHit, health, maxHp, mana, maxMana, damageInfo, tier = 'normal' }) {
+// Active skills previously only showed up as combat-log text — this gives
+// the caster a visible callout + glow pulse on their own portrait so a
+// skill cast actually reads as an event, not just another basic-attack line.
+function SkillCallout({ name }) {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '-26px',
+      left: '50%',
+      transform: 'translate(-50%, -100%)',
+      color: 'var(--gold)',
+      fontWeight: 'bold',
+      fontSize: '0.95rem',
+      whiteSpace: 'nowrap',
+      textShadow: '0 0 8px rgba(201,168,76,0.9), 0 2px 4px rgba(0,0,0,0.9)',
+      animation: 'floatUpAndFade 1.1s ease-out forwards',
+      zIndex: 101,
+      pointerEvents: 'none',
+      fontFamily: 'Cinzel, serif',
+    }}>
+      ✦ {name}
+    </div>
+  )
+}
+
+function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverride, isActive, isHit, health, maxHp, mana, maxMana, damageInfo, skillName, tier = 'normal' }) {
   const [imgError, setImgError] = useState(false)
   if (!unit) return null
 
@@ -126,11 +151,14 @@ function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverrid
         overflow: 'hidden',
         position: 'relative',
         background: '#1a1a24',
-        boxShadow: isActive
+        boxShadow: skillName
+          ? '0 0 28px 6px rgba(201,168,76,0.95)'
+          : isActive
           ? `0 0 20px ${team === 'hero' ? 'var(--gold)' : '#a44'}`
           : tier !== 'normal' ? `0 0 14px ${team === 'hero' ? 'rgba(201,168,76,0.4)' : 'rgba(170,68,68,0.5)'}, 0 4px 10px rgba(0,0,0,0.5)`
           : '0 4px 10px rgba(0,0,0,0.5)'
       }}>
+        {skillName && <SkillCallout name={skillName} />}
         {unit.portrait_path && !imgError ? (
           <img src={`http://localhost:8000/${unit.portrait_path}`} style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center top' }} alt={unit.name} onError={() => setImgError(true)} />
         ) : (
@@ -200,6 +228,16 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
   // Local state for Health/Mana tracking
   const [unitHPs, setUnitHPs] = useState({})
   const [unitManas, setUnitManas] = useState({})
+  // Persisted across fights (localStorage), not just this component's
+  // lifetime — once a player wants 2x, they want it for every fight.
+  const [speedMult, setSpeedMult] = useState(() => (localStorage.getItem('combatSpeed2x') === '1' ? 2 : 1))
+  function toggleSpeed() {
+    setSpeedMult(prev => {
+      const next = prev === 1 ? 2 : 1
+      localStorage.setItem('combatSpeed2x', next === 2 ? '1' : '0')
+      return next
+    })
+  }
   
   const heroes = combatData?.initial_state?.heroes || []
   const enemies = combatData?.initial_state?.enemies || []
@@ -254,7 +292,7 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
       setPlaying(false)
       setTimeout(() => {
         if (onComplete) onComplete()
-      }, 1500)
+      }, 1500 / speedMult)
       return
     }
 
@@ -278,10 +316,10 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
 
     const timer = setTimeout(() => {
       setCurrentTurnIndex(c => c + 1)
-    }, 800) // Delay between turns
+    }, 800 / speedMult) // Delay between turns
 
     return () => clearTimeout(timer)
-  }, [currentTurnIndex, playing, turns, onComplete])
+  }, [currentTurnIndex, playing, turns, onComplete, speedMult])
 
   const logEndRef = useRef(null)
 
@@ -352,6 +390,7 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
             tier={heroTier}
             isActive={isAttacker}
             isHit={isTarget}
+            skillName={isAttacker ? currentTurn?.skill_name : null}
             health={unitHPs[hero.id] ?? hero.health}
             maxHp={hero.max_health}
             mana={unitManas[hero.id] ?? hero.mana}
@@ -412,8 +451,22 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
       gap: '0.5rem',
       overflowY: 'auto',
     }}>
-      <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', fontSize: '0.8rem', letterSpacing: 1, textTransform: 'uppercase', marginBottom: '0.25rem', flexShrink: 0 }}>
-        Battle Log
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', flexShrink: 0 }}>
+        <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', fontSize: '0.8rem', letterSpacing: 1, textTransform: 'uppercase' }}>
+          Battle Log
+        </div>
+        <button
+          onClick={toggleSpeed}
+          title="Toggle combat playback speed"
+          style={{
+            fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: 4,
+            background: speedMult === 2 ? 'rgba(201,168,76,0.25)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${speedMult === 2 ? 'var(--gold)' : 'rgba(255,255,255,0.15)'}`,
+            color: speedMult === 2 ? 'var(--gold)' : '#aaa', cursor: 'pointer',
+          }}
+        >
+          {speedMult}x
+        </button>
       </div>
       {revealedLines.map(line => (
         <div key={line.key} style={{
