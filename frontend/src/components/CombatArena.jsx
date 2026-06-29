@@ -84,15 +84,23 @@ function FloatingDamage({ number, isCrit, onComplete }) {
   )
 }
 
-function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverride, isActive, isHit, health, maxHp, damageInfo, tier = 'normal' }) {
+function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverride, isActive, isHit, health, maxHp, mana, maxMana, damageInfo, tier = 'normal' }) {
   const [imgError, setImgError] = useState(false)
   if (!unit) return null
 
   const isDead = health <= 0
   const hpPercent = Math.max(0, (health / maxHp) * 100)
+  const manaPercent = maxMana > 0 ? Math.max(0, (mana / maxMana) * 100) : 0
 
   const pos = posOverride || (teamCount > 5 ? getGridPosition(position, teamCount, team) : TEAM_POSITIONS[team][position]) || TEAM_POSITIONS[team][0]
-  const size = ENEMY_SIZE_TIERS[tier] || ENEMY_SIZE_TIERS.normal
+  // Heroes render ~30% larger than the shared enemy-tier sizing so faces
+  // and HP/mana bars stay legible — was previously sharing ENEMY_SIZE_TIERS
+  // 1:1 with enemies, which is tuned for "boss should look huge," not for
+  // a hero player actually needs to read at a glance.
+  const baseSize = ENEMY_SIZE_TIERS[tier] || ENEMY_SIZE_TIERS.normal
+  const size = team === 'hero'
+    ? { ...baseSize, circle: Math.round(baseSize.circle * 1.3), container: Math.round(baseSize.container * 1.3) }
+    : baseSize
 
   return (
     <div style={{
@@ -117,13 +125,14 @@ function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverrid
         border: `${tier === 'normal' ? 4 : 5}px solid ${team === 'hero' ? 'var(--gold)' : '#a44'}`,
         overflow: 'hidden',
         position: 'relative',
+        background: '#1a1a24',
         boxShadow: isActive
           ? `0 0 20px ${team === 'hero' ? 'var(--gold)' : '#a44'}`
           : tier !== 'normal' ? `0 0 14px ${team === 'hero' ? 'rgba(201,168,76,0.4)' : 'rgba(170,68,68,0.5)'}, 0 4px 10px rgba(0,0,0,0.5)`
           : '0 4px 10px rgba(0,0,0,0.5)'
       }}>
         {unit.portrait_path && !imgError ? (
-          <img src={`http://localhost:8000/${unit.portrait_path}`} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%' }} alt={unit.name} onError={() => setImgError(true)} />
+          <img src={`http://localhost:8000/${unit.portrait_path}`} style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center top' }} alt={unit.name} onError={() => setImgError(true)} />
         ) : (
           <div style={{ width: '100%', height: '100%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size.icon }}>
             {team === 'hero' ? '⚔' : '💀'}
@@ -145,6 +154,24 @@ function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverrid
           transition: 'width 0.3s ease-out'
         }} />
       </div>
+
+      {team === 'hero' && maxMana > 0 && (
+        <div title={`MP: ${mana} / ${maxMana}`} style={{
+          width: '100%',
+          background: '#111',
+          height: '7px',
+          borderRadius: '4px',
+          overflow: 'hidden',
+          marginTop: '-0.35rem',
+        }}>
+          <div style={{
+            width: `${manaPercent}%`,
+            height: '100%',
+            background: '#3a7bd5',
+            transition: 'width 0.3s ease-out',
+          }} />
+        </div>
+      )}
 
       <div style={{
         fontSize: size.name,
@@ -170,8 +197,9 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
   const [currentTurnIndex, setCurrentTurnIndex] = useState(-1)
   const [playing, setPlaying] = useState(false)
   
-  // Local state for Health tracking
+  // Local state for Health/Mana tracking
   const [unitHPs, setUnitHPs] = useState({})
+  const [unitManas, setUnitManas] = useState({})
   
   const heroes = combatData?.initial_state?.heroes || []
   const enemies = combatData?.initial_state?.enemies || []
@@ -207,11 +235,13 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
 
   useEffect(() => {
     if (combatData) {
-      // Initialize HPs
+      // Initialize HPs/Manas
       const initialHps = {}
-      heroes.forEach(h => initialHps[h.id] = h.health)
+      const initialManas = {}
+      heroes.forEach(h => { initialHps[h.id] = h.health; initialManas[h.id] = h.mana })
       enemies.forEach(e => initialHps[e.id] = e.health)
       setUnitHPs(initialHps)
+      setUnitManas(initialManas)
       setCurrentTurnIndex(-1)
       setPlaying(true)
     }
@@ -235,6 +265,13 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
           ...prev,
           [turn.target_id]: turn.target_hp
         }))
+        if (turn.attacker_mana != null || turn.target_mana != null) {
+          setUnitManas(prev => ({
+            ...prev,
+            ...(turn.attacker_mana != null ? { [turn.attacker_id]: turn.attacker_mana } : {}),
+            ...(turn.target_mana != null ? { [turn.target_id]: turn.target_mana } : {}),
+          }))
+        }
         playHitSound(classifyAttacker(turn.attacker_id), turn.is_crit)
       }
     }
@@ -317,6 +354,8 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
             isHit={isTarget}
             health={unitHPs[hero.id] ?? hero.health}
             maxHp={hero.max_health}
+            mana={unitManas[hero.id] ?? hero.mana}
+            maxMana={hero.max_mana}
             damageInfo={dmgInfo}
           />
         )

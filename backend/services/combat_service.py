@@ -1041,7 +1041,7 @@ def _execute_active_skill(attacker: CombatUnit, skill: dict, targets: list, all_
             crit_text = " CRIT!" if is_crit else ""
             log_msg = f"  ✦ {attacker.log_name} uses {skill['name']} on {target.log_name} for {damage}{crit_text} [{max(0, target.health)}/{target.max_health}]"
             log.append(log_msg)
-            turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg})
+            turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg, "attacker_mana": attacker.mana, "target_mana": target.mana, "skill_name": skill["name"]})
             if target.health <= 0:
                 target.alive = False
                 attacker.kills += 1
@@ -1359,7 +1359,8 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
         "heroes": [
             {"id": h.id, "name": h.name, "hero_class": h.hero_class, "max_health": h.max_health, "health": h.health,
              "portrait_path": h.portrait_path, "hero_star": h.hero_star, "level": h.level,
-             "power_stat": h.power_stat, "is_ranged": h.is_ranged}
+             "power_stat": h.power_stat, "is_ranged": h.is_ranged,
+             "max_mana": h.max_mana, "mana": h.mana}
             for h in combatants_heroes
         ],
         "enemies": [
@@ -1563,7 +1564,7 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
                         crit_text = " CRIT!" if is_crit else ""
                         log_msg = f"    → {target.log_name} takes {damage}{crit_text} [{max(0,target.health)}/{target.max_health}]"
                         log.append(log_msg)
-                        turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg})
+                        turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg, "attacker_mana": attacker.mana, "target_mana": target.mana})
                         if target.health <= 0:
                             target.alive = False
                             attacker.kills += 1
@@ -1615,7 +1616,7 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
                     crit_text = " CRIT!" if is_crit else ""
                     log_msg = f"  {attacker.log_name} hits {target.log_name} for {damage}{crit_text} [{max(0,target.health)}/{target.max_health}]"
                     log.append(log_msg)
-                    turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg})
+                    turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg, "attacker_mana": attacker.mana, "target_mana": target.mana})
 
                     if target.health <= 0:
                         target.alive = False
@@ -1684,7 +1685,7 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
                 crit_text = " CRIT!" if is_crit else ""
                 log_msg = f"  {attacker.log_name} hits {target.log_name} for {damage}{crit_text} [{max(0,target.health)}/{target.max_health}]"
                 log.append(log_msg)
-                turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg})
+                turns.append({"round": round_num, "attacker_id": attacker.id, "target_id": target.id, "damage": damage, "is_crit": is_crit, "target_hp": max(0, target.health), "log": log_msg, "attacker_mana": attacker.mana, "target_mana": target.mana})
 
                 if target.health <= 0:
                     # Death save check
