@@ -1,0 +1,13 @@
+backend/venv/
+backend/saves/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+frontend/node_modules/
+frontend/dist/
+**/*.pyc
+**/.DS_Store
+build/
+dist/
+*.spec
+openspec/

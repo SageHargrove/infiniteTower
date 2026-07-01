@@ -378,9 +378,11 @@ CLASS_WEAPON_AFFINITY = {
     "Alchemist": ["Dagger"],  # Poisoner/Brewmaster — poisoned blade
 }
 
-_WEAPON_LINEAGE_MAP = None
+# Shared by both weapon and armor affinity resolution — purely a name->base
+# lineage lookup, nothing weapon-specific about it.
+_CLASS_LINEAGE_MAP = None
 
-def _build_weapon_lineage_map() -> dict:
+def _build_class_lineage_map() -> dict:
     mapping = {}
     for base, tiers in CLASS_EVOLUTIONS.items():
         for name in tiers.get(30, []):
@@ -394,13 +396,52 @@ def get_weapon_affinity(hero_class: str) -> list[str]:
     """Which WEAPON_TYPES this class can equip + draw an Art from. Empty
     list means no restriction is enforced (class has no defined weapon
     identity, e.g. a pure profession class or Tactician)."""
-    global _WEAPON_LINEAGE_MAP
+    global _CLASS_LINEAGE_MAP
     if hero_class in CLASS_WEAPON_AFFINITY:
         return CLASS_WEAPON_AFFINITY[hero_class]
-    if _WEAPON_LINEAGE_MAP is None:
-        _WEAPON_LINEAGE_MAP = _build_weapon_lineage_map()
-    base = _WEAPON_LINEAGE_MAP.get(hero_class)
+    if _CLASS_LINEAGE_MAP is None:
+        _CLASS_LINEAGE_MAP = _build_class_lineage_map()
+    base = _CLASS_LINEAGE_MAP.get(hero_class)
     return CLASS_WEAPON_AFFINITY.get(base, [])
+
+# ---------------------------------------------------------------------------
+# Armor affinity — class-specific armor types
+# ---------------------------------------------------------------------------
+# Robe/Light/Medium/Heavy — same hard-restriction shape as weapons (a typed
+# armor piece can only go on a matching-affinity class; untyped legacy gear
+# is grandfathered in for anyone). No bonus Art for armor — just a real
+# stat-flavor difference per type (see equipment_service._roll_equipment_stats)
+# and distinct icons, which was the actual ask.
+ARMOR_TYPES = ["Robe", "Light Armor", "Brigandine", "Heavy Armor"]
+
+CLASS_ARMOR_AFFINITY = {
+    "Warrior": ["Heavy Armor"],
+    "Spearman": ["Heavy Armor"],
+    "Thief": ["Light Armor"],
+    "Archer": ["Light Armor"],
+    "Scout": ["Light Armor"],
+    "Mage": ["Robe"],
+    "Acolyte": ["Robe"],
+    "Magic Engineer": ["Robe"],
+    "Medic": ["Robe"],
+    "Spellsword": ["Brigandine"],
+    "Classless": ["Brigandine"],
+    "Merchant": ["Light Armor"],   # Smuggler line — needs to move quietly
+    "Farmer": ["Brigandine"],    # Beast Tamer line — practical, not fragile
+    "Chef": ["Brigandine"],      # Butcher line
+    "Alchemist": ["Light Armor"],  # Poisoner/Brewmaster line
+}
+
+def get_armor_affinity(hero_class: str) -> list[str]:
+    """Which ARMOR_TYPES this class can equip. Empty list means no
+    restriction is enforced (no defined armor identity, e.g. Tactician)."""
+    global _CLASS_LINEAGE_MAP
+    if hero_class in CLASS_ARMOR_AFFINITY:
+        return CLASS_ARMOR_AFFINITY[hero_class]
+    if _CLASS_LINEAGE_MAP is None:
+        _CLASS_LINEAGE_MAP = _build_class_lineage_map()
+    base = _CLASS_LINEAGE_MAP.get(hero_class)
+    return CLASS_ARMOR_AFFINITY.get(base, [])
 
 # ---------------------------------------------------------------------------
 # Combat stat modifiers by class

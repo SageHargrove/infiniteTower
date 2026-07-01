@@ -48,14 +48,14 @@ export default function TalentObservatory({ upgrade, gold, onGoldChange, onUpgra
   return (
     <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
       <div style={{ width: '100%', aspectRatio: '3/1', overflow: 'hidden', position: 'relative' }}>
-        <img src={`http://localhost:8000/static/facilities/talent_observatory.png`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'none'; }} />
+        <img src={`http://localhost:8000/static/facilities/mirror_of_fate.png`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'none'; }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,10,14,0.95) 100%)' }} />
       </div>
       <div style={{ padding: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', margin: 0 }}>Talent Observatory (Lv.{level}/{maxLevel})</h3>
+              <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', margin: 0 }}>Mirror of Fate (Lv.{level}/{maxLevel})</h3>
             </div>
             <div className="text-dim text-sm" style={{ marginTop: '0.2rem', lineHeight: 1.4 }}>
               Pay gold to instantly reveal a hero's hidden Talent.
@@ -97,7 +97,7 @@ export default function TalentObservatory({ upgrade, gold, onGoldChange, onUpgra
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
             <div className="text-hi" style={{ fontFamily: 'Cinzel, serif' }}>{selected.name}</div>
             <div style={{ fontSize: '1.1rem', color: 'var(--gold)' }}>{selected.talent_reveal}</div>
-            <div className="text-dim text-sm">Already revealed — frozen at the Observatory's level when revealed.</div>
+            <div className="text-dim text-sm">Already revealed — frozen at the Mirror's level when revealed.</div>
           </div>
         )}
       </div>

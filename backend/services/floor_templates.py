@@ -40,7 +40,7 @@ import random
 #   assassin — tank check (huge speed/burst — no frontline means a one-shot squishy)
 #   twins    — damage-type check (one physical-resistant, one magic-resistant elite)
 #   mirror   — mirror-match (shadow clones of the deployed team's own classes/stats)
-MINIBOSS_VARIANTS = ["survival", "behemoth", "assassin", "twins", "mirror"]
+MINIBOSS_VARIANTS = ["survival", "behemoth", "assassin", "twins"]
 
 
 def get_floor_type(floor_number: int) -> str:
@@ -93,7 +93,6 @@ FLOOR_FLAVOR_INTRO = {
     "miniboss_behemoth": "The ground shakes with every step it takes. This will be a war of attrition.",
     "miniboss_assassin": "Silence. Too much silence — and then it's already moving.",
     "miniboss_twins": "Two shapes step out of the dark together, watching you with one mind.",
-    "miniboss_mirror": "Something in the gloom looks back at you with familiar faces.",
     "boss": "The floor's guardian awaits. There is no other way through.",
     "event": "Something unusual catches your attention.",
     "survival": "Waves of enemies pour from every corridor. There is no retreat — only endurance.",

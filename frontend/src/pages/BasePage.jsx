@@ -1,21 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { getBase, getFacilities, buildFacility, upgradeFacility, assignFacility, removeFacility, restHeroes, listHeroes, configTraining, getMageTowerUpgrades, buyResearchUpgrade, craftMaterialEquipment, craftBandages, getBaseFloors, assignBaseFloor, getLegacies, getChatLogs, renameBase, upgradeBase, getMarketCatalog, purchaseMarketItem, getBaseUpgrades, buyBaseUpgrade, getMailList, claimMail } from '../api/client'
-import TalentObservatory from '../components/TalentObservatory'
+import MirrorOfFate from '../components/MirrorOfFate'
 import LoreJournal from '../components/LoreJournal'
 
 // Hand-painted banner art for the base-wide upgrade tree — keyed by the
 // upgrade's id (see DEFAULT_UPGRADES in routers/base.py) so a rename there
 // doesn't silently lose its art.
 const UPGRADE_BANNERS = {
-  barracks: 'http://localhost:8000/static/facilities/Barracks.png',
   infirmary: 'http://localhost:8000/static/facilities/Infirmary.png',
   forge: 'http://localhost:8000/static/facilities/Forge.png',
-  archive: 'http://localhost:8000/static/facilities/Archive.png',
-  chapel: 'http://localhost:8000/static/facilities/Chapel.png',
 }
 
 // We now dynamically load banners for facilities based on their type name.
-// E.g. http://localhost:8000/static/facilities/The Market.png
+// E.g. http://localhost:8000/static/facilities/Market.png
 
 const FACILITY_TOOLTIPS = {
   "Forge": "Crafts powerful weapons, armor, and accessories. Quality is capped by your single best Blacksmith — more Blacksmiths of that same tier assigned together adds a smaller bonus on top.",
@@ -24,9 +21,8 @@ const FACILITY_TOOLTIPS = {
   "Restaurant": "Cooks advanced meals to increase morale. Assign Chefs to maximize food quality.",
   "Alchemist Lab": "Brews potions and elixirs. Alchemists and Mages excel in this facility.",
   "Workshop": "Builds base upgrades and gadgets. Magic Engineers are the best fit.",
-  "The Market": "Generates passive gold over time and stocks a small shop for supplies, materials, and bandages. Merchants and Quartermasters excel here.",
-  "The Farm": "Generates passive supplies over time. Merchants and Druids excel here.",
-  "Training Grounds": "Allows heroes to spar for EXP. Any combat class thrives here.",
+  "Market": "Generates passive gold over time and stocks a small shop for supplies, materials, and bandages. Merchants and Quartermasters excel here.",
+  "Farm": "Generates passive supplies over time. Merchants and Druids excel here.",
   "Mage Tower": "Conducts magical research. Magic Engineers are the most effective, with Mages and Spellswords close behind."
 }
 
@@ -342,10 +338,10 @@ const handleRenameBase = async () => {
   let suppliesGen = 0;
   if (facilitiesData && facilitiesData.built) {
     facilitiesData.built.forEach(f => {
-      let base_amt = f.type === 'The Market' ? 100 * f.level : 5 * f.level;
+      let base_amt = f.type === 'Market' ? 100 * f.level : 5 * f.level;
       let multiplier = 1.0 + ((f.heroes?.length || 0) * 0.10);
-      if (f.type === 'The Market') goldGen += Math.floor(base_amt * multiplier);
-      if (f.type === 'The Farm') suppliesGen += Math.floor(base_amt * multiplier);
+      if (f.type === 'Market') goldGen += Math.floor(base_amt * multiplier);
+      if (f.type === 'Farm') suppliesGen += Math.floor(base_amt * multiplier);
     });
   }
 
@@ -389,11 +385,11 @@ const handleRenameBase = async () => {
 
 
 const getGenRate = (fac) => {
-    if (fac.type !== 'The Market' && fac.type !== 'The Farm') return null;
-    let base_amt = fac.type === 'The Market' ? 100 * fac.level : 5 * fac.level;
+    if (fac.type !== 'Market' && fac.type !== 'Farm') return null;
+    let base_amt = fac.type === 'Market' ? 100 * fac.level : 5 * fac.level;
     let multiplier = 1.0 + ((fac.heroes || []).length * 0.10);
     let amt = Math.floor(base_amt * multiplier);
-    let resName = fac.type === 'The Market' ? 'Gold' : 'Supplies';
+    let resName = fac.type === 'Market' ? 'Gold' : 'Supplies';
     return `Generating: +${amt} ${resName} / 5 mins`;
   };
 
@@ -592,7 +588,7 @@ const getGenRate = (fac) => {
                 )}
 
                 {/* Market Shop */}
-                {fac.type === 'The Market' && Object.keys(marketCatalog).length > 0 && (
+                {fac.type === 'Market' && Object.keys(marketCatalog).length > 0 && (
                   <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.2)', padding: '0.75rem', borderRadius: 6 }}>
                     <div className="text-dim" style={{ marginBottom: '0.5rem', fontSize: '0.85rem' }}>Shop</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '0.5rem' }}>
@@ -635,14 +631,14 @@ const getGenRate = (fac) => {
             ))}
 
             {(() => {
-                const obs = baseUpgrades.find(u => u.id === 'talent_observatory')
+                const obs = baseUpgrades.find(u => u.id === 'mirror_of_fate')
                 if (obs && obs.level > 0) {
                     return (
-                        <TalentObservatory
+                        <MirrorOfFate
                             upgrade={obs}
                             gold={base.gold}
                             onGoldChange={() => { loadAll(); if (onGoldChange) onGoldChange() }}
-                            onUpgrade={() => handleBuyBaseUpgrade('talent_observatory')}
+                            onUpgrade={() => handleBuyBaseUpgrade('mirror_of_fate')}
                         />
                     )
                 }
@@ -672,15 +668,15 @@ const getGenRate = (fac) => {
               ))}
               
               {(() => {
-                const obs = baseUpgrades.find(u => u.id === 'talent_observatory')
+                const obs = baseUpgrades.find(u => u.id === 'mirror_of_fate')
                 if (obs && obs.level === 0) {
                   return (
                     <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontFamily: 'Cinzel, serif', fontSize: '1.1rem', color: 'var(--gold)' }}>Talent Observatory</span>
+                            <span style={{ fontFamily: 'Cinzel, serif', fontSize: '1.1rem', color: 'var(--gold)' }}>Mirror of Fate</span>
                           </div>
-                          <button className="btn btn-gold" onClick={() => handleBuyBaseUpgrade('talent_observatory')} disabled={base.gold < obs.next_cost} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
+                          <button className="btn btn-gold" onClick={() => handleBuyBaseUpgrade('mirror_of_fate')} disabled={base.gold < obs.next_cost} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
                             Build ({obs.next_cost}g)
                           </button>
                         </div>

@@ -9,7 +9,6 @@ router = APIRouter()
 @router.get("/")
 def get_base():
     from services.time_service import process_fatigue_decay, process_passive_generation
-    from services.training_service import process_training_xp
     from services.research_service import process_mage_research
     from services.alchemist_service import process_alchemist_lab
     from services.restaurant_service import process_restaurant
@@ -19,7 +18,6 @@ def get_base():
     with db() as conn:
         process_fatigue_decay(conn)
         process_passive_generation(conn)
-        process_training_xp(conn)
         process_mage_research(conn)
         process_alchemist_lab(conn)
         process_restaurant(conn)
@@ -357,13 +355,13 @@ def get_inventory():
 
 
 def _eligible_consumable_names(conn) -> set:
-    """Bandage plus every healing-capable Potion/Scroll — the same
+    """Bandage plus every healing- or mana-capable Potion/Scroll — the same
     "drinkable in a fight" set combat already restricts auto-use to,
     so equip choices can't point at e.g. a non-healing Scroll of Insight."""
     from services.alchemist_service import POTION_CATALOG
     from services.research_service import SCROLL_CATALOG
     names = {"Bandage"}
-    names.update(p["name"] for p in POTION_CATALOG if "heal_pct" in p["effect"])
+    names.update(p["name"] for p in POTION_CATALOG if "heal_pct" in p["effect"] or "mana_pct" in p["effect"])
     names.update(s["name"] for s in SCROLL_CATALOG if "heal_pct" in s["effect"])
     return names
 
@@ -487,12 +485,9 @@ def use_item(req: UseItemRequest):
 # ─── Base upgrades endpoints ────────────────────────────────────────
 
 DEFAULT_UPGRADES = [
-    {"id": "barracks", "name": "Barracks", "description": "Increase max team size.", "max_level": 5},
     {"id": "infirmary", "name": "Infirmary", "description": "Improve rest recovery rates.", "max_level": 5},
     {"id": "forge", "name": "Forge", "description": "Improves the quality of crafted equipment.", "max_level": 5},
-    {"id": "archive", "name": "Archive", "description": "Reveal hero aptitudes faster.", "max_level": 3},
-    {"id": "chapel", "name": "Chapel", "description": "Reduce trauma buildup.", "max_level": 5},
-    {"id": "talent_observatory", "name": "Talent Observatory", "description": "Pay gold to reveal a hero's Talent immediately, instead of waiting on Archive's passive per-level reveal.", "max_level": 3},
+    {"id": "mirror_of_fate", "name": "Mirror of Fate", "description": "Pay gold to reveal a hero's Talent immediately.", "max_level": 3},
 ]
 
 UPGRADE_GOLD_COST = {
@@ -532,7 +527,7 @@ def get_upgrades():
     results = []
     for r in rows:
         upgrade = dict(r)
-        if upgrade["id"] == "talent_observatory" and highest_floor < 5:
+        if upgrade["id"] == "mirror_of_fate" and highest_floor < 5:
             continue
             
         current_level = upgrade.get("level", 0)
@@ -540,7 +535,7 @@ def get_upgrades():
         next_level = current_level + 1
         upgrade["is_maxed"] = current_level >= max_level
         
-        if upgrade["id"] == "talent_observatory":
+        if upgrade["id"] == "mirror_of_fate":
             obs_costs = {1: 2500, 2: 10000, 3: 25000}
             upgrade["next_cost"] = obs_costs.get(next_level, 25000)
         else:
@@ -569,7 +564,7 @@ def buy_upgrade(data: UpgradeRequest):
 
         next_level = current_level + 1
         
-        if data.upgrade_id == "talent_observatory":
+        if data.upgrade_id == "mirror_of_fate":
             obs_costs = {1: 2500, 2: 10000, 3: 25000}
             cost = obs_costs.get(next_level, 25000)
         else:
@@ -578,7 +573,7 @@ def buy_upgrade(data: UpgradeRequest):
         base = conn.execute("SELECT gold, highest_floor FROM base WHERE id = 1").fetchone()
         
         if data.upgrade_id == "talent_observatory" and base["highest_floor"] < 5:
-            raise HTTPException(status_code=400, detail="Must reach Floor 5 to unlock Talent Observatory.")
+            raise HTTPException(status_code=400, detail="Must reach Floor 5 to unlock the Mirror of Fate.")
 
         if base["gold"] < cost:
             raise HTTPException(
@@ -610,7 +605,7 @@ def reveal_hero_talent(data: TalentRevealRequest):
     services/level_service.py's reveal_talent_observatory for how this
     differs from Archive's free, passive, per-level aptitude reveal."""
     from services.base_service import get_base_upgrade_level
-    from services.level_service import get_talent_observatory_cost, reveal_talent_observatory
+    from services.level_service import get_mirror_of_fate_cost, reveal_mirror_of_fate
 
     with db() as conn:
         hero = conn.execute("SELECT * FROM heroes WHERE id = ?", (data.hero_id,)).fetchone()
@@ -620,13 +615,13 @@ def reveal_hero_talent(data: TalentRevealRequest):
         if hero.get("talent_reveal"):
             raise HTTPException(status_code=400, detail="This hero's Talent has already been revealed.")
 
-        cost = get_talent_observatory_cost(hero)
+        cost = get_mirror_of_fate_cost(hero)
         base = conn.execute("SELECT gold FROM base WHERE id = 1").fetchone()
         if base["gold"] < cost:
             raise HTTPException(status_code=400, detail=f"Not enough gold. Need {cost}, have {base['gold']}.")
 
-        observatory_level = get_base_upgrade_level(conn, "talent_observatory")
-        revealed = reveal_talent_observatory(hero, observatory_level)
+        mirror_level = get_base_upgrade_level(conn, "mirror_of_fate")
+        revealed = reveal_mirror_of_fate(hero, mirror_level)
 
         conn.execute("UPDATE base SET gold = gold - ? WHERE id = 1", (cost,))
         conn.execute("UPDATE heroes SET talent_reveal = ? WHERE id = ?", (revealed, data.hero_id))
@@ -854,74 +849,6 @@ class RemoveFacilityReq(BaseModel):
 def remove_hero_facility(req: RemoveFacilityReq):
     from services.facility_service import remove_hero_from_facility
     return remove_hero_from_facility(req.hero_id)
-
-class TrainingConfigReq(BaseModel):
-    facility_id: int
-    hero_id: int
-    role: str
-    target_skill_id: str = None
-    target_hero_id: int = None
-
-@router.post("/facilities/training-config")
-def config_training(req: TrainingConfigReq):
-    from services.training_service import assign_training
-    try:
-        return assign_training(req.facility_id, req.hero_id, req.role, req.target_skill_id, req.target_hero_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-class TrainSkillReq(BaseModel):
-    hero_id: int
-    skill_id: str
-    sparring_partner_id: int = None
-
-@router.post("/facilities/training-grounds/train")
-def train_skill(req: TrainSkillReq):
-    with db() as conn:
-        # Verify they are in training grounds
-        assigned = conn.execute("""
-            SELECT fa.facility_id FROM facility_assignments fa
-            JOIN facilities f ON fa.facility_id = f.id
-            WHERE fa.hero_id = ? AND f.type = 'Training Grounds'
-        """, (req.hero_id,)).fetchone()
-        
-        if not assigned:
-            raise HTTPException(status_code=400, detail="Hero must be assigned to Training Grounds to train.")
-            
-        hero = conn.execute("SELECT skills, level, fatigue FROM heroes WHERE id = ?", (req.hero_id,)).fetchone()
-        skills = json.loads(hero["skills"]) if hero["skills"] else []
-        
-        target_skill = next((s for s in skills if s["id"] == req.skill_id), None)
-        if not target_skill:
-            raise HTTPException(status_code=400, detail="Skill not found.")
-            
-        if target_skill.get("level", 1) >= 10:
-            raise HTTPException(status_code=400, detail="Skill is max level for this tier. Advance tier in the tower.")
-            
-        xp_gain = 20
-        # If there's a sparring partner, verify they are also in training grounds
-        if req.sparring_partner_id:
-            partner_assigned = conn.execute("""
-                SELECT fa.facility_id FROM facility_assignments fa
-                JOIN facilities f ON fa.facility_id = f.id
-                WHERE fa.hero_id = ? AND f.type = 'Training Grounds'
-            """, (req.sparring_partner_id,)).fetchone()
-            if not partner_assigned:
-                raise HTTPException(status_code=400, detail="Sparring partner must also be in Training Grounds.")
-            xp_gain += 30 # Teacher/Sparring bonus!
-            
-        target_skill["xp"] = target_skill.get("xp", 0) + xp_gain
-        leveled_up = False
-        if target_skill["xp"] >= target_skill.get("max_xp", 100):
-            target_skill["level"] = target_skill.get("level", 1) + 1
-            target_skill["xp"] -= target_skill.get("max_xp", 100)
-            target_skill["max_xp"] = int(target_skill.get("max_xp", 100) * 1.5)
-            leveled_up = True
-            
-        # Training causes fatigue
-        conn.execute("UPDATE heroes SET skills = ?, fatigue = fatigue + 10 WHERE id = ?", (json.dumps(skills), req.hero_id))
-        
-        return {"ok": True, "xp_gained": xp_gain, "leveled_up": leveled_up, "new_level": target_skill["level"]}
 
 RESEARCH_UPGRADES = {
     "gold_boost": {"name": "Alchemical Transmutation", "desc": "+5% Gold from Tower", "max_level": 5, "base_cost": 100},

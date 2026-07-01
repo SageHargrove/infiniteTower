@@ -234,6 +234,110 @@ class PullRequest(BaseModel):
     count: int = 1
     currency: str = "gem"  # "gem" (2-7★, premium) or "gold" (1-4★, cheap/common)
 
+def _create_one_hero(birth_star: int, is_synergy: bool = False, is_leader: bool = False,
+                      current_synergy: str = None, synergy_theme_desc: str = "") -> dict:
+    """The actual hero-creation pipeline (stats/aptitudes/class/skills/
+    traits/portrait-claim-or-queue/insert/LLM-enrich-in-background) for a
+    single hero at an already-decided birth_star — extracted out of
+    pull_heroes' per-iteration loop body so a Summon Ticket (guaranteed
+    star, no pity/cost) can reuse the exact same pipeline instead of a
+    second hand-maintained copy."""
+    import random
+    stats = generate_base_stats(birth_star)
+    aptitudes = generate_aptitudes(birth_star)
+
+    cached_data = pop_cached_portrait(birth_star)
+    old_path, p_gender, p_class = cached_data if cached_data else (None, None, None)
+
+    hero_class, hidden_class = assign_class(birth_star)
+    if p_class:
+        hero_class = p_class
+    stats = apply_class_stat_bias(stats, hero_class)
+
+    from services.skills_service import assign_initial_skills
+    from services.traits_service import generate_traits
+    skills = assign_initial_skills(hero_class, birth_star)
+    skills_json = json.dumps(skills)
+    traits = generate_traits(birth_star)
+    traits_json = json.dumps(traits)
+
+    pilot = 1 if can_pilot(hero_class) else 0
+
+    if is_leader:
+        for k in aptitudes:
+            aptitudes[k] = min(100, aptitudes[k] + random.randint(10, 20))
+        stats["max_health"] += 25
+        stats["health"] = stats["max_health"]
+        stats["strength"] += 5
+        stats["intelligence"] += 3
+
+    extra_prompt = ""
+    if is_synergy:
+        extra_prompt = f" Make them a member of {current_synergy}. In the visual prompt, describe them {synergy_theme_desc}."
+    if is_leader:
+        extra_prompt += " They are the powerful LEADER of this group."
+    if p_class:
+        extra_prompt += f" This hero's class is {p_class}."
+    if p_gender and p_gender != "unknown":
+        extra_prompt += f" This hero is {p_gender}."
+
+    profile = build_instant_profile(birth_star, p_gender, synergy_theme_desc if is_synergy else None)
+
+    if old_path:
+        portrait_path = old_path
+    else:
+        portrait_path = f"static/portraits/defaults/default_{hero_class.lower().replace(' ', '_')}.png"
+
+    with db() as conn:
+        cursor = conn.execute("""
+            INSERT INTO heroes (
+                name, title, backstory, personality, portrait_path, gender,
+                birth_star, hero_class, hidden_class, can_pilot, level, skills, traits,
+                health, max_health, strength, intelligence, defense, endurance, agility, willpower, luck,
+                apt_combat, apt_tactical, apt_survival, apt_mental, apt_leadership, apt_diligence,
+                synergy_group, ego_type
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            profile.name, profile.title, profile.backstory,
+            profile.personality, portrait_path, getattr(profile, "gender", "unknown"),
+            birth_star, hero_class, hidden_class, pilot, 1, skills_json, traits_json,
+            stats["health"], stats["max_health"], stats["strength"], stats["intelligence"], stats["defense"], stats["endurance"], stats["agility"], stats["willpower"], stats["luck"],
+            aptitudes["apt_combat"], aptitudes["apt_tactical"], aptitudes["apt_survival"],
+            aptitudes["apt_mental"], aptitudes["apt_leadership"], aptitudes["apt_diligence"],
+            current_synergy, getattr(profile, "ego_type", None)
+        ))
+        hero_id = cursor.lastrowid
+
+        if portrait_path and "cached_" in portrait_path:
+            import os, time
+            import database
+            custom_dir = f"static/portraits/{database.ACTIVE_PROFILE}/alive"
+            os.makedirs(custom_dir, exist_ok=True)
+            safe_name = profile.name.replace(" ", "_").lower()
+            new_path = f"{custom_dir}/custom_hero_{hero_id}_{safe_name}_{int(time.time())}.png"
+            try:
+                os.rename(portrait_path, new_path)
+                conn.execute("UPDATE heroes SET portrait_path = ? WHERE id = ?", (new_path, hero_id))
+                conn.execute("DELETE FROM portrait_cache WHERE path = ?", (portrait_path,))
+                portrait_path = new_path
+                from services.portrait_cache import _prewarm_card
+                threading.Thread(target=_prewarm_card, args=(hero_id, new_path), daemon=True).start()
+            except Exception as e:
+                print(f"Failed to rename cached portrait: {e}")
+
+        hero = conn.execute("SELECT * FROM heroes WHERE id = ?", (hero_id,)).fetchone()
+        hero_dict = dict(hero)
+        from services.dialogue_service import get_hero_line
+        hero_dict["chatter_line"] = get_hero_line(hero_dict["hero_class"], hero_dict["birth_star"], "summon")
+
+    finalize_hero_async(
+        hero_id, birth_star, aptitudes, extra_prompt,
+        needs_custom_portrait="default_" in portrait_path,
+        fallback_gender=profile.gender,
+        fallback_portrait_prompt=profile.portrait_prompt,
+    )
+    return hero_dict
+
 @router.post("/pull")
 def pull_heroes(req: PullRequest):
     if req.count < 1 or req.count > 10:
@@ -319,130 +423,61 @@ def pull_heroes(req: PullRequest):
             conn.execute("UPDATE base SET pity_counter = ?, spark_points = ? WHERE id = 1",
                          (pity, sparks))
 
-        stats = generate_base_stats(birth_star)
-        aptitudes = generate_aptitudes(birth_star)
-        
-        cached_data = pop_cached_portrait(birth_star)
-        old_path, p_gender, p_class = cached_data if cached_data else (None, None, None)
-        
-        hero_class, hidden_class = assign_class(birth_star)
-        if p_class:
-            hero_class = p_class
-        stats = apply_class_stat_bias(stats, hero_class)
+        hero_dict = _create_one_hero(birth_star, is_synergy, is_leader, current_synergy, synergy_theme_desc)
+        results.append(hero_dict)
 
-        # Assign starting skills and traits
-        from services.skills_service import assign_initial_skills
-        from services.traits_service import generate_traits
-        skills = assign_initial_skills(hero_class, birth_star)
-        skills_json = json.dumps(skills)
-        traits = generate_traits(birth_star)
-        traits_json = json.dumps(traits)
-
-        # Basic stat scaling logic
-        # 1-star: 1x, 2-star: 1.5x, 3-star: 2x, 4-star: 3x, 5-star: 4.5x, 6-star: 7x, 7-star: 10x
-        multipliers = {1: 1.0, 2: 1.5, 3: 2.0, 4: 3.0, 5: 4.5, 6: 7.0, 7: 10.0}
-        mult = multipliers.get(birth_star, 1.0)
-        pilot = 1 if can_pilot(hero_class) else 0
-
-        # Force leader to have higher aptitudes to ensure they are visibly stronger
-        if is_leader:
-            for k in aptitudes:
-                aptitudes[k] = min(100, aptitudes[k] + random.randint(10, 20))
-            stats["max_health"] += 25
-            stats["health"] = stats["max_health"]
-            stats["strength"] += 5
-            stats["intelligence"] += 3
-
-        # Build extra LLM prompt context, but don't call the LLM yet — the
-        # pull must return instantly, so text generation happens in the
-        # background after the hero is already inserted with a placeholder.
-        extra_prompt = ""
-        if is_synergy:
-            extra_prompt = f" Make them a member of {current_synergy}. In the visual prompt, describe them {synergy_theme_desc}."
-        if is_leader:
-            extra_prompt += " They are the powerful LEADER of this group."
-        if p_class:
-            extra_prompt += f" This hero's class is {p_class}."
-        if p_gender and p_gender != "unknown":
-            extra_prompt += f" This hero is {p_gender}."
-
-        profile = build_instant_profile(birth_star, p_gender, synergy_theme_desc if is_synergy else None)
-
-        # Claim cached portrait instantly, or use default placeholder
-        if old_path:
-            portrait_path = old_path
-        else:
-            # No cached portrait available — use a default and queue generation
-            portrait_path = f"static/portraits/defaults/default_{hero_class.lower().replace(' ', '_')}.png"
-
-        with db() as conn:
-            cursor = conn.execute("""
-                INSERT INTO heroes (
-                    name, title, backstory, personality, portrait_path, gender,
-                    birth_star, hero_class, hidden_class, can_pilot, level, skills, traits,
-                    health, max_health, strength, intelligence, defense, endurance, agility, willpower, luck,
-                    apt_combat, apt_tactical, apt_survival, apt_mental, apt_leadership, apt_diligence,
-                    synergy_group, ego_type
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                profile.name, profile.title, profile.backstory,
-                profile.personality, portrait_path, getattr(profile, "gender", "unknown"),
-                birth_star, hero_class, hidden_class, pilot, 1, skills_json, traits_json,
-                stats["health"], stats["max_health"], stats["strength"], stats["intelligence"], stats["defense"], stats["endurance"], stats["agility"], stats["willpower"], stats["luck"],
-                aptitudes["apt_combat"], aptitudes["apt_tactical"], aptitudes["apt_survival"],
-                aptitudes["apt_mental"], aptitudes["apt_leadership"], aptitudes["apt_diligence"],
-                current_synergy, getattr(profile, "ego_type", None)
-            ))
-            hero_id = cursor.lastrowid
-
-            # No persisted starting weapon — heroes are genuinely weaponless
-            # in the Vault by default now. equipment_service.py's
-            # ensure_hero_has_weapon injects an in-memory-only placeholder
-            # at combat time instead, so there's nothing here to clutter
-            # the inventory or need hiding.
-
-            # Convert cached image to a permanent custom image instantly
-            if portrait_path and "cached_" in portrait_path:
-                import os, time
-                import database
-                custom_dir = f"static/portraits/{database.ACTIVE_PROFILE}/alive"
-                os.makedirs(custom_dir, exist_ok=True)
-                safe_name = profile.name.replace(" ", "_").lower()
-                new_path = f"{custom_dir}/custom_hero_{hero_id}_{safe_name}_{int(time.time())}.png"
-                try:
-                    os.rename(portrait_path, new_path)
-                    conn.execute("UPDATE heroes SET portrait_path = ? WHERE id = ?", (new_path, hero_id))
-                    conn.execute("DELETE FROM portrait_cache WHERE path = ?", (portrait_path,))
-                    portrait_path = new_path
-                    # Card compositing (rembg cutout) is slow — do it now in the
-                    # background instead of leaving it for whichever request
-                    # first loads this hero's card, which used to be the
-                    # player's own page load stalling every portrait at once.
-                    from services.portrait_cache import _prewarm_card
-                    threading.Thread(target=_prewarm_card, args=(hero_id, new_path), daemon=True).start()
-                except Exception as e:
-                    print(f"Failed to rename cached portrait: {e}")
-
-            hero = conn.execute("SELECT * FROM heroes WHERE id = ?", (hero_id,)).fetchone()
-            hero_dict = dict(hero)
-            from services.dialogue_service import get_hero_line
-            hero_dict["chatter_line"] = get_hero_line(hero_dict["hero_class"], hero_dict["birth_star"], "summon")
-            results.append(hero_dict)
-
-        # Enrich name/lore via the LLM in the background, and queue a custom
-        # portrait too if we never had a cached one to claim.
-        finalize_hero_async(
-            hero_id, birth_star, aptitudes, extra_prompt,
-            needs_custom_portrait="default_" in portrait_path,
-            fallback_gender=profile.gender,
-            fallback_portrait_prompt=profile.portrait_prompt,
-        )
+    with db() as conn:
+        conn.execute("UPDATE base SET total_summons = total_summons + ? WHERE id = 1", (req.count,))
 
     with db() as conn:
         base_row = conn.execute("SELECT gems FROM base WHERE id = 1").fetchone()
         new_gems = base_row["gems"] if base_row else 0
 
     return {"pulled": results, "cost": cost, "gems": new_gems}
+
+class UseTicketRequest(BaseModel):
+    item_name: str  # e.g. "5-Star Summon Ticket"
+
+@router.post("/use-ticket")
+def use_summon_ticket(req: UseTicketRequest):
+    """Consume a Summon Ticket from inventory for one guaranteed-minimum-
+    star hero pull. Reuses _create_one_hero (the same pipeline a normal
+    gacha pull uses) directly at a forced birth_star — no currency cost,
+    no pity interaction, since the ticket itself was already the cost."""
+    try:
+        min_star = int(req.item_name.split("-")[0])
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail="Not a valid summon ticket.")
+    if min_star not in (4, 5, 6, 7):
+        raise HTTPException(status_code=400, detail="Not a valid summon ticket.")
+
+    with db() as conn:
+        row = conn.execute(
+            "SELECT id, quantity FROM inventory WHERE item_name = ? AND item_type = 'summon_ticket'",
+            (req.item_name,)
+        ).fetchone()
+        if not row or row["quantity"] < 1:
+            raise HTTPException(status_code=400, detail=f"You don't have a {req.item_name}.")
+
+        base_row = conn.execute("SELECT max_roster_size FROM base WHERE id = 1").fetchone()
+        roster_count = conn.execute("SELECT COUNT(*) AS c FROM heroes WHERE is_alive = 1").fetchone()["c"]
+        max_roster = (base_row["max_roster_size"] if base_row else 10) or 10
+        if roster_count + 1 > max_roster:
+            raise HTTPException(status_code=400, detail=f"Roster is full ({roster_count}/{max_roster}) — upgrade your base or release/lose heroes first.")
+
+        new_qty = row["quantity"] - 1
+        if new_qty <= 0:
+            conn.execute("DELETE FROM inventory WHERE id = ?", (row["id"],))
+        else:
+            conn.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_qty, row["id"]))
+
+    birth_star = pull_rarity(min_star=min_star, max_star=7, currency="gem")
+    hero_dict = _create_one_hero(birth_star)
+
+    with db() as conn:
+        conn.execute("UPDATE base SET total_summons = total_summons + 1 WHERE id = 1")
+
+    return {"pulled": [hero_dict]}
 
 @router.post("/equipment-pull")
 def pull_equipment(req: PullRequest):
@@ -543,7 +578,7 @@ def equip_spark_redeem():
     """Spend equip spark points (gem equipment pulls only) for a guaranteed
     random A-tier (A-/A/A+) item."""
     import random
-    from services.equipment_service import _roll_equipment_stats, RARITY_MULTS, EQUIPMENT_ADJECTIVES, save_equipment
+    from services.equipment_service import _roll_equipment_stats, RARITY_MULTS, EQUIPMENT_ADJECTIVES, _display_type_name, save_equipment
 
     with db() as conn:
         base = conn.execute("SELECT equip_spark_points FROM base WHERE id = 1").fetchone()
@@ -557,7 +592,7 @@ def equip_spark_redeem():
         eq_type = random.choice(["Weapon", "Armor", "Accessory"])
         mult = RARITY_MULTS[rarity]
         stats = _roll_equipment_stats(eq_type, mult)
-        name = f"{EQUIPMENT_ADJECTIVES.get(rarity, rarity)} {eq_type}"
+        name = f"{EQUIPMENT_ADJECTIVES.get(rarity, rarity)} {_display_type_name(eq_type, stats)}"
         equip_dict = {"name": name, "type": eq_type, "rarity": rarity, "level": 1, **stats}
         equip_id = save_equipment(equip_dict, conn=conn)
         equip_dict["id"] = equip_id

@@ -52,13 +52,24 @@ runs fine without it, portraits just won't regenerate.
 ## How to Play
 
 1. **Summon** → pull heroes with gold/gems.
-2. **Heroes** → review hero stats, classes, aptitudes, Egos; set your team(s) (5 per team).
-3. **Tower** → enter and advance floor by floor. Combat resolves automatically;
-   deaths are permanent and leave a Legacy bonus for your roster.
+2. **Heroes** → review hero stats, classes, aptitudes, Egos, skills (5-tier
+   class-specific active/passive kits), traits, and weapon/armor affinity;
+   set your team(s) (5 per team).
+3. **Tower** → enter and advance floor by floor — combat, event (narrative
+   choice, sometimes turning into a real fight), explore, escort, survival,
+   and other floor types. Combat resolves automatically; deaths are
+   permanent and leave a Legacy bonus for your roster. Floor type/blurb
+   stays hidden (?) until you've actually visited it once.
 4. **Base** → between climbs, assign heroes to Facilities (Forge, Infirmary,
-   Market, etc.) and Base Upgrades, rest the roster, manage materials/equipment,
-   and read the Hero Chatter log.
+   Market, etc.) and Base Upgrades, rest the roster, manage materials/equipment
+   (including weapon types — Sword/Spear/Staff/Bow/Dagger — and armor types —
+   Robe/Light/Brigandine/Heavy — each with class-restricted equip and their
+   own stat flavor), and read the Hero Chatter log / Lore Journal.
 5. **Arena** → PvP against another player's snapshot team (see Known Gaps below).
+6. **Achievements** → singleplayer milestones (floors, summons, battles, gear,
+   wealth) plus a few PvP-rating ones that just sit locked until Arena is
+   live. Rewards are gems, and for the hardest ones, a Summon Ticket — a
+   consumable (Items tab) that guarantees a 4★+/5★+/6★+/7★+ hero pull.
 
 ---
 
@@ -68,9 +79,12 @@ runs fine without it, portraits just won't regenerate.
 backend/
   main.py                    # FastAPI app, CORS, serves frontend dist/ + static assets
   database.py                # SQLite schema, per-profile save files (saves/<profile>.db)
-  services/                  # Game logic — combat, gacha, classes, egos, legacies,
+  services/                  # Game logic — combat, gacha, classes (3-way schema:
+                              # core combat / support-combat / utility-profession,
+                              # plus weapon & armor type affinity), egos, legacies,
                               # equipment, facilities, materials, level/ascension,
-                              # skills, morale, events, LLM flavor text, portrait gen...
+                              # skills (full 5-tier kits per class lineage), morale,
+                              # events, LLM flavor text, portrait gen...
   routers/                   # API endpoints — heroes, gacha, tower, base, runs,
                               # equipment, relics, crafting, arena, profiles, chat
   static/portraits/          # Hero/enemy/boss art (git-ignored, locally generated)
@@ -79,7 +93,8 @@ frontend/src/
   App.jsx                    # Tab layout, forced onboarding tour, resource display
   api/client.js              # All API calls
   components/                # Reusable UI (HeroCard, CombatArena, tab tour overlay...)
-  pages/                     # SummonPage, HeroesPage, TowerPage, BasePage, ArenaPage, LogPage
+  pages/                     # SummonPage, HeroesPage, TowerPage, BasePage, ArenaPage,
+                              # AchievementsPage, InventoryPage, LogPage
 
 arena_server/                 # Separate small FastAPI service for Arena match
                                # resolution — not the main game backend.
@@ -89,8 +104,27 @@ arena_server/                 # Separate small FastAPI service for Arena match
 
 ## Known Gaps
 
-- **Arena PvP** — the local backend only builds and submits a team snapshot;
-  match resolution lives in the separate `arena_server/` and that loop isn't
-  fully closed end-to-end yet (no live opponent matching/leaderboard in the main app).
-- **Leaderboards / achievements** — not started.
+- **Arena PvP** — fully wired end-to-end (ArenaPage.jsx -> arenaServerClient.js
+  -> arena_server/, with the main backend just exporting a team snapshot via
+  /arena/team/{id}/snapshot). Matchmaking and leaderboards are implemented in
+  arena_server/. Not currently running as a live service — the game's combat/
+  skill/equipment systems are still changing too often for a hosted PvP server
+  to stay balanced — but there's no missing infrastructure, just a deliberate
+  choice not to launch it yet. **One real gap:** arena_server has no way to
+  report match results back to a player's local profile/save, so the
+  Achievements system's 3 PvP-rating achievements (Arena Debut/Gladiator/
+  Champion, gated on `base.arena_wins`) will stay at 0 progress until that
+  result-reporting round trip is built — they're visible in the list either
+  way, per design, just locked.
+- **Achievements** — implemented (`services/achievement_service.py`,
+  `routers/achievements.py`, AchievementsPage.jsx): 34 achievements across
+  Tower/Summoning/Roster/Combat/Economy/Equipment/Arena, computed live off
+  existing save state plus 4 new counters on `base`
+  (total_summons/total_battles_won/arena_wins/arena_losses). Rewards are
+  mostly gems; the hardest ones grant a Summon Ticket.
+- **Summon Tickets** — implemented (`/gacha/use-ticket`, item_type
+  `summon_ticket` in `inventory`): a guaranteed-minimum-star single hero
+  pull (4★/5★/6★/7★ tiers), reusing the same hero-creation pipeline as a
+  normal gacha pull. Currently only obtainable as Achievement rewards —
+  there's no separate event-drop or shop-purchase path for them yet.
 - **Enemy roster overhaul art** — waves of floors is implemented; enemy art needs polish

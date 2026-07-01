@@ -8,17 +8,19 @@ import random
 # even once unlocked, layered on top of (not replacing) the D-S quality roll.
 CRAFTING_MATERIALS = [
     "Slime Core", "Iron Ore", "Goblin Ear", "Monster Bone", "Mystic Dust",
-    "Steel", "Copper", "Leather",
+    "Steel", "Copper", "Leather", "Imp Horn", "Tattered Cloth",
 ]
 
 INTERMEDIATE_CRAFTING_MATERIALS = [
     "Wolf Pelt", "Ogre Hide", "Hardened Bone", "Refined Iron", "Spirit Dust",
+    "Harpy Feather", "Lizard Hide", "Troll Sinew",
 ]
 INTERMEDIATE_MATERIAL_UNLOCK_FLOOR = 15
 INTERMEDIATE_MATERIAL_DROP_CHANCE = 0.25
 
 ADVANCED_CRAFTING_MATERIALS = [
     "Wyvern Scale", "Enchanted Steel", "Demon Ichor", "Runed Crystal",
+    "Griffon Talon", "Pit Fiend Horn", "Vampire Fang",
 ]
 ADVANCED_MATERIAL_UNLOCK_FLOOR = 40
 ADVANCED_MATERIAL_DROP_CHANCE = 0.20
@@ -26,7 +28,8 @@ ADVANCED_MATERIAL_DROP_CHANCE = 0.20
 # Legendary materials are named like end-game gear components — these are
 # the rarest tier, gated the furthest out and still a minority once unlocked.
 LEGENDARY_CRAFTING_MATERIALS = [
-    "Mithril", "Adamantine", "Dragon Scale", "Phoenix Feather", "Void Crystal",
+    "Mithril", "Adamantine", "Dragon Scale", "Dragon Fang", "Phoenix Feather", "Void Crystal",
+    "Celestial Shard", "Dracolich Marrow",
 ]
 LEGENDARY_MATERIAL_UNLOCK_FLOOR = 70
 LEGENDARY_MATERIAL_DROP_CHANCE = 0.15
@@ -57,17 +60,18 @@ def roll_material_name(floor_number: int = 1) -> str:
 # the mismatch would actually be noticed; anything not listed here falls
 # back to the existing generic floor-gated roll, same as before this fix.
 ENEMY_MATERIAL_HINTS = {
-    "Shadow Wisp": ["Slime Core"], "Acid Slime": ["Slime Core"],
     "Goblin": ["Goblin Ear"], "Goblin Warrior": ["Goblin Ear"], "Goblin Shaman": ["Goblin Ear"],
     "Hobgoblin": ["Goblin Ear"], "Hobgoblin Berserker": ["Goblin Ear"], "Goblin King": ["Goblin Ear"],
     "Bandit": ["Monster Bone"], "Kobold": ["Monster Bone"], "Skeleton": ["Monster Bone"],
-    "Dungeon Imp": ["Monster Bone"], "Dungeon Imp Alpha": ["Monster Bone"],
-    "Wolf": ["Wolf Pelt"], "Dire Wolf": ["Wolf Pelt"], "Wolf Alpha": ["Wolf Pelt"], "Mangy Hyena": ["Wolf Pelt"],
+    "Giant Spider": ["Monster Bone"], "Spider Queen": ["Monster Bone"], "Venomous Spider": ["Monster Bone"],
+    "Wolf": ["Wolf Pelt"], "Mangy Hyena": ["Wolf Pelt"],
     "Ogre": ["Ogre Hide"], "The Ashen Colossus": ["Ogre Hide"],
-    "Troll": ["Hardened Bone"], "The Troll King": ["Hardened Bone"], "Giant": ["Hardened Bone"],
-    "Wyvern": ["Wyvern Scale"], "Wyvern Stormrider": ["Wyvern Scale"],
-    "Demon": ["Demon Ichor"], "Pit Fiend": ["Demon Ichor"], "Archdemon": ["Demon Ichor"],
-    "Young Dragon": ["Dragon Scale"], "Dracolich": ["Dragon Scale"],
+    "Troll": ["Hardened Bone", "Troll Sinew"], "The Troll King": ["Hardened Bone", "Troll Sinew"], "Giant": ["Hardened Bone"],
+    "Harpy": ["Harpy Feather"], "Lizardman": ["Lizard Hide"],
+    "Wyvern": ["Wyvern Scale", "Griffon Talon"], "Wyvern Stormrider": ["Wyvern Scale", "Griffon Talon"],
+    "Demon": ["Demon Ichor"], "Pit Fiend": ["Demon Ichor", "Pit Fiend Horn"], "Archdemon": ["Demon Ichor", "Pit Fiend Horn"],
+    "Young Dragon": ["Dragon Scale"], "Adult Dragon": ["Dragon Scale", "Dragon Fang"], "Dracolich": ["Dragon Scale", "Dracolich Marrow"],
+    "Primordial Vampire": ["Vampire Fang"],
 }
 
 

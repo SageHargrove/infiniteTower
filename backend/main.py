@@ -11,7 +11,7 @@ env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
 
 from database import init_db, db
-from routers import heroes, gacha, tower, base, runs, equipment, profiles, chat, relics, crafting, arena
+from routers import heroes, gacha, tower, base, runs, equipment, profiles, chat, relics, crafting, arena, achievements
 
 init_db()
 
@@ -70,6 +70,7 @@ app.include_router(profiles.router, prefix="/profiles", tags=["Profiles"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 app.include_router(crafting.router, prefix="/forge", tags=["Forge"])
 app.include_router(arena.router, prefix="/arena", tags=["Arena"])
+app.include_router(achievements.router, prefix="/achievements", tags=["Achievements"])
 
 
 @app.get("/portrait-cache/status")

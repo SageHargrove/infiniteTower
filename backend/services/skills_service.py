@@ -83,6 +83,9 @@ SKILL_POOL = {
             {"id": "reckless_swing", "name": "Reckless Swing", "type": "active",
              "desc": "220% ATK single target", "cooldown": 4,
              "effect": {"dmg_pct": 2.2, "single_target": True, "mana_cost": 30}},
+            {"id": "adrenaline_rush", "name": "Adrenaline Rush", "type": "active",
+             "desc": "Recover 20% of your own max Health", "cooldown": 5,
+             "effect": {"self_heal_pct": 0.20, "mana_cost": 25}},
         ],
         "epic": [
             {"id": "undying_will", "name": "Undying Will", "type": "passive",
@@ -206,6 +209,9 @@ SKILL_POOL = {
             {"id": "impale", "name": "Impale", "type": "active",
              "desc": "300% ATK single target, ignore DEF", "cooldown": 5,
              "effect": {"dmg_pct": 3.0, "ignore_def": True, "mana_cost": 35}},
+            {"id": "spear_wall", "name": "Spear Wall", "type": "active",
+             "desc": "Reduce team damage taken 20% for 2 rounds", "cooldown": 5,
+             "effect": {"team_dmg_reduce": 0.20, "duration": 2, "mana_cost": 30}},
         ],
         "epic": [
             {"id": "phalanx", "name": "Phalanx Formation", "type": "passive",
@@ -315,6 +321,8 @@ SKILL_POOL = {
              "desc": "+10% SPD", "effect": {"agi_pct": 0.10}},
             {"id": "light_steps", "name": "Light Steps", "type": "passive",
              "desc": "+5% crit chance", "effect": {"crit_pct": 0.05}},
+            {"id": "evasive_instinct", "name": "Evasive Instinct", "type": "passive",
+             "desc": "+6% SPD, +4% dodge chance", "effect": {"agi_pct": 0.06, "dodge_pct": 0.04}},
         ],
         "uncommon": [
             {"id": "backstab", "name": "Backstab", "type": "active",
@@ -451,6 +459,9 @@ SKILL_POOL = {
             {"id": "headshot", "name": "Headshot", "type": "passive",
              "desc": "Crits deal 250% damage instead of 180%",
              "effect": {"crit_mult": 2.5}},
+            {"id": "toxic_arrows", "name": "Toxic Arrows", "type": "passive",
+             "desc": "Attacks apply 3% max Health poison for 3 rounds",
+             "effect": {"poison_pct": 0.03, "poison_duration": 3}},
         ],
         "epic": [
             {"id": "rain_of_arrows", "name": "Rain of Arrows", "type": "active",
@@ -570,6 +581,9 @@ SKILL_POOL = {
         "rare": [
             {"id": "chain_lightning", "name": "Chain Lightning", "type": "passive",
              "desc": "AoE damage increased by 25%", "effect": {"aoe_bonus": 0.25}},
+            {"id": "mana_burn", "name": "Mana Burn", "type": "active",
+             "desc": "180% ATK single target, ignore DEF", "cooldown": 3,
+             "effect": {"dmg_pct": 1.8, "single_target": True, "ignore_def": True, "mana_cost": 30}},
         ],
         "epic": [
             {"id": "time_warp", "name": "Time Warp", "type": "active",
@@ -713,6 +727,9 @@ SKILL_POOL = {
             {"id": "repair_drone", "name": "Repair Drone", "type": "active",
              "desc": "Restore 15% Health to lowest-Health ally", "cooldown": 4,
              "effect": {"heal_pct": 0.15, "mana_cost": 25}},
+            {"id": "overclock_strike", "name": "Overclock Strike", "type": "active",
+             "desc": "170% ATK to single target", "cooldown": 3,
+             "effect": {"dmg_pct": 1.7, "single_target": True, "mana_cost": 28}},
         ],
         "rare": [
             {"id": "emp_blast", "name": "EMP Blast", "type": "active",
@@ -738,6 +755,8 @@ SKILL_POOL = {
         "common": [
             {"id": "novice_prayer", "name": "Novice Prayer", "type": "passive",
              "desc": "+10% Health", "effect": {"hlt_pct": 0.10}},
+            {"id": "ward", "name": "Ward", "type": "passive",
+             "desc": "+5% damage reduction", "effect": {"dmg_reduction_pct": 0.05}},
             {"id": "mend", "name": "Mend", "type": "active",
              "desc": "Heal the lowest-Health ally for 15% of their max Health", "cooldown": 3,
              "effect": {"heal_pct": 0.15, "mana_cost": 20}},
@@ -898,6 +917,9 @@ SKILL_POOL = {
         "rare": [
             {"id": "arcane_parry", "name": "Arcane Parry", "type": "passive",
              "desc": "+8% damage reduction", "effect": {"dmg_reduction_pct": 0.08}},
+            {"id": "elemental_edge", "name": "Elemental Edge", "type": "active",
+             "desc": "190% ATK single target, ignore 15% DEF", "cooldown": 4,
+             "effect": {"dmg_pct": 1.9, "single_target": True, "ignore_def": True, "mana_cost": 32}},
         ],
         "epic": [
             {"id": "spellblade_flurry", "name": "Spellblade Flurry", "type": "active",

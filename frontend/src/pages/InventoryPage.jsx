@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { getInventory, listEquipment, getFacilities, listHeroes, useItem, scrapEquipment } from '../api/client'
+import { getInventory, listEquipment, getFacilities, listHeroes, useItem, useSummonTicket, scrapEquipment } from '../api/client'
+import { EquipmentTypeIcon } from '../components/EquipmentTypeIcon'
 
-const EQUIPMENT_ICONS = { Weapon: '⚔️', Armor: '🛡️', Accessory: '💍' }
-function equipmentIcon(item) {
-  return EQUIPMENT_ICONS[item.type] || '❓'
-}
-
-const CONSUMABLE_ICONS = { potion: '🧪', scroll: '📜' }
+const CONSUMABLE_ICONS = { potion: '🧪', scroll: '📜', summon_ticket: '🎫' }
+const CONSUMABLE_COLORS = { potion: 'var(--green)', scroll: '#a83dff', summon_ticket: 'var(--gold)' }
 
 // Equipment rarity is a 24-tier letter grade (F- through Z), a completely
 // different scale than hero star rarity (1-7) — the old code reused
@@ -89,8 +86,8 @@ export default function InventoryPage() {
   let allItems = []
   if (Array.isArray(inventory)) {
     inventory.forEach(item => {
-      if (item.item_type === 'potion' || item.item_type === 'scroll') {
-        allItems.push({ ...item, typeId: (item.item_type === 'potion' ? 'pot_' : 'scr_') + item.item_name, itemType: 'consumable' })
+      if (item.item_type === 'potion' || item.item_type === 'scroll' || item.item_type === 'summon_ticket') {
+        allItems.push({ ...item, typeId: item.item_type + '_' + item.item_name, itemType: 'consumable' })
       } else {
         allItems.push({ ...item, typeId: 'mat_' + item.item_name, itemType: 'material' })
       }
@@ -258,13 +255,13 @@ export default function InventoryPage() {
                 if (item.itemType === 'material') {
                   borderColor = 'var(--border-hi)'
                   content = <span style={{ fontSize: '1.5rem' }}>📦</span>
-                } else if (item.itemType === 'potion' || item.itemType === 'scroll') {
-                  borderColor = item.itemType === 'potion' ? 'var(--green)' : '#a83dff'
-                  content = <span style={{ fontSize: '1.5rem' }}>{CONSUMABLE_ICONS[item.itemType]}</span>
+                } else if (item.itemType === 'consumable') {
+                  borderColor = CONSUMABLE_COLORS[item.item_type]
+                  content = <span style={{ fontSize: '1.5rem' }}>{CONSUMABLE_ICONS[item.item_type]}</span>
                 } else if (item.itemType === 'equipment') {
                   borderColor = rarityColor(item.rarity)
                   bgColor = `rgba(255,255,255,0.05)`
-                  content = <span style={{ fontSize: '1.5rem', filter: `drop-shadow(0 0 4px ${rarityColor(item.rarity)})` }}>{equipmentIcon(item)}</span>
+                  content = <EquipmentTypeIcon item={item} fontSize="1.5rem" glow={rarityColor(item.rarity)} />
                 }
               }
 
@@ -305,7 +302,7 @@ export default function InventoryPage() {
                   {content}
                   
                   {/* Quantity Badge */}
-                  {item && (item.itemType === 'material' || item.itemType === 'potion' || item.itemType === 'scroll') && (
+                  {item && (item.itemType === 'material' || item.itemType === 'consumable') && (
                     <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--bg)', border: '1px solid var(--border-hi)', fontSize: '0.7rem', padding: '0 4px', borderRadius: 4, fontFamily: 'monospace', fontWeight: 'bold' }}>
                       {item.quantity}
                     </div>
@@ -318,10 +315,10 @@ export default function InventoryPage() {
                     </div>
                   )}
 
-                  {/* Weapon type badge on card */}
-                  {item && item.itemType === 'equipment' && item.weapon_type && (
+                  {/* Weapon/Armor type badge on card */}
+                  {item && item.itemType === 'equipment' && (item.weapon_type || item.armor_type) && (
                     <div style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.85)', border: '1px solid rgba(201,168,76,0.5)', borderRadius: 3, padding: '0 4px', fontSize: '0.6rem', color: 'var(--gold)', whiteSpace: 'nowrap' }}>
-                      {item.weapon_type}
+                      {item.weapon_type || item.armor_type}
                     </div>
                   )}
                 </div>
@@ -356,9 +353,9 @@ export default function InventoryPage() {
                 </div>
               )}
 
-              {(selectedItem.itemType === 'potion' || selectedItem.itemType === 'scroll') && (
+              {(selectedItem.item_type === 'potion' || selectedItem.item_type === 'scroll') && (
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <div style={{ fontSize: '4rem', textAlign: 'center', marginBottom: '1rem' }}>{CONSUMABLE_ICONS[selectedItem.itemType]}</div>
+                  <div style={{ fontSize: '4rem', textAlign: 'center', marginBottom: '1rem' }}>{CONSUMABLE_ICONS[selectedItem.item_type]}</div>
                   <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.8rem', textAlign: 'center', color: 'var(--text-hi)', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
                     {selectedItem.item_name}
                   </div>
@@ -410,10 +407,54 @@ export default function InventoryPage() {
                 </div>
               )}
 
+              {selectedItem.item_type === 'summon_ticket' && (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div style={{ fontSize: '4rem', textAlign: 'center', marginBottom: '1rem' }}>{CONSUMABLE_ICONS.summon_ticket}</div>
+                  <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.8rem', textAlign: 'center', color: 'var(--gold)', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                    {selectedItem.item_name}
+                  </div>
+                  <div className="text-dim" style={{ fontSize: '1.05rem', marginBottom: '1.5rem', textAlign: 'center', lineHeight: '1.5' }}>
+                    {selectedItem.description}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <span className="text-dim" style={{ fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '2px' }}>Owned</span>
+                    <span className="text-gold" style={{ fontSize: '1.6rem', fontFamily: 'Cinzel, serif', fontWeight: 'bold' }}>{selectedItem.quantity}</span>
+                  </div>
+
+                  <div style={{ marginTop: 'auto' }}>
+                    <button
+                      className="btn btn-gold"
+                      style={{ width: '100%', padding: '0.8rem' }}
+                      disabled={using}
+                      onClick={async () => {
+                        setUsing(true)
+                        setUseMessage(null)
+                        try {
+                          const res = await useSummonTicket(selectedItem.item_name)
+                          const hero = res?.pulled?.[0]
+                          setUseMessage(hero ? `Summoned ${hero.name} (${hero.birth_star}★)!` : 'Used!')
+                          await refresh()
+                          setSelectedItem(null)
+                        } catch (e) {
+                          setUseMessage(e.message)
+                        } finally {
+                          setUsing(false)
+                        }
+                      }}
+                    >
+                      {using ? 'Summoning...' : 'Use Ticket'}
+                    </button>
+                    {useMessage && (
+                      <div className="text-dim text-center" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>{useMessage}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {selectedItem.itemType === 'equipment' && (
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <div style={{ fontSize: '4rem', textAlign: 'center', marginBottom: '1rem', filter: `drop-shadow(0 0 20px ${rarityColor(selectedItem.rarity)})` }}>
-                    {equipmentIcon(selectedItem)}
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                    <EquipmentTypeIcon item={selectedItem} fontSize="4rem" glow={rarityColor(selectedItem.rarity)} />
                   </div>
                   
                   <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.8rem', textAlign: 'center', color: rarityColor(selectedItem.rarity), borderBottom: `1px solid ${rarityColor(selectedItem.rarity)}`, paddingBottom: '0.5rem', marginBottom: '0.2rem', textShadow: `0 0 10px ${rarityColor(selectedItem.rarity)}` }}>
@@ -422,10 +463,10 @@ export default function InventoryPage() {
                   <div style={{ textAlign: 'center', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '3px', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     {selectedItem.rarity}★ {selectedItem.type}
                   </div>
-                  {selectedItem.type === 'Weapon' && selectedItem.weapon_type && (
+                  {((selectedItem.type === 'Weapon' && selectedItem.weapon_type) || (selectedItem.type === 'Armor' && selectedItem.armor_type)) && (
                     <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
                       <span style={{ background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.4)', borderRadius: 4, padding: '0.2rem 0.7rem', fontSize: '0.8rem', color: 'var(--gold)', letterSpacing: '1px' }}>
-                        {selectedItem.weapon_type}
+                        {selectedItem.weapon_type || selectedItem.armor_type}
                       </span>
                     </div>
                   )}

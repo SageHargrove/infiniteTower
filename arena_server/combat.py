@@ -18,6 +18,7 @@ _BACKEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
+from services.gacha_service import mana_from_stats  # noqa: E402
 from services.combat_service import run_combat, CombatUnit, talent_score, get_hero_star  # noqa: E402
 
 
@@ -25,7 +26,22 @@ def _hero_dict_to_unit(h: dict) -> CombatUnit:
     """Mirrors the hero-side CombatUnit construction in
     combat_service.py's _resolve_combat_from_processed — same field
     mapping, but is_hero=False since this unit plays the "opponent" side
-    via run_combat's preset_enemies hook."""
+    via run_combat's preset_enemies hook.
+
+    Was missing max_mana/mana/mana_regen_per_turn, physical_resist_pct/
+    magic_resist_pct, and poison_on_hit — those were all added to the real
+    hero-construction loop after this function was first written and it
+    never got updated, so every arena opponent had 0 mana (could never
+    cast an active skill) and no resist passives while the submitting
+    player's own team had full access to both. Brought back in sync."""
+    poison_on_hit = None
+    for s in h.get("_skills", []):
+        eff = s.get("effect", {})
+        if "poison_pct" in eff:
+            poison_on_hit = {"pct": eff["poison_pct"], "duration": eff.get("poison_duration", 3)}
+            break
+    hero_max_mana = mana_from_stats(h["intelligence"], h.get("willpower", 6))
+
     return CombatUnit(
         id=h["id"], name=h["name"],
         level=h.get("level", 1),
@@ -36,6 +52,8 @@ def _hero_dict_to_unit(h: dict) -> CombatUnit:
         willpower=h.get("willpower", 6), luck=h.get("luck", 5),
         power_stat=h.get("power_stat", "strength"),
         dmg_reduction_pct=h.get("dmg_reduction_pct", 0.0),
+        physical_resist_pct=h.get("physical_resist_pct", 0.0),
+        magic_resist_pct=h.get("magic_resist_pct", 0.0),
         trauma=h.get("trauma", 0),
         hero_class=h.get("hero_class", "Classless"),
         is_ranged=h.get("is_ranged", False),
@@ -53,6 +71,10 @@ def _hero_dict_to_unit(h: dict) -> CombatUnit:
         hero_star=get_hero_star(h),
         battle_tendency=h.get("battle_tendency") or "Stoic",
         is_team_leader=bool(h.get("is_team_leader")),
+        max_mana=hero_max_mana,
+        mana=hero_max_mana // 2,
+        mana_regen_per_turn=max(1, hero_max_mana // 10),
+        poison_on_hit=poison_on_hit,
         is_hero=False,
     )
 

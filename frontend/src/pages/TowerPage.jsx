@@ -5,6 +5,7 @@ import { emitToast } from '../toastBus'
 import CombatArena from '../components/CombatArena'
 import FairyGuide from '../components/FairyGuide'
 import { CardFrame } from '../components/HeroCard'
+import { EquipmentTypeIcon } from '../components/EquipmentTypeIcon'
 
 const FLOOR_ICONS = {
   field_combat: '🗡️',
@@ -178,11 +179,11 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
                     <img
                       src={`http://localhost:8000/heroes/${h.id}/card-image?mini=true`}
                       draggable={false}
-                      style={{ width: '100%', height: 96, objectFit: 'cover', objectPosition: 'center 15%', borderRadius: 4 }}
+                      style={{ width: '100%', aspectRatio: '2 / 3', height: 'auto', objectFit: 'cover', objectPosition: 'center top', borderRadius: 4 }}
                       onError={(e) => { e.target.onerror = null; e.target.src = `http://localhost:8000/${h.portrait_path}` }}
                     />
                   ) : (
-                    <div style={{ width: '100%', height: 96, borderRadius: 4, background: 'var(--bg-panel)' }} />
+                    <div style={{ width: '100%', aspectRatio: '2 / 3', borderRadius: 4, background: 'var(--bg-panel)' }} />
                   )}
                 </CardFrame>
                 <div style={{ fontSize: '0.72rem', marginTop: '0.3rem', color: isMvp ? 'var(--star5)' : undefined }}>{h.name}</div>
@@ -262,9 +263,12 @@ function PostCombatScreen({ lastResult, combatEntities, onReturn, onRerun, busy 
             )}
 
             {lastResult.equipment_drop && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(74,154,106,0.1)', border: '1px solid var(--green)', borderRadius: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'rgba(74,154,106,0.1)', border: '1px solid var(--green)', borderRadius: 6 }}>
                 <span style={{ color: 'var(--green)' }}>Equipment Dropped</span>
-                <span>{lastResult.equipment_drop.name} ({lastResult.equipment_drop.rarity})</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <EquipmentTypeIcon item={lastResult.equipment_drop} fontSize="1.4rem" glow="var(--green)" />
+                  {lastResult.equipment_drop.name} ({lastResult.equipment_drop.rarity})
+                </span>
               </div>
             )}
 
@@ -540,10 +544,22 @@ export default function TowerPage({ onGoldChange }) {
     setError(null)
     try {
       const result = await resolveEvent(resolvedFloor || selectedFloor, deployTeamIds[0], pendingEvent.event.template_id, choiceId, pendingEvent.theme)
-      setEventResolution(result)
       setPendingEvent(null)
+      setEventResolution(result)
 
-      setPostCombatPhase(true);
+      if (result.combat) {
+        // The choice turned hostile — route through the same animated
+        // combat arena as a normal/Explore floor instead of jumping
+        // straight to the static narrative-only result box.
+        setLastResult(result)
+        setArenasFinished(0)
+        setTurnNarrations({})
+        setCombatEntities(mergedCombatEntities(result))
+        const tnIds = result.turn_narrative_ids || (result.turn_narrative_id != null ? [result.turn_narrative_id] : [])
+        tnIds.forEach((id, i) => pollTurnNarrative(id, i))
+      } else {
+        setPostCombatPhase(true)
+      }
 
       await refresh()
       if (onGoldChange) onGoldChange()
@@ -787,8 +803,18 @@ export default function TowerPage({ onGoldChange }) {
                     {eventResolution.choice_label || 'Event Resolved'}
                   </div>
                   <div style={{ lineHeight: 1.6, fontSize: '1.05rem' }}>
-                    {eventResolution.narrative}
+                    {eventResolution.event_narrative || eventResolution.narrative}
                   </div>
+                  {eventResolution.effects?.trait && (
+                    <div style={{ marginTop: '1rem', padding: '0.6rem 1rem', border: '1px solid var(--gold)', borderRadius: 6, background: 'rgba(201,168,76,0.08)', display: 'inline-block' }}>
+                      <div style={{ fontFamily: 'Cinzel, serif', color: 'var(--gold)', fontSize: '0.95rem' }}>
+                        ✦ New Trait: {eventResolution.effects.trait.name}
+                      </div>
+                      <div className="text-dim" style={{ fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                        {eventResolution.effects.trait.desc}
+                      </div>
+                    </div>
+                  )}
                   {eventResolution.effects?.gems > 0 && (
                     <div style={{ marginTop: '1rem', fontSize: '1.1rem', color: '#00ffff' }}>
                       +{eventResolution.effects.gems} 💎

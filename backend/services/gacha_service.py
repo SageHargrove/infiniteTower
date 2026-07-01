@@ -201,7 +201,7 @@ EQUIPMENT_PULL_ODDS = {
 }
 
 def pull_equipment_gacha(conn, currency: str = "gold") -> dict:
-    from services.equipment_service import _roll_equipment_stats, RARITY_MULTS, EQUIPMENT_ADJECTIVES
+    from services.equipment_service import _roll_equipment_stats, RARITY_MULTS, EQUIPMENT_ADJECTIVES, _display_type_name
     import random
 
     currency = currency if currency in EQUIPMENT_PULL_COST else "gold"
@@ -226,7 +226,7 @@ def pull_equipment_gacha(conn, currency: str = "gold") -> dict:
     eq_type = random.choice(["Weapon", "Armor", "Accessory"])
     mult = RARITY_MULTS[rarity]
     stats = _roll_equipment_stats(eq_type, mult)
-    name = f"{EQUIPMENT_ADJECTIVES.get(rarity, rarity)} {eq_type}"
+    name = f"{EQUIPMENT_ADJECTIVES.get(rarity, rarity)} {_display_type_name(eq_type, stats)}"
 
     return {
         "name": name, "type": eq_type, "rarity": rarity, "level": 1,

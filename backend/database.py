@@ -215,7 +215,14 @@ CREATE TABLE IF NOT EXISTS base (
             equip_spark_points INTEGER DEFAULT 0,
             last_training_tick TIMESTAMP,
             last_fatigue_tick TIMESTAMP
-        , last_research_tick TIMESTAMP, last_mage_tick TIMESTAMP, last_alchemist_tick TIMESTAMP, last_restaurant_tick TIMESTAMP, master_name TEXT, tutorial_complete INTEGER DEFAULT 0, difficulty TEXT DEFAULT 'normal');
+        , last_research_tick TIMESTAMP, last_mage_tick TIMESTAMP, last_alchemist_tick TIMESTAMP, last_restaurant_tick TIMESTAMP, master_name TEXT, tutorial_complete INTEGER DEFAULT 0, difficulty TEXT DEFAULT 'normal',
+            total_summons INTEGER DEFAULT 0, total_battles_won INTEGER DEFAULT 0,
+            arena_wins INTEGER DEFAULT 0, arena_losses INTEGER DEFAULT 0);
+
+CREATE TABLE IF NOT EXISTS achievements_claimed (
+            id TEXT PRIMARY KEY,
+            claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
 
 CREATE TABLE IF NOT EXISTS event_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -295,6 +302,7 @@ CREATE TABLE IF NOT EXISTS equipment (
             is_equipped_to INTEGER REFERENCES heroes(id),
             set_family TEXT,
             weapon_type TEXT,
+            armor_type TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -359,9 +367,6 @@ CREATE TABLE IF NOT EXISTS mail (
 );
 
 INSERT OR IGNORE INTO base (id) VALUES (1);
-INSERT INTO facilities (base_id, type, slots_unlocked) 
-SELECT 1, 'Training Grounds', 1 
-WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE type = 'Training Grounds');
 
 INSERT INTO recipes (name, type, description, materials_json, gold_cost, base_stat_mult, is_discovered)
 SELECT 'Basic Sword', 'weapon', 'A sturdy basic sword.', '{"Iron Ore": 3, "Monster Bone": 1}', 100, 1.0, 1
@@ -502,6 +507,27 @@ WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Void Ring');
         except sqlite3.OperationalError:
             pass
 
+        # Achievement-tracking counters. total_summons/total_battles_won
+        # backfill from existing data so a save that's been played for a
+        # while doesn't start every counter at zero — arena_wins/losses
+        # have no equivalent existing data (arena results live in the
+        # separate arena_server, not synced back here yet) so those start
+        # at 0 regardless of save age.
+        for col, default, backfill_sql in [
+            ("total_summons", "INTEGER DEFAULT 0", "UPDATE base SET total_summons = (SELECT COUNT(*) FROM heroes)"),
+            ("total_battles_won", "INTEGER DEFAULT 0", "UPDATE base SET total_battles_won = (SELECT COALESCE(SUM(lifetime_kills), 0) FROM heroes)"),
+            ("arena_wins", "INTEGER DEFAULT 0", None),
+            ("arena_losses", "INTEGER DEFAULT 0", None),
+            ("arena_elo", "INTEGER DEFAULT 1000", None),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE base ADD COLUMN {col} {default}")
+                if backfill_sql:
+                    conn.execute(backfill_sql)
+                print(f"[DB] Migrated: added column '{col}' to base")
+            except sqlite3.OperationalError:
+                pass
+
         # Stat rework: Endurance replaces Defense (same mitigation role, but
         # also drives max_health going forward) and Willpower/Luck are new.
         # Old defense/base_def columns are left in place, inert, rather than
@@ -574,6 +600,29 @@ WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Void Ring');
         except Exception as e:
             print(f"[DB] Migration error for The Lobby: {e}")
 
+        try:
+            conn.execute("UPDATE facilities SET type = 'Market' WHERE type = 'The Market'")
+            conn.execute("UPDATE facilities SET type = 'Farm' WHERE type = 'The Farm'")
+            conn.commit()
+        except Exception as e:
+            print(f"[DB] Migration error for Market/Farm rename: {e}")
+
+        try:
+            conn.execute("DELETE FROM facility_assignments WHERE facility_id IN (SELECT id FROM facilities WHERE type IN ('Training Grounds', 'Training Center', 'Training Facility', 'Watchtower'))")
+            conn.execute("DELETE FROM facilities WHERE type IN ('Training Grounds', 'Training Center', 'Training Facility', 'Watchtower')")
+            conn.commit()
+        except Exception as e:
+            print(f"[DB] Migration error removing unused facilities: {e}")
+
+        try:
+            for fac_type in ("Market", "Farm", "Infirmary", "Training Grounds"):
+                existing = conn.execute("SELECT id FROM facilities WHERE base_id = 1 AND type = ?", (fac_type,)).fetchone()
+                if not existing:
+                    conn.execute("INSERT INTO facilities (base_id, type, slots_unlocked) VALUES (1, ?, 1)", (fac_type,))
+            conn.commit()
+        except Exception as e:
+            print(f"[DB] Migration error seeding default facilities: {e}")
+
         # Floor type is rolled once per floor number and cached here so
         # re-entering the same floor (rerun) always gives the same floor type.
         conn.execute("""
@@ -637,6 +686,7 @@ WHERE NOT EXISTS (SELECT 1 FROM recipes WHERE name = 'Void Ring');
         eq_migrations = [
             ("set_family", "ALTER TABLE equipment ADD COLUMN set_family TEXT"),
             ("weapon_type", "ALTER TABLE equipment ADD COLUMN weapon_type TEXT"),
+            ("armor_type", "ALTER TABLE equipment ADD COLUMN armor_type TEXT"),
         ]
 
         # floor_cache.visited: mark previously-cleared floors as visited so

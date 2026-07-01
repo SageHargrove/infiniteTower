@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from services.equipment_service import get_all_equipment, craft_equipment, equip_item, unequip_item, scrap_equipment
+from services.equipment_service import get_all_equipment, craft_equipment, equip_item, unequip_item, unequip_all, auto_equip_hero, scrap_equipment
 from database import db
 
 router = APIRouter()
@@ -66,5 +66,22 @@ def do_unequip(req: UnequipReq):
 def do_scrap(req: ScrapReq):
     try:
         return scrap_equipment(req.equipment_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+class AutoEquipReq(BaseModel):
+    hero_id: int
+
+@router.post("/auto-equip")
+def do_auto_equip(req: AutoEquipReq):
+    try:
+        return auto_equip_hero(req.hero_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/unequip-all")
+def do_unequip_all(req: AutoEquipReq):
+    try:
+        return unequip_all(req.hero_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

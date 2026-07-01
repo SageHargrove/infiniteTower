@@ -102,20 +102,25 @@ function SkillCallout({ name }) {
   return (
     <div style={{
       position: 'absolute',
-      top: '-26px',
+      top: '-32px',
       left: '50%',
       transform: 'translate(-50%, -100%)',
-      color: 'var(--gold)',
+      color: '#fff',
       fontWeight: 'bold',
-      fontSize: '0.95rem',
+      fontSize: '1.15rem',
       whiteSpace: 'nowrap',
-      textShadow: '0 0 8px rgba(201,168,76,0.9), 0 2px 4px rgba(0,0,0,0.9)',
-      animation: 'floatUpAndFade 1.1s ease-out forwards',
+      background: 'rgba(201,168,76,0.25)',
+      border: '1px solid var(--gold)',
+      borderRadius: '6px',
+      padding: '0.15rem 0.7rem',
+      textShadow: '0 0 10px rgba(201,168,76,1), 0 2px 4px rgba(0,0,0,0.9)',
+      boxShadow: '0 0 16px rgba(201,168,76,0.7)',
+      animation: 'skillCalloutPop 1.3s ease-out forwards',
       zIndex: 101,
       pointerEvents: 'none',
       fontFamily: 'Cinzel, serif',
     }}>
-      ✦ {name}
+      ✦ {name} ✦
     </div>
   )
 }
@@ -161,12 +166,13 @@ function CombatUnitSprite({ unit, team, position, teamCount = 1, pos: posOverrid
         width: `${size.circle}px`,
         height: `${size.circle}px`,
         borderRadius: '50%',
-        border: `${tier === 'normal' ? 4 : 5}px solid ${team === 'hero' ? 'var(--gold)' : '#a44'}`,
+        border: `${skillName ? 6 : tier === 'normal' ? 4 : 5}px solid ${skillName ? '#fff' : team === 'hero' ? 'var(--gold)' : '#a44'}`,
         overflow: 'hidden',
         position: 'relative',
         background: '#1a1a24',
+        animation: skillName ? 'skillRingPulse 0.6s ease-out 2' : undefined,
         boxShadow: skillName
-          ? '0 0 28px 6px rgba(201,168,76,0.95)'
+          ? '0 0 45px 12px rgba(201,168,76,1)'
           : isActive
           ? `0 0 20px ${team === 'hero' ? 'var(--gold)' : '#a44'}`
           : tier !== 'normal' ? `0 0 14px ${team === 'hero' ? 'rgba(201,168,76,0.4)' : 'rgba(170,68,68,0.5)'}, 0 4px 10px rgba(0,0,0,0.5)`
@@ -363,6 +369,28 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
   const currentTurn = currentTurnIndex >= 0 && currentTurnIndex < turns.length ? turns[currentTurnIndex] : null
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    {/* Speed toggle — used to float absolutely positioned over the top-left
+        corner of the arena itself, overlapping sprites/UI there. Pulled
+        fully outside the arena's visual canvas into its own thin header
+        strip above it instead — still right where you'd look for it, but
+        no longer covering anything mid-fight. */}
+    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <button
+        onClick={toggleSpeed}
+        title="Toggle combat playback speed"
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.4rem',
+          fontSize: '0.78rem', padding: '0.35rem 0.7rem', borderRadius: 6,
+          fontFamily: 'Cinzel, serif',
+          background: speedMult === 2 ? 'rgba(201,168,76,0.25)' : 'rgba(10,10,14,0.85)',
+          border: `1px solid ${speedMult === 2 ? 'var(--gold)' : 'rgba(255,255,255,0.2)'}`,
+          color: speedMult === 2 ? 'var(--gold)' : '#ccc', cursor: 'pointer',
+        }}
+      >
+        Speed: {speedMult}x
+      </button>
+    </div>
     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'stretch' }}>
     <div style={{
       position: 'relative',
@@ -381,27 +409,6 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
 
       {/* Divider */}
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', background: 'rgba(255,255,255,0.05)' }} />
-
-      {/* Speed toggle — was a bare "1x"/"2x" tucked into the Battle Log
-          header's corner with no label, reported as not intuitive to find.
-          Moved to a clearly-labeled control fixed at the top of the arena
-          itself, where it's the first thing visible when a fight starts. */}
-      <button
-        onClick={toggleSpeed}
-        title="Toggle combat playback speed"
-        style={{
-          position: 'absolute', top: '10px', left: '10px', zIndex: 50,
-          display: 'flex', alignItems: 'center', gap: '0.4rem',
-          fontSize: '0.78rem', padding: '0.35rem 0.7rem', borderRadius: 6,
-          fontFamily: 'Cinzel, serif',
-          background: speedMult === 2 ? 'rgba(201,168,76,0.25)' : 'rgba(10,10,14,0.85)',
-          border: `1px solid ${speedMult === 2 ? 'var(--gold)' : 'rgba(255,255,255,0.2)'}`,
-          color: speedMult === 2 ? 'var(--gold)' : '#ccc', cursor: 'pointer',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
-        }}
-      >
-        Speed: {speedMult}x
-      </button>
 
       {/* Survival Floor round counter — frames the fight as "outlast the
           clock," not "kill count," since the normal enemies-remaining
@@ -499,6 +506,17 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
           20% { transform: translate(-50%, -20px) scale(1.2); opacity: 1; }
           100% { transform: translate(-50%, -40px) scale(1); opacity: 0; }
         }
+        @keyframes skillCalloutPop {
+          0% { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
+          15% { transform: translate(-50%, -16px) scale(1.35); opacity: 1; }
+          30% { transform: translate(-50%, -20px) scale(1.1); opacity: 1; }
+          100% { transform: translate(-50%, -48px) scale(1); opacity: 0; }
+        }
+        @keyframes skillRingPulse {
+          0% { transform: scale(1); filter: brightness(1); }
+          50% { transform: scale(1.12); filter: brightness(1.6); }
+          100% { transform: scale(1); filter: brightness(1); }
+        }
         @keyframes logLineIn {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
@@ -539,6 +557,7 @@ export default function CombatArena({ combatData, onComplete, turnNarrations }) 
         </div>
       ))}
       <div ref={logEndRef} />
+    </div>
     </div>
     </div>
   )

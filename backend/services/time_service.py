@@ -82,11 +82,11 @@ def process_passive_generation(conn):
     if ticks <= 0:
         return
         
-    facilities = conn.execute("SELECT id, type, level FROM facilities WHERE type IN ('The Market', 'The Farm', 'The Vault')").fetchall()
+    facilities = conn.execute("SELECT id, type, level FROM facilities WHERE type IN ('Market', 'Farm', 'Vault', 'Training Grounds')").fetchall()
 
     PREFERRED_CLASSES = {
-        'The Market': ('Merchant', 'Quartermaster'),
-        'The Farm': ('Merchant', 'Druid'),
+        'Market': ('Merchant', 'Quartermaster'),
+        'Farm': ('Merchant', 'Druid'),
     }
 
     gold_gen = 0
@@ -104,23 +104,31 @@ def process_passive_generation(conn):
         for a in assigned:
             multiplier += 0.20 if a["hero_class"] in preferred else 0.10
 
-        if f["type"] == 'The Market':
+        if f["type"] == 'Market':
             base_amt = 100 * f["level"]
             gold_gen += int(base_amt * multiplier) * ticks
-        elif f["type"] == 'The Farm':
+        elif f["type"] == 'Farm':
             base_amt = 5 * f["level"]
             supplies_gen += int(base_amt * multiplier) * ticks
+        elif f["type"] == 'Training Grounds':
+            xp_per_tick = int(50 * f["level"] * multiplier)
+            training_heroes = conn.execute("""
+                SELECT fa.hero_id FROM facility_assignments fa
+                WHERE fa.facility_id = ? AND fa.hero_id IN (SELECT id FROM heroes WHERE is_alive = 1)
+            """, (f["id"],)).fetchall()
+            for h in training_heroes:
+                conn.execute("UPDATE heroes SET xp = COALESCE(xp, 0) + ? WHERE id = ?", (xp_per_tick * ticks, h["hero_id"]))
 
     if gold_gen > 0 or supplies_gen > 0:
         conn.execute("UPDATE base SET gold = gold + ?, supplies = supplies + ? WHERE id = 1", (gold_gen, supplies_gen))
-        
+
     hero_assignments = conn.execute("""
         SELECT fa.hero_id
         FROM facilities f
         JOIN facility_assignments fa ON f.id = fa.facility_id
-        WHERE f.type IN ('The Market', 'The Farm', 'The Vault')
+        WHERE f.type IN ('Market', 'Farm', 'Vault')
     """).fetchall()
-    
+
     for h in hero_assignments:
         conn.execute("UPDATE heroes SET xp = COALESCE(xp, 0) + ? WHERE id = ?", (20 * ticks, h["hero_id"]))
         

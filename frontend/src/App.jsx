@@ -6,6 +6,7 @@ import BasePage from './pages/BasePage'
 import LogPage from './pages/LogPage'
 import InventoryPage from './pages/InventoryPage'
 import ArenaPage from './pages/ArenaPage'
+import AchievementsPage from './pages/AchievementsPage'
 import ProfileSelect from './components/ProfileSelect'
 import HeroChat from './components/HeroChat'
 import ToastContainer from './components/ToastContainer'
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'inventory', label: 'Items' },
   { id: 'tower',  label: 'Tower' },
   { id: 'arena',  label: 'Arena' },
+  { id: 'achievements', label: 'Achievements' },
   { id: 'base',   label: 'Base' },
 ]
 
@@ -205,6 +207,7 @@ export default function App() {
     inventory: <InventoryPage />,
     tower:  <TowerPage onGoldChange={refreshResources} />,
     arena:  <ArenaPage />,
+    achievements: <AchievementsPage />,
     base:   <BasePage onGoldChange={refreshResources} onSubTabChange={setBaseSubTab}
                tourTargetSubTab={tourActive && TAB_TOUR_STEPS[tourStepIndex]?.tab === 'base' ? TAB_TOUR_STEPS[tourStepIndex].subTab : null} />,
     log:    <LogPage />,

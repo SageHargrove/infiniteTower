@@ -6,6 +6,8 @@ POTION_CATALOG = [
     {"name": "Vitality Elixir", "desc": "Heals 60% max Health and clears 10 stress.", "effect": {"heal_pct": 0.6, "stress_delta": -10}, "min_level": 5},
     {"name": "Greater Healing Draught", "desc": "Heals a hero for 90% of max Health.", "effect": {"heal_pct": 0.9}, "min_level": 10},
     {"name": "Panacea", "desc": "Fully heals a hero and clears 50 stress and 20 trauma.", "effect": {"heal_pct": 1.0, "stress_delta": -50, "trauma_delta": -20}, "min_level": 20},
+    {"name": "Mana Draught", "desc": "Restores 40% of a hero's max Mana mid-battle, when equipped and they run low.", "effect": {"mana_pct": 0.4}, "min_level": 1},
+    {"name": "Greater Mana Draught", "desc": "Restores 80% of a hero's max Mana mid-battle, when equipped and they run low.", "effect": {"mana_pct": 0.8}, "min_level": 10},
 ]
 
 

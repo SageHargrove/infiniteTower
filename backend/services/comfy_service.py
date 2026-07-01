@@ -10,7 +10,7 @@ LORA_NAME = os.getenv("COMFY_LORA", None)
 LORA_STRENGTH = float(os.getenv("COMFY_LORA_STRENGTH", "0.8"))
 
 
-def _build_workflow(prompt: str, negative: str = "", seed: int = None, init_image_name: str = None, denoise: float = 0.45, width: int = 832, height: int = 1216, hires: bool = False, hires_denoise: float = 0.55) -> dict:
+def _build_workflow(prompt: str, negative: str = "", seed: int = None, init_image_name: str = None, denoise: float = 0.45, width: int = 832, height: int = 1216, hires: bool = False, hires_denoise: float = 0.55, lora_override: str = None, lora_strength_override: float = None) -> dict:
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
 
@@ -52,13 +52,19 @@ def _build_workflow(prompt: str, negative: str = "", seed: int = None, init_imag
         }
     }
 
-    # Add LoRA node if configured, rewire model/clip sources
-    if LORA_NAME:
+    # Add LoRA node if configured, rewire model/clip sources. A per-call
+    # override (lora_override) takes precedence over the COMFY_LORA env var
+    # so a caller (e.g. the equipment icon script) can use a different LoRA
+    # than whatever's configured for hero portrait generation, without
+    # touching that global setting.
+    lora_name = lora_override if lora_override is not None else LORA_NAME
+    lora_strength = lora_strength_override if lora_strength_override is not None else LORA_STRENGTH
+    if lora_name:
         workflow["10"] = {
             "inputs": {
-                "lora_name": LORA_NAME,
-                "strength_model": LORA_STRENGTH,
-                "strength_clip": LORA_STRENGTH,
+                "lora_name": lora_name,
+                "strength_model": lora_strength,
+                "strength_clip": lora_strength,
                 "model": ["4", 0],
                 "clip": ["4", 1]
             },
@@ -225,7 +231,7 @@ def _upload_image(file_path: str) -> str | None:
         return None
 
 
-def generate_portrait_comfy(prompt: str, save_path: str, init_image_path: str = None, denoise: float = 0.45, negative: str = "", width: int = 832, height: int = 1216, hires: bool = False, hires_denoise: float = 0.55) -> bool:
+def generate_portrait_comfy(prompt: str, save_path: str, init_image_path: str = None, denoise: float = 0.45, negative: str = "", width: int = 832, height: int = 1216, hires: bool = False, hires_denoise: float = 0.55, lora_override: str = None, lora_strength_override: float = None) -> bool:
     if not is_comfy_running():
         print("[ComfyUI] Server not running — skipping.")
         return False
@@ -234,7 +240,7 @@ def generate_portrait_comfy(prompt: str, save_path: str, init_image_path: str = 
     if init_image_path and os.path.exists(init_image_path):
         init_image_name = _upload_image(init_image_path)
 
-    workflow = _build_workflow(prompt, negative=negative, init_image_name=init_image_name, denoise=denoise, width=width, height=height, hires=hires, hires_denoise=hires_denoise)
+    workflow = _build_workflow(prompt, negative=negative, init_image_name=init_image_name, denoise=denoise, width=width, height=height, hires=hires, hires_denoise=hires_denoise, lora_override=lora_override, lora_strength_override=lora_strength_override)
     prompt_id = _queue_prompt(workflow)
     if not prompt_id:
         return False

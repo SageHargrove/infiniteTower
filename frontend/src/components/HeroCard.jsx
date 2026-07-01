@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import { regenerateProfile, getHeroAptitudes } from '../api/client'
+import { EquipmentTypeIcon } from './EquipmentTypeIcon'
+
+const RARITY_COLORS = {
+  'D-': '#3ddb3d', 'D': '#4dff4d', 'D+': '#6bff6b',
+  'C-': '#1e90ff', 'C': '#3aa0ff', 'C+': '#5cb3ff',
+  'B-': '#a83dff', 'B': '#b84dff', 'B+': '#c66bff',
+  'A-': '#ffb300', 'A': '#ffc733', 'A+': '#ffd966',
+  'S-': '#ff3333', 'S': '#ff5555', 'S+': '#ff7777',
+  'SS': '#00ffff', 'SSS': '#66ffff', 'Z': '#ff00ff',
+}
+function rarityColor(rarity) { return RARITY_COLORS[rarity] || '#888' }
 
 const MORALE_STATE_LABEL = {
   steady: 'Steady', shaken: 'Shaken', fearful: 'Fearful', broken: 'Broken',
@@ -345,7 +356,7 @@ function AptitudeDisplay({ hero }) {
   )
 }
 
-export default function HeroCard({ hero, onAssign, onManageEquipment, onManageConsumable, selected, onClick, onToggleSelect, showFull = false, scale = 1, onRegenerateProfile, actions }) {
+export default function HeroCard({ hero, onAssign, onManageEquipment, onManageConsumable, onAutoEquip, selected, onClick, onToggleSelect, showFull = false, scale = 1, onRegenerateProfile, actions }) {
   if (!hero) return null
   const dead = !hero.is_alive
   const [refreshing, setRefreshing] = useState(false)
@@ -475,7 +486,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
 
       <div className="hero-name">{hero.name}</div>
       <div className="hero-title">{hero.title}</div>
-      {hero.synergy_group && (
+      {showFull && hero.synergy_group && (
         <div style={{ marginTop: '0.4em', marginBottom: '0.2em', position: 'relative', display: 'inline-block' }}>
           <span
             onMouseEnter={(e) => { e.stopPropagation(); setShowSynergyTip(true) }}
@@ -530,6 +541,34 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
 
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3em', marginTop: '0.3em' }}>
         <ClassBadge heroClass={hero.hero_class} />
+        {hero.condition && hero.condition !== 'Normal' && (
+          <span
+            title={hero.condition === 'Depressed' ? `Depressed (-75% Stats) until ${new Date(hero.condition_until).toLocaleString()}` : "Mind broken from Survivor's Guilt. Permanently retired from combat."}
+            style={{
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            background: hero.condition === 'Depressed' ? 'rgba(100,150,255,0.15)' : 'rgba(100,100,100,0.15)', border: `1px solid ${hero.condition === 'Depressed' ? 'rgba(100,150,255,0.4)' : 'rgba(100,100,100,0.4)'}`,
+            color: hero.condition === 'Depressed' ? '#88bbff' : '#888', borderRadius: 3,
+            padding: '1px 6px', fontSize: '0.7em',
+            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
+          }}>
+            {hero.condition === 'Depressed' ? '🌧️ Depressed' : '👴 Retired'}
+          </span>
+        )}
+        {!showFull && (hero.is_team_leader || (hero.ego_type && hero.ego_type.toLowerCase() !== 'null')) && (
+          <span title="Click for Ego/leadership details" style={{
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.18)',
+            color: 'var(--text-dim)', borderRadius: 3,
+            padding: '1px 6px', fontSize: '0.7em',
+            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
+          }}>
+            {hero.is_team_leader ? '👑' : '⚡'} more...
+          </span>
+        )}
+      </div>
+
+      {showFull && (
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3em', marginTop: '0.3em' }}>
         {hero.ego_type && hero.ego_type.toLowerCase() !== 'null' && (
           <span
             title={`Ego Preference: ${EGO_TOOLTIPS[hero.ego_type] || 'Unknown desires.'}\nPatience: ${hero.ego_patience ?? 100}/100\n\n${
@@ -616,20 +655,8 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
             🕯️ {hero.legacies.length}
           </span>
         )}
-        {hero.condition && hero.condition !== 'Normal' && (
-          <span 
-            title={hero.condition === 'Depressed' ? `Depressed (-75% Stats) until ${new Date(hero.condition_until).toLocaleString()}` : "Mind broken from Survivor's Guilt. Permanently retired from combat."}
-            style={{
-            display: 'inline-flex', alignItems: 'center', gap: '3px',
-            background: hero.condition === 'Depressed' ? 'rgba(100,150,255,0.15)' : 'rgba(100,100,100,0.15)', border: `1px solid ${hero.condition === 'Depressed' ? 'rgba(100,150,255,0.4)' : 'rgba(100,100,100,0.4)'}`,
-            color: hero.condition === 'Depressed' ? '#88bbff' : '#888', borderRadius: 3,
-            padding: '1px 6px', fontSize: '0.7em',
-            fontFamily: 'Cinzel, serif', marginTop: '0.3em', cursor: 'help'
-          }}>
-            {hero.condition === 'Depressed' ? '🌧️ Depressed' : '👴 Retired'}
-          </span>
-        )}
       </div>
+      )}
 
       <div style={{ flex: 1 }} />
 
@@ -676,33 +703,37 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
 
               {/* Equipment Display */}
               <div style={{ marginTop: '0.75em' }}>
-                <div className="text-dim" style={{ fontSize: '0.7em', marginBottom: '0.3em', fontFamily: 'Cinzel, serif' }}>
-                  Equipment
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.3em' }}>
+                  <div className="text-dim" style={{ fontSize: '0.7em', fontFamily: 'Cinzel, serif', flex: 1 }}>
+                    Equipment
+                  </div>
+                  {onAutoEquip && (
+                    <div style={{ display: 'flex', gap: '0.25em' }}>
+                      <button onClick={(e) => { e.stopPropagation(); onAutoEquip(hero, 'auto'); }} style={{ fontSize: '0.6em', padding: '0.15em 0.4em', background: 'rgba(201,168,76,0.15)', border: '1px solid var(--gold)', color: 'var(--gold)', borderRadius: 3, cursor: 'pointer' }}>Auto Equip</button>
+                      <button onClick={(e) => { e.stopPropagation(); onAutoEquip(hero, 'unequip_all'); }} style={{ fontSize: '0.6em', padding: '0.15em 0.4em', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-dim)', borderRadius: 3, cursor: 'pointer' }}>Unequip All</button>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3em' }}>
                   {['weapon', 'armor', 'accessory'].map(slot => {
                     const eq = hero.equipment ? hero.equipment.find(e => e.type?.toLowerCase() === slot) : null;
                     return (
-                      <div key={slot} style={{ 
-                        padding: '0.3rem 0.5em', 
-                        background: 'rgba(255,255,255,0.02)', 
-                        borderLeft: `2px solid ${
-                          !eq ? '#444' :
-                          eq.rarity >= 5 ? '#c9a84c' : 
-                          eq.rarity >= 4 ? '#8030c8' : 
-                          eq.rarity >= 3 ? '#4a7aaa' : 
-                          eq.rarity >= 2 ? '#4a9a6a' : '#888'
-                        }`,
+                      <div key={slot} style={{
+                        padding: '0.3rem 0.5em',
+                        background: 'rgba(255,255,255,0.02)',
+                        borderLeft: `2px solid ${eq ? rarityColor(eq.rarity) : '#444'}`,
                         borderRadius: '0 3px 3px 0',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center'
                       }}>
-                        <div style={{ flex: 1, marginRight: '0.5em' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4em', flex: 1, marginRight: '0.5em', minWidth: 0 }}>
+                          {eq && <EquipmentTypeIcon item={eq} fontSize="1rem" glow={rarityColor(eq.rarity)} />}
+                          <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: '0.65em', color: 'var(--text-dim)', textTransform: 'capitalize', marginBottom: '0.1em' }}>{slot}</div>
                           {eq ? (
                             <>
-                              <div style={{ fontSize: '0.75em', color: 'var(--text-hi)' }}>{eq.name}</div>
+                              <div style={{ fontSize: '0.75em', color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{eq.name}</div>
                               {eq.stats_json && (
                                 <div style={{ display: 'flex', gap: '0.4em', flexWrap: 'wrap', marginTop: '0.1em' }}>
                                   {Object.entries(JSON.parse(eq.stats_json)).map(([k, v]) => (
@@ -716,6 +747,7 @@ export default function HeroCard({ hero, onAssign, onManageEquipment, onManageCo
                           ) : (
                             <div style={{ fontSize: '0.75em', color: 'var(--text-dim)', fontStyle: 'italic' }}>Empty</div>
                           )}
+                          </div>
                         </div>
                         {onManageEquipment && (
                           <button 

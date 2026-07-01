@@ -291,9 +291,9 @@ def estimate_talent_rarity(hero: dict, archive_level: int = 0) -> float | None:
 # (scaled to a friendlier 0-100 display range) for ANY hero regardless of
 # level, with the level of detail (tier/range/exact) gated by the
 # Observatory's own building level. The two systems don't share state.
-TALENT_OBSERVATORY_GOLD_PER_STAR = 500
+MIRROR_OF_FATE_GOLD_PER_STAR = 500
 
-TALENT_OBSERVATORY_TIERS = [
+MIRROR_OF_FATE_TIERS = [
     (25, "Poor"),
     (50, "Average"),
     (75, "Good"),
@@ -305,25 +305,25 @@ def talent_display_value(hero: dict) -> int:
     player-facing number that doesn't require explaining the raw formula."""
     return round(talent_score(hero) * 50)
 
-def get_talent_observatory_cost(hero: dict) -> int:
-    return get_hero_star(hero) * TALENT_OBSERVATORY_GOLD_PER_STAR
+def get_mirror_of_fate_cost(hero: dict) -> int:
+    return get_hero_star(hero) * MIRROR_OF_FATE_GOLD_PER_STAR
 
-def reveal_talent_observatory(hero: dict, observatory_level: int) -> str:
-    """Returns the display string for the Observatory's current level —
+def reveal_mirror_of_fate(hero: dict, mirror_level: int) -> str:
+    """Returns the display string for the Mirror's current level —
     this is what gets persisted to heroes.talent_reveal, frozen at
     whatever detail the building offered at the moment of reveal."""
     value = talent_display_value(hero)
-    if observatory_level >= 3:
+    if mirror_level >= 3:
         return f"Talent is {value}"
-    if observatory_level >= 2:
+    if mirror_level >= 2:
         # ~15-wide window, gated to stay within [0, 100].
         low = max(0, (value // 15) * 15)
         high = min(100, low + 15)
         return f"Talent is between {low}-{high}"
-    for threshold, label in TALENT_OBSERVATORY_TIERS:
+    for threshold, label in MIRROR_OF_FATE_TIERS:
         if value < threshold:
             return label
-    return TALENT_OBSERVATORY_TIERS[-1][1]
+    return MIRROR_OF_FATE_TIERS[-1][1]
 
 
 def get_talent_title(hero: dict, archive_level: int = 0) -> str | None:

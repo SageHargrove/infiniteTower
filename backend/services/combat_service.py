@@ -82,34 +82,25 @@ class CombatUnit:
 # raw stats were scaled down to match.
 ENEMY_TYPES = [
     # --- beginner (floor 1+) ---
-    # "Giant Rat" -> "Dungeon Imp" and "Slime" -> "Shadow Wisp": both
-    # renamed (openspec/specs/enemy-art-overhaul) since round/rodent shapes
-    # read as cute/cartoonish against this game's dark fantasy tone and
-    # render poorly through the AI art pipeline — humanoid/angular/shadowy
-    # forms hold up far better.
-    ("Dungeon Imp", 0.8, 0.8, 1.6, "swarm", "beginner"),
+    ("Giant Spider", 0.8, 0.8, 1.6, "swarm", "beginner"),
     ("Goblin", 0.8, 0.7, 1.1, "normal", "beginner"),
     ("Bandit", 0.9, 0.8, 1.2, "normal", "beginner"),
     ("Wolf", 0.9, 0.7, 1.5, "pack", "beginner"),
-    ("Shadow Wisp", 0.6, 0.5, 0.7, "swarm", "beginner"),
-    # Elite variants of the floor 1-10 family (Shadow Wisp/Goblin/Imp/Wolf) —
+    # Elite variants of the floor 1-10 family (Goblin/Spider/Wolf) —
     # same species, better stats, one extra ability via
     # ENEMY_ABILITY_OVERRIDES below. See backend/services/enemy_families.py
     # for the matching miniboss/boss tier for this floor range.
-    ("Acid Slime", 1.1, 0.9, 0.7, "elite", "beginner"),
     ("Goblin Warrior", 1.2, 1.1, 1.0, "elite", "beginner"),
     ("Goblin Shaman", 1.0, 0.8, 1.0, "elite", "beginner"),
-    ("Dungeon Imp Alpha", 1.1, 0.8, 1.7, "elite", "beginner"),
-    ("Wolf Alpha", 1.2, 0.9, 1.6, "elite", "beginner"),
+    ("Spider Queen", 1.1, 0.8, 1.7, "elite", "beginner"),
     # --- intermediate (floor 15+) — checklist family is "Kobolds, Skeletons,
     # Orcs, Giant Spiders" (PLAN_floor_workshop_enemies.md); Dire Wolf/Harpy
     # predate that checklist and stay as bonus extras, not removed ---
-    ("Dire Wolf", 1.1, 0.9, 1.6, "pack", "intermediate"),
     ("Orc", 1.1, 1.0, 0.9, "normal", "intermediate"),
     ("Harpy", 0.8, 0.6, 1.8, "pack", "intermediate"),
     ("Kobold", 0.7, 0.6, 1.3, "swarm", "intermediate"),
     ("Skeleton", 0.9, 0.9, 1.0, "normal", "intermediate"),
-    ("Giant Spider", 1.0, 0.7, 1.2, "pack", "intermediate"),
+    ("Venomous Spider", 1.0, 0.7, 1.2, "pack", "intermediate"),
     ("Ogre", 1.6, 1.3, 0.6, "elite", "intermediate"),
     ("Troll", 1.7, 1.0, 0.6, "elite", "intermediate"),
     # --- veteran (floor 21+) — checklist: "Hobgoblins, Ghouls, Harpies,
@@ -148,6 +139,7 @@ ENEMY_TYPES = [
     ("Stone Golem", 1.5, 1.8, 0.5, "elite", "ascendant"),
     ("Dread Brute", 1.8, 1.2, 0.7, "elite", "ascendant"),
     ("Obsidian Behemoth", 2.0, 1.6, 0.4, "elite", "ascendant"),
+    ("Primordial Vampire", 1.5, 1.0, 1.5, "elite", "ascendant"),
     # --- mythic (floor 61+) — Chimeras/Naga half of the 51-70 checklist
     # range ---
     ("Chimera", 1.2, 1.0, 1.1, "normal", "mythic"),
@@ -159,13 +151,13 @@ ENEMY_TYPES = [
     # Demon Lords" (Demon Lords land in dread below, same 71-90 split) ---
     ("Death Knight", 1.3, 1.2, 0.9, "normal", "apex"),
     ("Giant", 1.6, 1.1, 0.6, "normal", "apex"),
-    ("Hydra", 1.6, 1.2, 0.8, "normal", "apex"),
-    ("Hydra Spawn", 1.5, 1.0, 1.0, "elite", "apex"),
+    ("Hydra", 1.8, 1.4, 0.7, "elite", "apex"),
+    ("Hydra Spawn", 1.1, 0.8, 1.0, "pack", "apex"),
     ("Black Knight Commander", 1.6, 1.4, 1.0, "elite", "apex"),
     # --- dread (floor 81+) — Demon Lords half of the 71-90 checklist range ---
     ("Demon", 1.3, 1.0, 1.2, "normal", "dread"),
     ("Imp", 0.8, 0.6, 1.8, "pack", "dread"),
-    ("Demon Lord", 1.4, 1.1, 1.0, "normal", "dread"),
+    ("Demon Lord", 1.7, 1.2, 1.1, "elite", "dread"),
     ("Pit Fiend", 1.7, 1.3, 1.0, "elite", "dread"),
     ("Wraith Sovereign", 1.4, 0.9, 1.5, "elite", "dread"),
     # --- ancient (floor 91+) — checklist: "Dragons, Liches, Archdemons,
@@ -174,6 +166,7 @@ ENEMY_TYPES = [
     ("Young Dragon", 1.6, 1.2, 1.0, "normal", "ancient"),
     ("Archdemon", 1.5, 1.2, 1.0, "normal", "ancient"),
     ("Ancient Guardian", 1.4, 1.6, 0.6, "normal", "ancient"),
+    ("Adult Dragon", 2.0, 1.4, 1.2, "elite", "ancient"),
     ("Dracolich", 1.8, 1.3, 0.9, "elite", "ancient"),
     ("Archdemon Enforcer", 1.8, 1.5, 1.0, "elite", "ancient"),
 ]
@@ -191,18 +184,18 @@ ENEMY_TIER_UNLOCK_FLOOR = {
 # — that's still ENEMY_TIER_UNLOCK_FLOOR — this just keeps the art library
 # reviewable in the same batches you're already going through it in.
 ENEMY_WAVE = {
-    "Shadow Wisp": 1, "Goblin": 1, "Dungeon Imp": 1, "Wolf": 1,
-    "Acid Slime": 1, "Goblin Warrior": 1, "Goblin Shaman": 1, "Dungeon Imp Alpha": 1, "Wolf Alpha": 1,
-    "Bandit": 2, "Dire Wolf": 2, "Harpy": 2, "Orc": 2, "Ogre": 2, "Troll": 2,
-    "Kobold": 2, "Skeleton": 2, "Giant Spider": 2,
+    "Goblin": 1, "Giant Spider": 1, "Wolf": 1,
+    "Goblin Warrior": 1, "Goblin Shaman": 1, "Spider Queen": 1,
+    "Bandit": 2, "Harpy": 2, "Orc": 2, "Ogre": 2, "Troll": 2,
+    "Kobold": 2, "Skeleton": 2, "Venomous Spider": 2,
     "Hobgoblin": 3, "Lizardman": 3, "Feral Ghoul": 3, "Hobgoblin Berserker": 3, "Lizardman Stalker": 3,
     "Grave Scarab": 4, "Rotting Ghoul": 4, "Bone Warden": 4, "Gargoyle": 4, "Wraith": 4, "Scarab Swarmlord": 4, "Plague Harbinger": 4,
     "Minotaur": 5, "Wyvern": 5, "Manticore": 5, "Elemental": 5, "Minotaur Juggernaut": 5, "Wyvern Stormrider": 5,
-    "Stone Sentinel": 6, "Lesser Golem": 6, "Vampire Spawn": 6, "Stone Golem": 6, "Obsidian Behemoth": 6, "Dread Brute": 6,
+    "Stone Sentinel": 6, "Lesser Golem": 6, "Vampire Spawn": 6, "Stone Golem": 6, "Obsidian Behemoth": 6, "Dread Brute": 6, "Primordial Vampire": 6,
     "Chimera": 7, "Naga": 7, "Abyssal Lurker": 7, "Frost Wight": 7, "Shrouded Reaper": 7,
     "Death Knight": 8, "Giant": 8, "Hydra": 8, "Hydra Spawn": 8, "Black Knight Commander": 8,
     "Demon": 9, "Imp": 9, "Demon Lord": 9, "Pit Fiend": 9, "Wraith Sovereign": 9,
-    "Lich Acolyte": 10, "Young Dragon": 10, "Archdemon": 10, "Ancient Guardian": 10, "Dracolich": 10, "Archdemon Enforcer": 10,
+    "Lich Acolyte": 10, "Young Dragon": 10, "Adult Dragon": 10, "Archdemon": 10, "Ancient Guardian": 10, "Dracolich": 10, "Archdemon Enforcer": 10,
 }
 
 # Per-name ability overrides — lets a specific elite/miniboss/boss entry use
@@ -213,26 +206,27 @@ ENEMY_WAVE = {
 # enemy can be wired into just by adding an entry here (or to a family's
 # elites list in enemy_families.py) — no new per-monster code needed.
 ENEMY_ABILITY_OVERRIDES = {
-    "Acid Slime": ["self_regen"],
     "Goblin Warrior": ["cleave"],
     "Goblin Shaman": ["team_buff_aura"],
-    "Dungeon Imp Alpha": ["summon_add"],
-    "Wolf Alpha": ["enrage"],
+    "Spider Queen": ["summon_add"],
     "Hobgoblin Berserker": ["enrage"],
     "Lizardman Stalker": ["self_regen"],
     "Scarab Swarmlord": ["summon_add"],
     "Plague Harbinger": ["team_buff_aura"],
     "Minotaur Juggernaut": ["enrage"],
-    "Hydra Spawn": ["self_regen"],
+    "Hydra": ["self_regen"],
     "Pit Fiend": ["enrage"],
+    "Demon Lord": ["crushing_blow"],
     "Wraith Sovereign": ["team_buff_aura"],
+    "Primordial Vampire": ["self_regen"],
+    "Adult Dragon": ["crushing_blow"],
     "Dracolich": ["self_regen"],
     "Archdemon Enforcer": ["crushing_blow"],
 }
 
 # Which weak swarm-type a "summon_add" user calls in as reinforcements.
 ENEMY_SPAWN_TEMPLATE = {
-    "Dungeon Imp Alpha": "Dungeon Imp",
+    "Spider Queen": "Giant Spider",
     "Scarab Swarmlord": "Grave Scarab",
 }
 
@@ -244,6 +238,7 @@ REVIVE_ALLY_HP_PCT = 0.4  # Health a "revive_ally" user brings a fallen ally bac
 # healing-capable one at their own discretion, once per hero per fight, so
 # one bad floor doesn't drain the whole shared stock on a single hero.
 CONSUMABLE_LOW_HP_THRESHOLD = 0.35
+CONSUMABLE_LOW_MANA_THRESHOLD = 0.20
 
 def _enemy_pool_for_floor(floor_number: int) -> list[tuple]:
     """Every tier unlocked at or below this floor stays available — a
@@ -1778,10 +1773,24 @@ def _resolve_combat_from_processed(processed, floor_number, is_boss, is_miniboss
             for hero in alive_heroes:
                 if hero.used_consumable or not hero.equipped_consumable:
                     continue
-                if hero.health >= hero.max_health * CONSUMABLE_LOW_HP_THRESHOLD:
-                    continue
                 item = stock.get(hero.equipped_consumable)
                 if not item or item["quantity"] <= 0:
+                    continue
+                if item.get("mana_pct") is not None:
+                    # A mana potion triggers on low MANA, not low HP — and
+                    # only for heroes who actually have a mana pool worth
+                    # refilling (max_mana == 0 means a class with no active
+                    # skill kit, nothing to restore).
+                    if hero.max_mana <= 0 or hero.mana > hero.max_mana * CONSUMABLE_LOW_MANA_THRESHOLD:
+                        continue
+                    restored = min(hero.max_mana - hero.mana, int(hero.max_mana * item["mana_pct"]))
+                    hero.mana += restored
+                    item["quantity"] -= 1
+                    hero.used_consumable = True
+                    consumables_used[item["item_name"]] = consumables_used.get(item["item_name"], 0) + 1
+                    log.append(f"  ✦ {hero.log_name} drinks a {item['item_name']}, restoring {restored} Mana [{hero.mana}/{hero.max_mana}]")
+                    continue
+                if item.get("heal_pct") is None or hero.health >= hero.max_health * CONSUMABLE_LOW_HP_THRESHOLD:
                     continue
                 heal = apply_heal(hero, int(hero.max_health * item["heal_pct"]))
                 item["quantity"] -= 1
@@ -2136,6 +2145,9 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
                 buffs = __import__('json').loads(base_info["global_buffs"] or "{}") if base_info else {}
                 diff_mults = get_difficulty_mults(_conn)
         from services.equipment_service import generate_equipment_drop
+        # Enemy names are needed by both the equipment-type bias below and
+        # the material-hint roll further down — computed once, up front.
+        enemy_names = [e["name"] for e in result.get("initial_state", {}).get("enemies", [])]
         # Luck is averaged across the deployed team, not taken from a
         # single hero — a team-comp consideration, not "stack one lucky
         # hero and ignore the rest."
@@ -2144,7 +2156,7 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
         # tier, Hard skews up ~half a tier), not drop_bonus — drop_bonus
         # only gates whether anything drops at all, not how good it is.
         rarity_boost = (diff_mults["rare_drop_mult"] - 1.0) * 40
-        equip = generate_equipment_drop(floor_number, is_boss, drop_bonus, rarity_boost=rarity_boost)
+        equip = generate_equipment_drop(floor_number, is_boss, drop_bonus, rarity_boost=rarity_boost, enemy_names=enemy_names)
         if equip:
             result["equipment_drop"] = equip
 
@@ -2163,7 +2175,6 @@ def _apply_combat_drops(result: dict, floor_number: int, is_boss: bool, is_minib
         # Shadow Wisp/Acid Slime was actually fought) instead of a pure
         # floor-wide pool with no connection to what you fought — confirmed
         # reported bug: "fought floor 1, no slimes, got a slime core."
-        enemy_names = [e["name"] for e in result.get("initial_state", {}).get("enemies", [])]
         drops = {}
         for _ in range(random.randint(2, 4)):
             mat = tiered_material_name(roll_material_name_for_enemies(floor_number, enemy_names), avg_luck=avg_luck)

@@ -26,6 +26,17 @@ when ready; nothing here is scheduled.
 - Lore readout before floor 10, or an unlockable lore page that grows as
   you climb.
 
+## Skills Content
+- **Bespoke skill kits per class**: only 6 classes (Warrior, Spearman,
+  Thief, Archer, Mage, Magic Engineer) have a dedicated `SKILL_POOL` entry
+  in `services/skills_service.py` — the other ~130 classes (Knight,
+  Paladin, Necromancer, Acolyte, Cleric, etc.) all fall back to the shared
+  `GENERIC_SKILLS` pool. Stopgapped for now (GENERIC_SKILLS bumped to 3
+  actives + more passives, every 3★+ hero guaranteed at least one active),
+  but the real ask is hundreds-to-thousands of unique skills long-term,
+  weighted more passive than active, with passives leaning class-agnostic
+  and actives leaning class-specific.
+
 ## Systems / Text Quality
 - **LLM model for narrative text**: currently Gemini-based
   (services/llm_service.py). Investigate Haiku (or another model) for

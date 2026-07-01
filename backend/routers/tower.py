@@ -113,6 +113,7 @@ def _resolve_real_combat(conn, hero_teams, floor_number, is_boss, is_miniboss, z
 
     if combat_result["winner"] == "heroes":
         result["message"] = f"Floor {floor_number} Cleared!"
+        conn.execute("UPDATE base SET total_battles_won = total_battles_won + 1 WHERE id = 1")
         survivors = [h for h in flat_heroes if h["id"] in surviving_ids_for_chatter]
         if survivors:
             from services.dialogue_service import get_hero_line
@@ -386,10 +387,12 @@ def enter_floor(req: EnterFloorRequest):
         from services.research_service import SCROLL_CATALOG
         heal_catalog = {p["name"]: p["effect"]["heal_pct"] for p in POTION_CATALOG if "heal_pct" in p["effect"]}
         heal_catalog.update({s["name"]: s["effect"]["heal_pct"] for s in SCROLL_CATALOG if "heal_pct" in s["effect"]})
+        mana_catalog = {p["name"]: p["effect"]["mana_pct"] for p in POTION_CATALOG if "mana_pct" in p["effect"]}
         available_consumables = [
-            {"item_name": row["item_name"], "quantity": row["quantity"], "heal_pct": heal_catalog[row["item_name"]]}
+            {"item_name": row["item_name"], "quantity": row["quantity"],
+             "heal_pct": heal_catalog.get(row["item_name"]), "mana_pct": mana_catalog.get(row["item_name"])}
             for row in conn.execute("SELECT item_name, quantity FROM inventory WHERE quantity > 0").fetchall()
-            if row["item_name"] in heal_catalog
+            if row["item_name"] in heal_catalog or row["item_name"] in mana_catalog
         ]
 
         conn.execute("UPDATE base SET supplies = supplies - ? WHERE id = 1", (supply_cost,))
@@ -704,9 +707,14 @@ class ResolveEventRequest(BaseModel):
 
 @router.post("/floor/event/resolve")
 def resolve_event_floor(data: ResolveEventRequest):
-    """Resolve a player's event floor choice."""
+    """Resolve a player's event floor choice. Most choices are pure
+    narrative + stat effects, but some (trigger_combat) turn hostile after
+    the narrative beat, and some (trait) leave a permanent mark on the
+    hero beyond the temporary gold/health/stress nudge."""
     pending_legacies = []
     with db() as conn:
+        base_row = conn.execute("SELECT highest_floor FROM base WHERE id = 1").fetchone()
+
         heroes = conn.execute(
             "SELECT * FROM heroes WHERE is_on_team = ? AND is_alive = 1", (data.team_id,)
         ).fetchall()
@@ -777,6 +785,17 @@ def resolve_event_floor(data: ResolveEventRequest):
                 updates.append("trauma = ?")
                 params.append(new_trauma)
 
+            # Permanent trait grant — same effect-dict shape as a passive
+            # skill (see skills_service.apply_passive_skills), just never
+            # rolled away or replaced. One-time per trait id per hero.
+            if "trait" in effects:
+                trait = effects["trait"]
+                existing_traits = json.loads(hero.get("traits") or "[]")
+                if not any(t.get("id") == trait["id"] for t in existing_traits):
+                    existing_traits.append(trait)
+                    updates.append("traits = ?")
+                    params.append(json.dumps(existing_traits))
+
             if updates:
                 params.append(hid)
                 conn.execute(f"UPDATE heroes SET {', '.join(updates)} WHERE id = ?", params)
@@ -799,7 +818,50 @@ def resolve_event_floor(data: ResolveEventRequest):
                 if new_level != hero_row["level"]:
                     conn.execute("UPDATE heroes SET level = ? WHERE id = ?", (new_level, hero["id"]))
 
-        base_row = conn.execute("SELECT highest_floor FROM base WHERE id = 1").fetchone()
+        # The choice turned hostile — a real fight breaks out right after
+        # the narrative beat, using the same engine/UI path as Explore
+        # floors. Floor progress/gems are gated on actually winning this
+        # fight, same as any other combat floor — the narrative-only
+        # rewards above (gold/trait/etc.) already landed regardless.
+        if effects.get("trigger_combat") and hero_list:
+            from services.difficulty_service import get_difficulty_mults
+            enemy_stat_mult = get_difficulty_mults(conn)["enemy_stat_mult"]
+            combat_result = _resolve_real_combat(
+                conn, [hero_list], data.floor_number, is_boss=False, is_miniboss=False, zone_theme="",
+                boss_data_override=None, base_row=base_row, pending_legacies=pending_legacies,
+                difficulty_mult=enemy_stat_mult,
+                flavor_intro=f"{resolution['choice_label']} — and then it turns hostile.",
+            )
+            combat_result["floor_type"] = "event"
+            combat_result["choice_label"] = resolution["choice_label"]
+            combat_result["event_narrative"] = narrative
+            combat_result["effects"] = effects
+
+            conn.execute("UPDATE floor_cache SET visited = 1 WHERE floor_number = ?", (data.floor_number,))
+
+            if not combat_result.get("run_over") and data.floor_number > base_row["highest_floor"]:
+                gems_reward = 500 if data.floor_number % 5 == 0 else 100
+                conn.execute("UPDATE base SET highest_floor = ?, gems = gems + ? WHERE id = 1", (data.floor_number, gems_reward))
+                combat_result["gems_gained"] = gems_reward
+
+            for hero_dict, is_sacrifice in pending_legacies:
+                try:
+                    from services.portrait_cache import handle_fallen_portrait
+                    new_path = handle_fallen_portrait(hero_dict["id"], hero_dict.get("portrait_path"), is_sacrifice)
+                    hero_dict["portrait_path"] = new_path
+                except Exception as e:
+                    print(f"Portrait cleanup error: {e}")
+                try:
+                    from services.legacy_service import create_legacy
+                    create_legacy(hero_dict, is_sacrifice=is_sacrifice)
+                except Exception as e:
+                    print(f"Legacy creation error: {e}")
+
+            combat_result["floor"] = data.floor_number
+            return combat_result
+
+        conn.execute("UPDATE floor_cache SET visited = 1 WHERE floor_number = ?", (data.floor_number,))
+
         if data.floor_number > base_row["highest_floor"]:
             gems_reward = 500 if data.floor_number % 5 == 0 else 100
             conn.execute("UPDATE base SET highest_floor = ?, gems = gems + ? WHERE id = 1", (data.floor_number, gems_reward))
@@ -855,7 +917,7 @@ def resolve_explore_floor_choice(data: ResolveExploreRequest):
         enemy_stat_mult = get_difficulty_mults(conn)["enemy_stat_mult"]
 
         result = _resolve_real_combat(
-            conn, hero_list, data.floor_number, is_boss=False, is_miniboss=False, zone_theme="",
+            conn, [hero_list], data.floor_number, is_boss=False, is_miniboss=False, zone_theme="",
             boss_data_override=None, base_row=base_row, pending_legacies=pending_legacies,
             difficulty_mult=choice["difficulty_mult"] * enemy_stat_mult, flavor_intro=template["theme"],
         )

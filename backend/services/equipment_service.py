@@ -68,10 +68,19 @@ EQUIPMENT_ADJECTIVES = {
     # droppable, only ever auto-generated as a hero's guaranteed starting
     # weapon (see generate_starting_weapon below) so nobody fights bare-handed.
     "F": "Worn",
-    "D-": "Standard", "D": "Polished", "D+": "Heavy", "C-": "Fine", "C": "Refined", "C+": "Balanced",
-    "B-": "Masterwork", "B": "Exceptional", "B+": "Flawless", "A-": "Epic", "A": "Legendary", "A+": "Mythic",
+    "D-": "Cracked", "D": "Battered", "D+": "Crude",
+    "C-": "Plain", "C": "Standard", "C+": "Fine",
+    "B-": "Polished", "B": "Refined", "B+": "Masterwork",
+    "A-": "Exceptional", "A": "Flawless", "A+": "Mythic",
     "S-": "Divine", "S": "Godly", "S+": "Transcendent", "SS": "Omnipotent", "SSS": "Absolute", "Z": "Eldritch",
 }
+
+def _display_type_name(eq_type: str, stats: dict) -> str:
+    """'Weapon'/'Armor' on their own say nothing about what the item
+    actually is — use the rolled weapon_type/armor_type (Sword, Robe, etc.)
+    in the item's name whenever one was rolled, falling back to the bare
+    type name for Accessories (no sub-type) or pre-migration legacy gear."""
+    return stats.get("weapon_type") or stats.get("armor_type") or eq_type
 
 def generate_starting_weapon() -> dict:
     """Every hero starts with a guaranteed basic weapon instead of fighting
@@ -106,7 +115,49 @@ def _rarity_from_score(score: float) -> str:
     if score < 600: return "SSS"
     return "Z"
 
-def _roll_equipment_stats(eq_type: str, mult: float) -> dict:
+# Which weapon/armor TYPE a given enemy name thematically suggests, mirrored
+# from materials_service.py's ENEMY_MATERIAL_HINTS — a sword dropping from a
+# fight against pure beasts (Wolves, Spiders) read as just as arbitrary as
+# the slime-core material bug did. Only the type is biased (Sword/Dagger/
+# Spear/Bow/Staff or Heavy/Light/Brigandine/Robe), never which slot (Weapon
+# vs Armor) drops at all — that's still the existing TYPES roll. Not
+# exhaustive over the full 100+ enemy roster; unlisted enemies just fall
+# back to the existing fully-random type roll.
+ENEMY_EQUIPMENT_HINTS = {
+    "Shadow Wisp": "Staff",
+    "Goblin": "Dagger", "Goblin Warrior": "Sword", "Goblin Shaman": "Staff", "Goblin King": "Sword",
+    "Hobgoblin": "Sword", "Hobgoblin Berserker": "Sword",
+    "Bandit": "Dagger", "Kobold": "Dagger",
+    "Skeleton": "Sword", "Skeleton Archer": "Bow",
+    "Giant Spider": "Light Armor", "Spider Queen": "Light Armor", "Venomous Spider": "Light Armor",
+    "Wolf": "Light Armor", "Mangy Hyena": "Light Armor",
+    "Orc": "Sword", "Orc Warchief": "Sword",
+    "Lizardman": "Spear",
+    "Harpy": "Bow",
+    "Ogre": "Heavy Armor", "The Ashen Colossus": "Heavy Armor",
+    "Troll": "Heavy Armor", "The Troll King": "Heavy Armor", "Giant": "Heavy Armor",
+    "Wyvern": "Bow", "Wyvern Stormrider": "Bow",
+    "Demon": "Staff", "Pit Fiend": "Staff", "Archdemon": "Staff",
+    "Vampire Spawn": "Staff", "Primordial Vampire": "Staff",
+    "Young Dragon": "Brigandine", "Adult Dragon": "Brigandine", "Dracolich": "Robe",
+}
+
+
+def _pick_biased_type(eq_type: str, enemy_names: list[str] = None) -> str | None:
+    """70% chance to use an enemy-thematic weapon/armor type if one of the
+    fought enemies has a hint for this eq_type's category, else a plain
+    random roll — same probability and fallback shape as
+    materials_service.roll_material_name_for_enemies."""
+    from services.class_service import WEAPON_TYPES, ARMOR_TYPES
+    pool = WEAPON_TYPES if eq_type == "Weapon" else ARMOR_TYPES
+    if enemy_names:
+        candidates = [ENEMY_EQUIPMENT_HINTS[n] for n in enemy_names if ENEMY_EQUIPMENT_HINTS.get(n) in pool]
+        if candidates and random.random() < 0.7:
+            return random.choice(candidates)
+    return random.choice(pool)
+
+
+def _roll_equipment_stats(eq_type: str, mult: float, enemy_names: list[str] = None) -> dict:
     """Roll base stats for a piece of gear at a given rarity multiplier.
 
     The primary stat (base_str for weapons, base_int/base_hlt for armor) is
@@ -205,15 +256,36 @@ def _roll_equipment_stats(eq_type: str, mult: float) -> dict:
 
     weapon_type = None
     if eq_type == "Weapon":
-        from services.class_service import WEAPON_TYPES
-        weapon_type = random.choice(WEAPON_TYPES)
+        weapon_type = _pick_biased_type(eq_type, enemy_names)
+
+    armor_type = None
+    if eq_type == "Armor":
+        armor_type = _pick_biased_type(eq_type, enemy_names)
+        # Each armor type leans a slightly different way instead of being
+        # a pure reskin — Heavy trades mobility flavor for raw bulk, Light
+        # trades bulk for dodge, Robe trades bulk for arcane potency,
+        # Medium stays the unmodified baseline rolled above.
+        if armor_type == "Heavy Armor":
+            base_end = round(base_end * 1.25)
+            base_def = base_end
+            base_hlt = round(base_hlt * 1.15)
+            dmg_reduction_pct += 0.02
+        elif armor_type == "Light Armor":
+            base_end = round(base_end * 0.80)
+            base_def = base_end
+            dodge += 0.03
+        elif armor_type == "Robe":
+            base_end = round(base_end * 0.70)
+            base_def = base_end
+            base_hlt = round(base_hlt * 0.90)
+            int_pct += 0.03
 
     return {
         "base_str": base_str, "base_int": base_int, "base_hlt": base_hlt, "base_agi": base_agi, "base_def": base_def,
         "base_end": base_end, "base_wil": base_wil, "base_luck": base_luck,
         "str_pct": str_pct, "int_pct": int_pct, "hlt_pct": hlt_pct, "agi_pct": agi_pct,
         "crit_chance": crit, "dodge_chance": dodge, "armor_pen": armor_pen, "dmg_reduction_pct": dmg_reduction_pct,
-        "weapon_type": weapon_type,
+        "weapon_type": weapon_type, "armor_type": armor_type,
     }
 
 def save_equipment(equip: dict, conn=None) -> int:
@@ -223,14 +295,14 @@ def save_equipment(equip: dict, conn=None) -> int:
     Pass `conn` if the caller is already inside a `with db() as conn:` block —
     opening a second connection while the first is still uncommitted raises
     'database is locked' on SQLite."""
-    sql = "INSERT INTO equipment (name, type, rarity, level, base_str, base_int, base_hlt, base_agi, base_def, base_end, base_wil, base_luck, str_pct, int_pct, hlt_pct, agi_pct, crit_chance, dodge_chance, armor_pen, dmg_reduction_pct, set_family, weapon_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    sql = "INSERT INTO equipment (name, type, rarity, level, base_str, base_int, base_hlt, base_agi, base_def, base_end, base_wil, base_luck, str_pct, int_pct, hlt_pct, agi_pct, crit_chance, dodge_chance, armor_pen, dmg_reduction_pct, set_family, weapon_type, armor_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     params = (
         equip["name"], equip["type"], equip["rarity"], equip.get("level", 1),
         equip.get("base_str", 0), equip.get("base_int", 0), equip.get("base_hlt", 0), equip.get("base_agi", 0), equip.get("base_def", 0),
         equip.get("base_end", 0), equip.get("base_wil", 0), equip.get("base_luck", 0),
         equip.get("str_pct", 0.0), equip.get("int_pct", 0.0), equip.get("hlt_pct", 0.0), equip.get("agi_pct", 0.0),
         equip.get("crit_chance", 0.0), equip.get("dodge_chance", 0.0), equip.get("armor_pen", 0.0), equip.get("dmg_reduction_pct", 0.0),
-        equip.get("set_family"), equip.get("weapon_type"),
+        equip.get("set_family"), equip.get("weapon_type"), equip.get("armor_type"),
     )
     if conn is not None:
         return conn.execute(sql, params).lastrowid
@@ -247,7 +319,7 @@ def craft_equipment_for_slot(slot: str, level: int, apt: int) -> dict:
     rarity = _rarity_from_score(score)
     mult = RARITY_MULTS[rarity]
     stats = _roll_equipment_stats(eq_type, mult)
-    name = f"{EQUIPMENT_ADJECTIVES.get(rarity, rarity)} {eq_type}"
+    name = f"{EQUIPMENT_ADJECTIVES.get(rarity, rarity)} {_display_type_name(eq_type, stats)}"
 
     return {
         "name": name, "type": eq_type, "rarity": rarity, "level": max(1, level),
@@ -289,6 +361,17 @@ def equip_item(hero_id: int, equipment_id: int):
                 if affinity and item["weapon_type"] not in affinity:
                     raise ValueError(f"{hero['hero_class']} can't wield a {item['weapon_type']} (affinity: {', '.join(affinity)}).")
 
+        # Same hard restriction for armor types (Robe/Light/Medium/Heavy) —
+        # untyped legacy armor and classes with no defined affinity stay
+        # unrestricted, identical grandfathering rule as weapons.
+        if item["type"] == "Armor" and item["armor_type"]:
+            from services.class_service import get_armor_affinity
+            hero = conn.execute("SELECT hero_class FROM heroes WHERE id = ?", (hero_id,)).fetchone()
+            if hero:
+                affinity = get_armor_affinity(hero["hero_class"])
+                if affinity and item["armor_type"] not in affinity:
+                    raise ValueError(f"{hero['hero_class']} can't wear {item['armor_type']} (affinity: {', '.join(affinity)}).")
+
         # Un-equip whatever is in that slot for the hero
         conn.execute("UPDATE equipment SET is_equipped_to = NULL WHERE is_equipped_to = ? AND type = ?", (hero_id, item["type"]))
 
@@ -300,6 +383,51 @@ def unequip_item(equipment_id: int):
     with db() as conn:
         conn.execute("UPDATE equipment SET is_equipped_to = NULL WHERE id = ?", (equipment_id,))
         return {"success": True}
+
+def unequip_all(hero_id: int):
+    with db() as conn:
+        conn.execute("UPDATE equipment SET is_equipped_to = NULL WHERE is_equipped_to = ?", (hero_id,))
+    return {"success": True}
+
+def auto_equip_hero(hero_id: int):
+    """For each of the three slots (Weapon/Armor/Accessory), find the highest-rarity
+    unequipped item this hero can use and equip it, replacing whatever is in that slot."""
+    from services.class_service import get_weapon_affinity, get_armor_affinity
+    with db() as conn:
+        hero = conn.execute("SELECT hero_class FROM heroes WHERE id = ?", (hero_id,)).fetchone()
+        if not hero:
+            raise ValueError("Hero not found")
+        hero_class = hero["hero_class"]
+        weapon_affinity = get_weapon_affinity(hero_class)
+        armor_affinity = get_armor_affinity(hero_class)
+
+        unequipped = conn.execute(
+            "SELECT * FROM equipment WHERE is_equipped_to IS NULL AND rarity != 'F' ORDER BY level DESC"
+        ).fetchall()
+
+        rarity_index = {r: i for i, r in enumerate(RARITY_TIERS)}
+
+        def score(row):
+            return (rarity_index.get(row["rarity"], -1), row["level"] or 0)
+
+        def can_use(row):
+            if row["type"] == "Weapon" and row["weapon_type"] and weapon_affinity:
+                return row["weapon_type"] in weapon_affinity
+            if row["type"] == "Armor" and row["armor_type"] and armor_affinity:
+                return row["armor_type"] in armor_affinity
+            return True
+
+        equipped_count = 0
+        for slot in ("Weapon", "Armor", "Accessory"):
+            candidates = [dict(r) for r in unequipped if r["type"] == slot and can_use(r)]
+            if not candidates:
+                continue
+            best = max(candidates, key=score)
+            conn.execute("UPDATE equipment SET is_equipped_to = NULL WHERE is_equipped_to = ? AND type = ?", (hero_id, slot))
+            conn.execute("UPDATE equipment SET is_equipped_to = ? WHERE id = ?", (hero_id, best["id"]))
+            equipped_count += 1
+
+    return {"success": True, "slots_filled": equipped_count}
 
 def scrap_equipment(equipment_id: int) -> dict:
     """Break down an unwanted piece of gear into crafting materials, scaled
@@ -480,18 +608,18 @@ def craft_equipment(crafter_id: int):
         stats = _roll_equipment_stats(eq_type, mult)
 
         adj = EQUIPMENT_ADJECTIVES.get(rarity, rarity)
-        name = f"{adj} {eq_type}"
+        name = f"{adj} {_display_type_name(eq_type, stats)}"
 
         set_family = roll_set_family(rarity)
         cursor = conn.execute(
-            "INSERT INTO equipment (name, type, rarity, level, base_str, base_int, base_hlt, base_agi, str_pct, int_pct, hlt_pct, agi_pct, crit_chance, dodge_chance, armor_pen, set_family, weapon_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO equipment (name, type, rarity, level, base_str, base_int, base_hlt, base_agi, str_pct, int_pct, hlt_pct, agi_pct, crit_chance, dodge_chance, armor_pen, set_family, weapon_type, armor_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (name, eq_type, rarity, level, stats["base_str"], stats["base_int"], stats["base_hlt"], stats["base_agi"],
              stats["str_pct"], stats["int_pct"], stats["hlt_pct"], stats["agi_pct"],
-             stats["crit_chance"], stats["dodge_chance"], stats["armor_pen"], set_family, stats.get("weapon_type"))
+             stats["crit_chance"], stats["dodge_chance"], stats["armor_pen"], set_family, stats.get("weapon_type"), stats.get("armor_type"))
         )
-        return {"id": cursor.lastrowid, "name": name, "type": eq_type, "rarity": rarity, "set_family": set_family, "weapon_type": stats.get("weapon_type")}
+        return {"id": cursor.lastrowid, "name": name, "type": eq_type, "rarity": rarity, "set_family": set_family, "weapon_type": stats.get("weapon_type"), "armor_type": stats.get("armor_type")}
 
-def generate_equipment_drop(floor_number: int, is_boss: bool = False, drop_bonus: float = 0.0, rarity_boost: float = 0.0) -> dict | None:
+def generate_equipment_drop(floor_number: int, is_boss: bool = False, drop_bonus: float = 0.0, rarity_boost: float = 0.0, enemy_names: list[str] = None) -> dict | None:
     # Base chance: 10% on normal floors, 100% on bosses
     base_chance = 1.0 if is_boss else 0.10
     total_chance = min(1.0, base_chance + drop_bonus)
@@ -506,12 +634,12 @@ def generate_equipment_drop(floor_number: int, is_boss: bool = False, drop_bonus
     rarity = _rarity_from_score(score)
     eq_type = random.choice(TYPES)
     mult = RARITY_MULTS[rarity]
-    
-    stats = _roll_equipment_stats(eq_type, mult)
+
+    stats = _roll_equipment_stats(eq_type, mult, enemy_names=enemy_names)
         
     adjectives = {"F-": "Broken", "F": "Rusted", "F+": "Chipped", "E-": "Poor", "E": "Basic", "E+": "Sturdy", "D-": "Standard", "D": "Polished", "D+": "Heavy", "C-": "Fine", "C": "Refined", "C+": "Balanced", "B-": "Masterwork", "B": "Exceptional", "B+": "Flawless", "A-": "Epic", "A": "Legendary", "A+": "Mythic", "S-": "Divine", "S": "Godly", "S+": "Transcendent", "SS": "Omnipotent", "SSS": "Absolute", "Z": "Eldritch"}
     adj = adjectives.get(rarity, rarity)
-    name = f"{adj} {eq_type}"
+    name = f"{adj} {_display_type_name(eq_type, stats)}"
 
     result = {
         "name": name, "type": eq_type, "rarity": rarity,

@@ -184,14 +184,14 @@ HUMANOID_ENEMY_NAMES = {
     "Hobgoblin", "Lizardman", "Hobgoblin Berserker", "Lizardman Stalker",
     "Plague Harbinger", "Minotaur", "Minotaur Juggernaut",
     "Stone Sentinel", "Lesser Golem", "Naga", "Death Knight", "Giant",
-    "Black Knight Commander", "Demon", "Imp", "Pit Fiend", "Wraith Sovereign",
+    "Black Knight Commander", "Demon", "Pit Fiend", "Wraith Sovereign",
     "Lich Acolyte", "Archdemon Enforcer",
     "Orc Warchief", "The Troll King", "Skarn the Lizard Chieftain",
     "The Hobgoblin Warlord", "The Grave Sovereign", "Bullhorn the Minotaur Lord",
     "The Ashen Colossus", "Stoneheart the Unbroken", "The Obsidian Tyrant",
     "The Drowned Naga Queen", "Knight-Captain Mordrek", "Pit Fiend Commander",
     "Goblin King",
-    "Kobold", "Skeleton", "Feral Ghoul", "Wraith", "Vampire Spawn",
+    "Kobold", "Skeleton", "Feral Ghoul", "Wraith", "Vampire Spawn", "Primordial Vampire",
     "Demon Lord", "Archdemon", "Ancient Guardian",
     "Gorrath the Bonebreaker", "The Rotcaller, Warlord of the Fester Host",
     "Mordane, the Hollow King", "Aetherion, the End of All Things",
@@ -618,12 +618,11 @@ ENEMY_PORTRAIT_HINTS = {
     # Renamed from "Giant Rat" — rodent shapes read as cute/cartoonish
     # against this game's tone (openspec/specs/enemy-art-overhaul). Prompt
     # text is the spec's own suggested phrasing.
-    "Dungeon Imp": "dark fantasy dungeon imp creature, small wiry demon with leathery skin, small horns, hunched posture, glowing red eyes, black background, concept art style, no text",
+    "Giant Spider": "a giant spider, eight legs, arachnid, cave dungeon background",
     "Mangy Hyena": "a feral hyena, tawny fur covered in dark brown spots and patches, a powerful jaw with bared yellowed teeth, glowing amber eyes, a hunched sloped back with powerful front shoulders, low aggressive stalking stance on all fours, dusty wasteland background",
     "Goblin": "a small wiry goblin humanoid, (sickly green mottled skin, green clearly visible as the skin color:1.3), oversized pointed ears, a hooked nose, sharp yellowed teeth bared in a snarl, ragged dark leather scraps for clothing, gripping a crude rusted blade, standing alert lunging stance mid-attack with weapon raised high, beady yellow eyes, gritty dungeon background",
     "Bandit": "a rough human bandit, weathered tan skin, a worn leather jerkin and a loose hood pushed back enough to show his face, narrowed eyes, scarred forearms, gripping a plain worn dagger, alert lean stance, dim alley background",
     "Wolf": "an adult wolf standing on all four legs in a snowy forest at night, dense grey and white fur, pointed ears forward, fangs bared in a snarl, glowing pale yellow eyes, a lean athletic build, bushy tail held low",
-    "Dire Wolf": "a large adult wolf standing on all four legs in a dead forest, bigger and bulkier than an ordinary wolf, shaggy dark reddish-brown fur, a scarred muzzle, fangs bared, glowing amber eyes, thick powerful shoulders",
     "Orc": "a hulking orc warrior standing in a war-camp at dusk, green-grey skin evenly lit across his face and body, a jutting lower jaw with tusks, small dark eyes under a heavy brow, spiked iron armor plates over leather, gripping a heavy cleaver-like blade",
     "Ogre": "an enormous OGRE giant, twice the height and bulk of a normal man, a massive bloated frame with thick rolls of muscle and fat, warty greenish-brown skin, a disproportionately huge brutish jaw with jutting yellowed tusks, a small head sitting atop a vastly oversized hulking body, small dull eyes, wrapped in crude furs and rusted armor scraps that look small and stretched on its huge frame, gripping a tree-trunk-sized wooden club studded with nails, hunched towering stance dwarfing its surroundings",
     "Troll": "a tall gaunt TROLL, (sickly grey-green warty hide with patches of coarse moss-like growth, clearly visible color and texture, not solid black:1.2), an elongated jaw with crooked yellowed tusks, sunken glowing dull-yellow eyes, long gangly muscular arms ending in clawed hands, hunched predatory stance, well-lit damp cave background",
@@ -634,14 +633,12 @@ ENEMY_PORTRAIT_HINTS = {
     # as near-black blobs with nothing recognizable in them ---
     # Renamed from "Slime" — round/amorphous blobs render poorly through
     # this pipeline and read as cute rather than threatening
-    # (openspec/specs/enemy-art-overhaul). Prompt text is the spec's own
-    # suggested phrasing.
-    "Shadow Wisp": "dark fantasy shadowy wisp creature, hovering ball of dark energy with wispy tendrils, faint purple glow, black background, concept art style, no text",
-    "Acid Slime": "(a translucent gelatinous blob creature, clearly visible glowing acid-green corrosive jelly body you can partly see into, NOT solid black, NOT humanoid, NOT a person, NOT wearing clothes:1.4), (NO face, NO eyes, NO mouth, NOT cute, NOT chibi, NOT a cartoon mascot, an unsettling featureless mass of corrosive jelly, not adorable:1.4), a simple round wobbling blob shape sitting on the ground, (rippled uneven surface with visible dents and bumps, glossy wet specular highlights, faint internal cloudy swirls visible through the translucent acid-green body:1.3), faint caustic green vapor rising off its surface, acid droplets dripping from its body leaving small smoking scorch marks on the floor, well-lit dungeon floor background",
+    # (openspec/specs/enemy-art-overhaul). Acid Slime removed entirely for
+    # the same reason — gelatinous blobs never render well regardless of
+    # prompt engineering effort.
     "Goblin Warrior": "a goblin warrior standing in torchlight in a dungeon, green skin clearly lit on his face and arms, oversized pointed ears, a hooked nose, yellowed teeth bared in a snarl, scavenged leather and scrap-metal armor over his chest, gripping a short iron sword, beady yellow eyes",
     "Goblin Shaman": "a goblin shaman standing in torchlight in a dungeon, green skin clearly lit on his face and hands, oversized pointed ears, a hooked nose, ragged brown cloth robes with bone trinkets tied on with twine, gripping a wooden staff topped with a glowing skull, green magic swirling around his raised hand, beady yellow eyes",
-    "Dungeon Imp Alpha": "dark fantasy dungeon imp creature, larger and more muscular than an ordinary imp, scarred leathery skin, larger curved horns, hunched aggressive posture, glowing red eyes, black background, concept art style, no text",
-    "Wolf Alpha": "(a real four-legged quadruped wolf, larger and more muscular than an ordinary wolf, an animal on all four legs, NOT a werewolf, NOT bipedal, NOT humanoid:1.4), dense clearly visible dark grey and black fur, scarred muzzle, bared fangs in a snarl, glowing pale yellow eyes, thick powerful shoulders, low predatory stance on all fours like a real wolf, bushy tail held low, well-lit snowy forest background, evenly lit fur with visible texture",
+    "Spider Queen": "a massive spider queen perched on a throne of webs, crimson and ochre patterned abdomen, eight thick legs gripping silk strands, six glowing amber eyes, dim cave background",
 
     # Goblin King / Warren Tyrant (floor 5/10) never actually got dedicated
     # art despite the family-override system supporting it — discovered
@@ -673,7 +670,7 @@ ENEMY_PORTRAIT_HINTS = {
     "Pit Fiend": "a massive armored pit fiend standing upright, charred dark-red skin clearly lit beneath spiked black armor plates, large curved horns, tattered leathery wings, gripping a flaming trident, glowing orange eyes, molten cavern background",
     "Wraith Sovereign": "a tall regal wraith draped in flowing tattered violet and black robes clearly lit, a pale gaunt face with glowing violet eyes beneath a torn hood, a ghostly crown hovering above its head, clawed translucent hands, misty graveyard background",
     "Lich Acolyte": "a robed lich acolyte standing with arms raised, pale bony hands and a skeletal face clearly lit beneath a tattered dark-purple hood, glowing violet eyes in hollow sockets, clutching an ancient tome, faint violet runes swirling around it, crypt background",
-    "Archdemon Enforcer": "a hulking armored archdemon enforcer standing upright, charcoal-grey scaled skin clearly lit beneath heavy black spiked armor, large curling horns, leathery wings folded behind its back, gripping a massive cleaver, glowing red eyes, brimstone cavern background",
+    "Archdemon Enforcer": "a hulking archdemon standing upright, charcoal scaled hide, bony spurs on its shoulders and spine, massive curling black horns, tattered leathery wings spread wide, clawed fists raised, burning red eyes, hellfire cavern background",
     "Orc Warchief": "a battle-scarred orc warchief standing tall, uniform green-grey skin clearly lit across his muscular body, war paint across his tusked face, wearing spiked iron pauldrons over leather, gripping a massive cleaver-axe raised high, war-camp background at dusk",
     "The Troll King": "a colossal troll king seated on a crude throne of bones, sickly grey-green warty hide clearly lit, a crooked iron crown jammed onto its elongated skull, jagged yellowed tusks, clutching a massive spiked club, glowing dull-yellow eyes, damp cave-throne background",
     "Skarn the Lizard Chieftain": "a regal lizardman chieftain standing proudly, scaled deep-green skin clearly lit with golden ceremonial markings, an ornate bone headdress, gripping a long ceremonial trident, slitted golden eyes, ancient swamp temple background",
@@ -689,11 +686,12 @@ ENEMY_PORTRAIT_HINTS = {
 
     # beast/monster-style entries (MONSTER_STYLE) from the same pass
     "Scarab Swarmlord": "a massive armored beetle-like scarab, glossy dark-purple chitin shell clearly visible with iridescent sheen, oversized mandibles, six clawed legs, glowing violet eyes, surrounded by smaller scarabs skittering at its sides, torchlit crypt floor background",
-    "Wyvern": "a fierce wyvern beast with leathery dark-green wings spread wide, a long barbed tail, a sharp reptilian head with bared fangs, clawed hind legs gripping a rocky outcrop, glowing amber eyes, stormy cliffside background",
+    "Wyvern": "a fierce wyvern with slate-grey wings spread wide, barbed tail, sharp reptilian head with bared fangs, amber eyes, stormy mountain pass background",
     "Wyvern Stormrider": "a fierce wyvern beast crackling with electricity, leathery storm-grey wings spread wide with faint blue lightning arcing along the membrane, a long barbed tail, bared fangs, glowing white eyes, stormy cliffside background",
     "Chimera": "a monstrous chimera with a lion's maned body, a goat's head growing from its back, and a serpent-headed tail, tawny fur clearly visible with patchy goat-grey fur on its second head, bared fangs on all three heads, glowing amber eyes, rocky wasteland background",
     "Hydra Spawn": "a young multi-headed hydra beast, three serpentine necks rising from a stocky scaled body, deep-green scales clearly visible with darker mottled patterns, each head baring fangs, glowing yellow eyes, swampy lair background",
-    "Young Dragon": "a young dragon rearing back on its hind legs, gleaming dark-red scales clearly visible, small curling horns, leathery wings half-spread, sharp fangs bared, glowing amber eyes, smoke curling from its nostrils, rocky mountain lair background",
+    "Young Dragon": "a young dragon on all fours, quadruped, scales, horns, wings, fangs, mountain cave background",
+    "Adult Dragon": "a massive adult dragon rearing up on powerful hind legs, overlapping dark-crimson and obsidian scales clearly visible with plate-like texture, large swept-back horns, enormous leathery wings spread wide, bared fangs with fire and smoke billowing from its jaws, blazing amber eyes, heavily scarred and battle-worn, rocky mountain peak background wreathed in flame",
     "Dracolich": "an undead dragon, bleached bone-white scales and exposed ribs clearly visible over a skeletal serpentine frame, tattered leathery wing-remnants, a skull-like draconic head with glowing violet eyes, faint violet mist trailing from its jaws, crypt-cavern background",
     "The Hydra Sovereign": "a colossal multi-headed hydra beast towering upward, five serpentine necks rising from a massive scaled body, deep emerald-green scales clearly visible with darker ridged patterns, each head baring fangs and glowing yellow eyes, swampy lair-throne background",
     "The Dracolich Herald": "an imposing undead dragon herald, bleached bone-white scales and exposed ribs clearly visible over a skeletal serpentine frame, tattered leathery wing-remnants trailing violet mist, a crowned skull-like draconic head with glowing violet eyes, crypt-cavern-throne background",
@@ -703,13 +701,14 @@ ENEMY_PORTRAIT_HINTS = {
     # table), plus 4 dedicated Raid Bosses for floors 20/40/60/80 ---
     "Kobold": "a small scaly kobold skirmisher crouched low, rough reddish-brown scaled skin clearly lit, a doglike reptilian snout with small horns, wielding a crude rusty dagger, beady red eyes, torchlit dungeon tunnel background",
     "Skeleton": "an animated skeleton warrior standing upright, bare bone clearly visible with no flesh, hollow dark eye sockets with faint blue glowing pinpricks, wielding a chipped rusty sword and a cracked wooden shield, tattered remnants of old armor, dim crypt corridor background",
-    "Giant Spider": "a massive spider crouched low on eight long spindly legs, glossy black-and-brown banded carapace clearly visible, rows of glinting red eyes, sharp dripping fangs, faint webbing strands trailing behind it, torchlit cave background",
+    "Venomous Spider": "a sleek forest spider crouched on eight segmented legs, olive-brown and tan carapace with a distinctive darker stripe pattern clearly visible, rows of small eyes, dripping venomous fangs, dense forest undergrowth background, diffuse green-filtered light picking out the body texture",
     "Feral Ghoul": "a feral ghoul hunched forward, sickly grey-green rotting skin clearly lit, sunken yellow eyes, ragged torn clothing, long blackened claws, jaw stretched in a silent snarl, dim graveyard background",
     "Gargoyle": "a winged stone gargoyle perched low, rough grey granite hide clearly visible with cracked weathered texture, curling ram-like horns, leathery stone wings spread, clawed hands and feet, glowing faint green eyes, moonlit cathedral rooftop background",
     "Wraith": "a tall wraith draped in tattered grey-blue spectral robes clearly visible, a pale gaunt translucent face with hollow glowing blue eyes, clawed semi-transparent hands reaching forward, faint wisps trailing from its form, misty graveyard background",
     "Manticore": "a fearsome manticore beast with a lion's muscular tawny-furred body, large feathered wings, a spiked venomous scorpion tail curled over its back, a humanlike grimace with sharp fangs, glowing amber eyes, rocky desert background",
     "Elemental": "a swirling stone-and-magma elemental, jagged grey rock fragments clearly visible orbiting a glowing molten-orange core, cracks of lava light seeping between the rock plates, a roughly humanoid mass with no distinct face, rocky volcanic background",
     "Vampire Spawn": "a pale vampire spawn crouched predatorily, ashen grey-white skin clearly lit, sharp visible fangs bared, ragged dark formal clothing in tatters, clawed fingers, glowing red eyes, foggy moonlit graveyard background",
+    "Primordial Vampire": "an ancient primordial vampire standing with regal menace, alabaster pale skin clearly lit on a gaunt imperious face, elongated fangs bared in a cold smile, ornate flowing robes of deep crimson and black silk centuries old, long dark hair, glowing blood-red eyes with vertical pupils, clawed hands with extended talons, shadowy gothic crypt background with drifting fog",
     "Hydra": "a massive multi-headed hydra beast, four serpentine necks rising from a thick scaled body, deep teal-green scales clearly visible with darker ridged patterning, each head baring fangs, glowing yellow eyes, swampy lake background",
     "Demon Lord": "an imposing horned demon lord standing tall, deep crimson-black skin clearly lit over a muscular humanoid frame, large curling black horns, tattered leathery wings, clawed hands wreathed in dark flame, glowing orange eyes, brimstone throne-cavern background",
     "Archdemon": "a towering archdemon standing upright, charcoal-grey scaled skin clearly lit, massive ram-like horns, leathery wings folded behind its back, a clawed muscular frame wreathed in faint dark smoke, glowing deep-red eyes, hellish cavern background",

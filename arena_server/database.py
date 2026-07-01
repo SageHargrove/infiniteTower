@@ -79,6 +79,11 @@ def init_db():
         conn.execute("ALTER TABLE arena_players ADD COLUMN highest_floor INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass # Column already exists
+
+    try:
+        conn.execute("ALTER TABLE arena_players ADD COLUMN elo INTEGER DEFAULT 1000")
+    except sqlite3.OperationalError:
+        pass # Column already exists
     conn.commit()
     conn.close()
     print("[Arena] Database initialized.")

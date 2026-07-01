@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from database import db, init_db
 from combat import resolve_arena_fight
+from elo import update_elo
 
 TOKEN_LIFETIME_SECONDS = 7 * 24 * 60 * 60  # 7 days
 
@@ -161,11 +162,15 @@ def challenge(req: ChallengeRequest, authorization: str | None = Header(default=
     loser_username = opponent if winner_username == username else username
 
     with db() as conn:
+        elo_row_w = conn.execute("SELECT elo FROM arena_players WHERE username = ?", (winner_username,)).fetchone()
+        elo_row_l = conn.execute("SELECT elo FROM arena_players WHERE username = ?", (loser_username,)).fetchone()
+        new_winner_elo, new_loser_elo = update_elo(elo_row_w["elo"] or 1000, elo_row_l["elo"] or 1000)
+
         conn.execute(
-            "UPDATE arena_players SET wins = wins + 1 WHERE username = ?", (winner_username,)
+            "UPDATE arena_players SET wins = wins + 1, elo = ? WHERE username = ?", (new_winner_elo, winner_username)
         )
         conn.execute(
-            "UPDATE arena_players SET losses = losses + 1 WHERE username = ?", (loser_username,)
+            "UPDATE arena_players SET losses = losses + 1, elo = ? WHERE username = ?", (new_loser_elo, loser_username)
         )
         conn.execute(
             "INSERT INTO arena_matches (player1, player2, winner, log_json, timestamp) VALUES (?, ?, ?, ?, ?)",
@@ -177,6 +182,7 @@ def challenge(req: ChallengeRequest, authorization: str | None = Header(default=
         "loser": loser_username,
         "log": result.get("log", []),
         "turns": result.get("turns", []),
+        "elo_change": {winner_username: new_winner_elo, loser_username: new_loser_elo},
     }
 
 
@@ -184,25 +190,26 @@ def challenge(req: ChallengeRequest, authorization: str | None = Header(default=
 def matchmake(authorization: str | None = Header(default=None)):
     username = _require_player(authorization)
     with db() as conn:
-        me = conn.execute("SELECT wins, losses, team_json FROM arena_players WHERE username = ?", (username,)).fetchone()
+        me = conn.execute("SELECT wins, losses, elo, team_json FROM arena_players WHERE username = ?", (username,)).fetchone()
         if not me or not me["team_json"]:
             raise HTTPException(status_code=400, detail="Submit your team before matchmaking")
-        
-        my_net = me["wins"] - me["losses"]
-        
-        # Find opponent with closest net wins
+
+        my_elo = me["elo"] or 1000
+
+        # Find opponent with the closest ELO rating — a true skill-based pairing
+        # now that ELO exists, rather than the old raw net-wins proxy.
         opponent_row = conn.execute(
-            """SELECT username, team_json, ABS((wins - losses) - ?) as diff 
-               FROM arena_players 
+            """SELECT username, team_json, ABS(COALESCE(elo, 1000) - ?) as diff
+               FROM arena_players
                WHERE username != ? AND team_json IS NOT NULL
-               ORDER BY diff ASC 
+               ORDER BY diff ASC
                LIMIT 1""",
-            (my_net, username)
+            (my_elo, username)
         ).fetchone()
-        
+
     if not opponent_row:
         raise HTTPException(status_code=404, detail="No suitable opponents found. Wait for others to join!")
-        
+
     # We found an opponent. Proceed to run a challenge exactly like /arena/challenge
     opponent = opponent_row["username"]
     team_a = json.loads(me["team_json"])
@@ -213,8 +220,12 @@ def matchmake(authorization: str | None = Header(default=None)):
     loser_username = opponent if winner_username == username else username
 
     with db() as conn:
-        conn.execute("UPDATE arena_players SET wins = wins + 1 WHERE username = ?", (winner_username,))
-        conn.execute("UPDATE arena_players SET losses = losses + 1 WHERE username = ?", (loser_username,))
+        elo_row_w = conn.execute("SELECT elo FROM arena_players WHERE username = ?", (winner_username,)).fetchone()
+        elo_row_l = conn.execute("SELECT elo FROM arena_players WHERE username = ?", (loser_username,)).fetchone()
+        new_winner_elo, new_loser_elo = update_elo(elo_row_w["elo"] or 1000, elo_row_l["elo"] or 1000)
+
+        conn.execute("UPDATE arena_players SET wins = wins + 1, elo = ? WHERE username = ?", (new_winner_elo, winner_username))
+        conn.execute("UPDATE arena_players SET losses = losses + 1, elo = ? WHERE username = ?", (new_loser_elo, loser_username))
         conn.execute(
             "INSERT INTO arena_matches (player1, player2, winner, log_json, timestamp) VALUES (?, ?, ?, ?, ?)",
             (username, opponent, winner_username, json.dumps(result.get("log", [])), time.time()),
@@ -226,6 +237,7 @@ def matchmake(authorization: str | None = Header(default=None)):
         "loser": loser_username,
         "log": result.get("log", []),
         "turns": result.get("turns", []),
+        "elo_change": {winner_username: new_winner_elo, loser_username: new_loser_elo},
     }
 
 
@@ -245,8 +257,8 @@ def update_floor(req: UpdateFloorRequest, authorization: str | None = Header(def
 def leaderboard(limit: int = 20):
     with db() as conn:
         pvp_rows = conn.execute(
-            "SELECT username, wins, losses FROM arena_players "
-            "ORDER BY wins DESC, losses ASC LIMIT ?",
+            "SELECT username, wins, losses, elo FROM arena_players "
+            "ORDER BY COALESCE(elo, 1000) DESC LIMIT ?",
             (limit,),
         ).fetchall()
         pve_rows = conn.execute(
@@ -254,10 +266,10 @@ def leaderboard(limit: int = 20):
             "ORDER BY highest_floor DESC LIMIT ?",
             (limit,),
         ).fetchall()
-        
+
     return {
         "leaderboard": [
-            {"username": r["username"], "wins": r["wins"], "losses": r["losses"]}
+            {"username": r["username"], "wins": r["wins"], "losses": r["losses"], "elo": r["elo"] or 1000}
             for r in pvp_rows
         ],
         "pve_leaderboard": [

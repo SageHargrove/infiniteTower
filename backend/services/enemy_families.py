@@ -16,7 +16,7 @@ trigger on floors that are multiples of 20 (20/40/60/80/100) — floor 50
 milestone it is despite not landing on a multiple of 20.
 """
 
-# ─── Floors 1-10: Shadow Wisp / Goblin / Dungeon Imp / Wolf ────────────
+# ─── Floors 1-10: Shadow Wisp / Goblin / Giant Spider / Wolf ────────────
 
 GOBLIN_KING = {
     "name": "Goblin King",
@@ -28,14 +28,7 @@ GOBLIN_KING = {
 WARREN_TYRANT = {
     "name": "The Warren Tyrant",
     "abilities": ["summon_add", "crushing_blow", "last_stand"],
-    "spawn_template": "Dungeon Imp",  # was "Giant Rat" — renamed family member,
-                                       # see enemy-art-overhaul. Tyrant's own
-                                       # "rat overlord" flavor (portrait_cache.py)
-                                       # is now a little mismatched with imp
-                                       # reinforcements; the spec didn't ask for
-                                       # a Warren Tyrant restyle, flagging as a
-                                       # worthwhile follow-up rather than doing
-                                       # an unrequested boss redesign here.
+    "spawn_template": "Giant Spider",
     "stat_mod": {"atk": 1.1, "def": 1.0, "spd": 0.9, "health": 1.2},
 }
 

@@ -303,6 +303,11 @@ export default function ArenaPage() {
             <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
               <div style={{ fontFamily: 'Cinzel, serif', fontSize: '1.2rem', marginBottom: '0.5rem', color: fightResult.winner === username ? 'var(--green)' : 'var(--red)' }}>
                 {fightResult.winner === username ? '✓ Victory' : '✗ Defeat'} — {fightResult.winner} defeated {fightResult.loser}
+                {fightResult.elo_change?.[username] != null && (
+                  <span style={{ marginLeft: '0.8rem', fontSize: '0.9rem', color: 'var(--gold)' }}>
+                    ELO: {fightResult.elo_change[username]}
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', maxHeight: '40vh', overflowY: 'auto' }}>
                 {fightResult.log.map((line, i) => (
@@ -327,6 +332,7 @@ export default function ArenaPage() {
                     <div key={p.username} style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
                       <span className="text-dim" style={{ minWidth: 30 }}>#{i + 1}</span>
                       <span style={{ color: p.username === username ? 'var(--gold)' : 'inherit', flex: 1 }}>{p.username}</span>
+                      <span style={{ color: 'var(--gold)', fontWeight: 'bold', minWidth: 50, textAlign: 'right' }}>{p.elo ?? 1000}</span>
                       <span className="text-dim">{p.wins}W / {p.losses}L</span>
                     </div>
                   ))}

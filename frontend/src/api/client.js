@@ -108,6 +108,11 @@ export const listUpgrades = () => request('/base/upgrades')
 export const purchaseUpgrade = (facilityId) => request('/base/upgrades/purchase', { method: 'POST', body: JSON.stringify({ upgrade_id: facilityId }) })
 export const getInventory = () => request('/base/inventory')
 export const useItem = (itemName, heroId, targetSkillId = null) => request('/base/inventory/use', { method: 'POST', body: JSON.stringify({ item_name: itemName, hero_id: heroId, target_skill_id: targetSkillId }) })
+export const useSummonTicket = (itemName) => request('/gacha/use-ticket', { method: 'POST', body: JSON.stringify({ item_name: itemName }) })
+
+// Achievements
+export const getAchievements = () => request('/achievements/')
+export const claimAchievement = (achievementId) => request('/achievements/claim', { method: 'POST', body: JSON.stringify({ achievement_id: achievementId }) })
 
 // Heroes
 export const listHeroes = (aliveOnly = false) => request(`/heroes/?alive_only=${aliveOnly}`)
@@ -144,6 +149,8 @@ export const craftEquipment = (crafterId) => request('/equipment/craft', { metho
 export const equipItem = (equipmentId, heroId) => request('/equipment/equip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId, hero_id: heroId }) })
 export const unequipItem = (equipmentId) => request('/equipment/unequip', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
 export const scrapEquipment = (equipmentId) => request('/equipment/scrap', { method: 'POST', body: JSON.stringify({ equipment_id: equipmentId }) })
+export const autoEquipHero = (heroId) => request('/equipment/auto-equip', { method: 'POST', body: JSON.stringify({ hero_id: heroId }) })
+export const unequipAllHero = (heroId) => request('/equipment/unequip-all', { method: 'POST', body: JSON.stringify({ hero_id: heroId }) })
 
 export const equipConsumable = (heroId, itemName) => request('/base/heroes/equip-consumable', { method: 'POST', body: JSON.stringify({ hero_id: heroId, item_name: itemName }) })
 

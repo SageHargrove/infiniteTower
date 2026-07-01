@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { listHeroes, setTeam, removeHeroFromTeam, reorderTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, getAscensionInfo, promoteHero, getEvolutionInfo, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, egoAutoTeam, getEgoRecommendation, assignTeamLeader, getBonds, equipConsumable, getInventory, getBase } from '../api/client'
+import { listHeroes, setTeam, removeHeroFromTeam, reorderTeam, dismissHero, dismissHeroesBulk, synthesizeHero, ascendHero, getAscensionInfo, promoteHero, getEvolutionInfo, regeneratePortraits, evolveHero, listEquipment, equipItem, unequipItem, autoEquipHero, unequipAllHero, egoAutoTeam, getEgoRecommendation, assignTeamLeader, getBonds, equipConsumable, getInventory, getBase } from '../api/client'
+import { emitToast } from '../toastBus'
 import HeroCard from '../components/HeroCard'
 import ClassEvolutionModal from '../components/ClassEvolutionModal'
 import { HeroCompareModal, TeamCompareModal } from '../components/CompareModal'
@@ -540,6 +541,15 @@ export default function HeroesPage() {
           onRegenerateProfile={() => load()}
           onManageEquipment={(h, s, e) => setEqModal({ hero: h, slot: s, currentEq: e })}
           onManageConsumable={(h) => setConsModal({ hero: h })}
+          onAutoEquip={async (h, mode) => {
+            try {
+              if (mode === 'auto') await autoEquipHero(h.id)
+              else await unequipAllHero(h.id)
+              load()
+            } catch (e) {
+              emitToast({ title: 'Equipment Error', lines: [{ label: e.message, value: '' }], borderColor: 'var(--red)' })
+            }
+          }}
           actions={!synthMode && hero.is_alive && (
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
               {activeTab !== 'all' && (
@@ -630,7 +640,16 @@ export default function HeroesPage() {
               showFull={true}
               onRegenerateProfile={() => load()}
               onManageEquipment={(h, s, e) => setEqModal({ hero: h, slot: s, currentEq: e })}
-          onManageConsumable={(h) => setConsModal({ hero: h })}
+              onManageConsumable={(h) => setConsModal({ hero: h })}
+              onAutoEquip={async (h, mode) => {
+                try {
+                  if (mode === 'auto') await autoEquipHero(h.id)
+                  else await unequipAllHero(h.id)
+                  load()
+                } catch (e) {
+                  emitToast({ title: 'Equipment Error', lines: [{ label: e.message, value: '' }], borderColor: 'var(--red)' })
+                }
+              }}
               actions={heroes.find(h => h.id === expandedId)?.is_alive && (
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                   {typeof activeTab === 'number' && heroes.find(h => h.id === expandedId)?.ego_type && (
@@ -949,9 +968,13 @@ export default function HeroesPage() {
                       </div>
                     </div>
                     <button className="btn btn-primary" onClick={async () => {
-                      await equipItem(eq.id, eqModal.hero.id);
-                      setEqModal(null);
-                      load();
+                      try {
+                        await equipItem(eq.id, eqModal.hero.id);
+                        setEqModal(null);
+                        load();
+                      } catch (e) {
+                        emitToast({ title: 'Cannot Equip', lines: [{ label: e.message, value: '' }], borderColor: 'var(--red)' });
+                      }
                     }}>Equip</button>
                   </div>
                 ))}
