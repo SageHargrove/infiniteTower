@@ -24,13 +24,6 @@ GOBLIN_KING = {
     "stat_mod": {"atk": 1.0, "def": 1.0, "spd": 1.0, "health": 1.1},
 }
 
-WARREN_TYRANT = {
-    "name": "The Warren Tyrant",
-    "abilities": ["summon_add", "crushing_blow", "last_stand"],
-    "spawn_template": "Giant Spider",
-    "stat_mod": {"atk": 1.1, "def": 1.0, "spd": 0.9, "health": 1.2},
-}
-
 # ─── Floors 11-30: intermediate/veteran tiers' miniboss+boss ──────────────
 #
 # These two tiers (Dire Wolf/Orc/Harpy/Ogre/Troll at floor 15+, Hobgoblin/
@@ -216,21 +209,20 @@ AETHERION_END_OF_ALL_THINGS = {
 }
 
 BOSS_OVERRIDES = {
-    10: WARREN_TYRANT,
-    # Floors 20/40/60/80 are regular boss floors. Each rolls randomly
-    # between the original override and the old-raid-boss that used to
-    # occupy that floor — keeps variety on repeat runs.
+    # Floor 10 has no named override — LLM generates a spider-themed boss
+    # (Warren Tyrant art was cut; Giant Spider theme still fits floor 10's enemy pool).
     20: [TROLL_KING, GORRATH_BONEBREAKER],
     30: HOBGOBLIN_WARLORD,
     40: [GRAVE_SOVEREIGN, ROTCALLER_FESTER_HOST],
     60: [OBSIDIAN_TYRANT, EARTHSHAKER_TITAN],
     70: UNDEAD_MONARCH,
-    80: [HYDRA_SOVEREIGN, ASHEN_COLOSSUS],
+    # Stormcaller added here — sky/dragon tier fits floor 80's depth,
+    # alongside the aquatic/colossus duo already in this pool.
+    80: [HYDRA_SOVEREIGN, ASHEN_COLOSSUS, STORMCALLER_SKY_TYRANT],
     90: MASKED_HORROR_BOSS,
-    # Floor 100 is a Raid Boss (Stormcaller) — this entry is never reached
-    # in normal play because get_raid_boss_override fires first. Kept for
-    # completeness / manual testing fallback.
-    100: [LICH_KING, NIGHTWING_DEVOURER, AETHERION_END_OF_ALL_THINGS],
+    # Floor 100 is a Raid Boss (Aetherion) — this fallback is never reached
+    # in normal play because get_raid_boss_override fires first.
+    100: [LICH_KING, NIGHTWING_DEVOURER],
 }
 
 SPECIAL_BOSS_FLOORS = {50, 100}
@@ -294,11 +286,9 @@ STORMCALLER_SKY_TYRANT = {
 }
 
 # Only two true Raid Boss floors — 50 (halfway) and 100 (final).
-# Mordane first since dragon-heavy content ramps toward the end;
-# Stormcaller at 100 fits the sky/apex-predator final-boss feel.
 RAID_BOSS_OVERRIDES = {
     50: MORDANE_HOLLOW_KING,
-    100: STORMCALLER_SKY_TYRANT,
+    100: AETHERION_END_OF_ALL_THINGS,
 }
 
 
