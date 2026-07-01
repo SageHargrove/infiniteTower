@@ -208,47 +208,9 @@ AETHERION_END_OF_ALL_THINGS = {
     "stat_mod": {"atk": 1.4, "def": 1.2, "spd": 1.1, "health": 1.5},
 }
 
-BOSS_OVERRIDES = {
-    # Floor 10 has no named override — LLM generates a spider-themed boss
-    # (Warren Tyrant art was cut; Giant Spider theme still fits floor 10's enemy pool).
-    20: [TROLL_KING, GORRATH_BONEBREAKER],
-    30: HOBGOBLIN_WARLORD,
-    40: [GRAVE_SOVEREIGN, ROTCALLER_FESTER_HOST],
-    60: [OBSIDIAN_TYRANT, EARTHSHAKER_TITAN],
-    70: UNDEAD_MONARCH,
-    # Stormcaller added here — sky/dragon tier fits floor 80's depth,
-    # alongside the aquatic/colossus duo already in this pool.
-    80: [HYDRA_SOVEREIGN, ASHEN_COLOSSUS, STORMCALLER_SKY_TYRANT],
-    90: MASKED_HORROR_BOSS,
-    # Floor 100 is a Raid Boss (Aetherion) — this fallback is never reached
-    # in normal play because get_raid_boss_override fires first.
-    100: [LICH_KING, NIGHTWING_DEVOURER],
-}
-
-SPECIAL_BOSS_FLOORS = {50, 100}
-
-
 def get_miniboss_override(floor_number: int) -> dict | None:
     return MINIBOSS_OVERRIDES.get(floor_number)
 
-
-def get_boss_override(floor_number: int) -> dict | None:
-    entry = BOSS_OVERRIDES.get(floor_number)
-    if isinstance(entry, list):
-        import random
-        return random.choice(entry)
-    return entry
-
-
-# ─── Raid Bosses (every 20th floor, multi-team merge) ──────────────────────
-#
-# The original roster-overhaul plan named four tiers — elite/miniboss/boss/
-# raid_boss — but raid_boss was never built; floor 20/40/60/80 just reused
-# that floor's regular %10 boss scaled up for the combined team size. These
-# give floors 20/40/60/80 their own unique, tougher-than-the-regular-boss
-# identity, themed as the culmination of the two decades feeding into them.
-# Floor 100 keeps its existing Lich King/Nightwing Devourer treatment —
-# already has dedicated raid-scale specialness, doesn't need a 5th entry.
 
 GORRATH_BONEBREAKER = {
     "name": "Gorrath the Bonebreaker",
@@ -284,6 +246,30 @@ STORMCALLER_SKY_TYRANT = {
     "spawn_template": "Manticore",
     "stat_mod": {"atk": 1.3, "def": 1.1, "spd": 1.1, "health": 1.5},
 }
+
+BOSS_OVERRIDES = {
+    20: [TROLL_KING, GORRATH_BONEBREAKER],
+    30: HOBGOBLIN_WARLORD,
+    40: [GRAVE_SOVEREIGN, ROTCALLER_FESTER_HOST],
+    60: [OBSIDIAN_TYRANT, EARTHSHAKER_TITAN],
+    70: UNDEAD_MONARCH,
+    80: [HYDRA_SOVEREIGN, ASHEN_COLOSSUS, STORMCALLER_SKY_TYRANT],
+    90: MASKED_HORROR_BOSS,
+    # Floor 100 is a Raid Boss (Aetherion) — this fallback is never reached
+    # in normal play because get_raid_boss_override fires first.
+    100: [LICH_KING, NIGHTWING_DEVOURER],
+}
+
+SPECIAL_BOSS_FLOORS = {50, 100}
+
+
+def get_boss_override(floor_number: int) -> dict | None:
+    entry = BOSS_OVERRIDES.get(floor_number)
+    if isinstance(entry, list):
+        import random
+        return random.choice(entry)
+    return entry
+
 
 # Only two true Raid Boss floors — 50 (halfway) and 100 (final).
 RAID_BOSS_OVERRIDES = {
